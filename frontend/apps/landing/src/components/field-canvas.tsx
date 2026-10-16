@@ -37,11 +37,28 @@ function Terrain() {
 
 type Blade = { x: number; y: number; z: number; scale: number; phase: number; delay: number };
 
+// Grow, sway and cursor push all run in the vertex shader: the CPU only raycasts the pointer once per frame.
+const SPROUT_VERTEX = /* glsl */ `
+  float gT = position.y / BLADE_H;                       // 0 at root, 1 at tip
+  vec3 gBase = instanceMatrix[3].xyz;
+  float gGrow = smoothstep(aBlade.y, aBlade.y + 0.9, uTime);
+  vec2 gBend = vec2(
+    0.08 * sin(uTime * 1.1 + aBlade.x),
+    0.12 * sin(uTime * 1.4 + aBlade.x + gBase.z * 0.3)
+  );
+  vec2 gAway = gBase.xz - uPointer.xz;                   // lean away from the cursor
+  float gDist = length(gAway);
+  gBend += gDist > 0.001 ? normalize(gAway) * (1.0 - clamp(gDist / 2.2, 0.0, 1.0)) * 0.9 : vec2(0.0);
+  transformed.xz += gBend * gT * gT * BLADE_H;
+  transformed *= gGrow;
+`;
+
+const BLADE_H = 0.55;
+
 function Sprouts() {
-  const mesh = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const pointer = useMemo(() => new THREE.Vector3(999, 0, 999), []);
   const ground = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uPointer: { value: new THREE.Vector3(999, 0, 999) } }), []);
+  const mesh = useRef<THREE.InstancedMesh>(null);
   const { raycaster, pointer: ndc, camera } = useThree();
 
   const blades = useMemo<Blade[]>(() => {
@@ -65,51 +82,50 @@ function Sprouts() {
   }, []);
 
   const geometry = useMemo(() => {
-    const g = new THREE.ConeGeometry(0.045, 0.55, 4);
-    g.translate(0, 0.275, 0); // pivot at the base so blades bend from the ground
+    const g = new THREE.ConeGeometry(0.045, BLADE_H, 4);
+    g.translate(0, BLADE_H / 2, 0); // pivot at the base so blades bend from the ground
+    g.setAttribute(
+      "aBlade",
+      new THREE.InstancedBufferAttribute(new Float32Array(blades.flatMap((b) => [b.phase, b.delay])), 2),
+    );
     return g;
-  }, []);
+  }, [blades]);
 
+  const material = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+    m.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader =
+        `uniform float uTime;\nuniform vec3 uPointer;\nattribute vec2 aBlade;\n#define BLADE_H ${BLADE_H.toFixed(2)}\n` +
+        shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\n${SPROUT_VERTEX}`);
+    };
+    m.customProgramCacheKey = () => "surco-sprouts";
+    return m;
+  }, [uniforms]);
+
+  // Instances are static: placed and tinted once.
   useLayoutEffect(() => {
+    const dummy = new THREE.Object3D();
     const palette = [token("--ink"), token("--success-text"), token("--lime-deep")];
-    blades.forEach((_, i) => mesh.current!.setColorAt(i, palette[i % palette.length]));
+    blades.forEach((b, i) => {
+      dummy.position.set(b.x, b.y, b.z);
+      dummy.scale.setScalar(b.scale);
+      dummy.updateMatrix();
+      mesh.current!.setMatrixAt(i, dummy.matrix);
+      mesh.current!.setColorAt(i, palette[i % palette.length]);
+    });
+    mesh.current!.instanceMatrix.needsUpdate = true;
     mesh.current!.instanceColor!.needsUpdate = true;
   }, [blades]);
 
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
+    uniforms.uTime.value = clock.elapsedTime;
     raycaster.setFromCamera(ndc, camera);
-    raycaster.ray.intersectPlane(ground, pointer);
-
-    blades.forEach((b, i) => {
-      const grow = THREE.MathUtils.smoothstep(t, b.delay, b.delay + 0.9);
-      let bendX = 0.12 * Math.sin(t * 1.4 + b.phase + b.z * 0.3);
-      let bendZ = 0.08 * Math.sin(t * 1.1 + b.phase);
-
-      // blades lean away from the cursor
-      const dx = b.x - pointer.x;
-      const dz = b.z - pointer.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 2.2) {
-        const f = (1 - d / 2.2) * 0.9;
-        bendZ -= (dx / (d || 1)) * f;
-        bendX += (dz / (d || 1)) * f;
-      }
-
-      dummy.position.set(b.x, b.y, b.z);
-      dummy.rotation.set(bendX, 0, bendZ);
-      dummy.scale.setScalar(b.scale * grow);
-      dummy.updateMatrix();
-      mesh.current!.setMatrixAt(i, dummy.matrix);
-    });
-    mesh.current!.instanceMatrix.needsUpdate = true;
+    raycaster.ray.intersectPlane(ground, uniforms.uPointer.value);
   });
 
-  return (
-    <instancedMesh ref={mesh} args={[geometry, undefined, blades.length]}>
-      <meshStandardMaterial roughness={0.8} />
-    </instancedMesh>
-  );
+  // ponytail: frustumCulled off because instances span the whole field around the camera
+  return <instancedMesh ref={mesh} args={[geometry, material, blades.length]} frustumCulled={false} />;
 }
 
 function CameraRig() {
