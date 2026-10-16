@@ -8,9 +8,9 @@ function token(name: string) {
 }
 
 // furrows run toward the horizon (along z); the sprout rows draw them
-const ROW_GAP = 0.9;
-const ROWS = 45;
-const PER_ROW = 130;
+const ROW_GAP = 0.6;
+const ROWS = 71;
+const PER_ROW = 260;
 const Z_NEAR = 10;
 const Z_FAR = -45;
 

@@ -70,7 +70,7 @@ export default function Landing() {
             </Button>
           </div>
           {is3D === false && <FieldScene />}
-          <p className="mt-auto pb-6 text-center font-brand text-sm font-bold text-primary" aria-hidden="true">
+          <p className="mx-auto mt-auto mb-6 rounded-full bg-card px-4 py-1.5 font-brand text-sm font-bold text-primary shadow-sm" aria-hidden="true">
             Desliza ↓
           </p>
         </section>
