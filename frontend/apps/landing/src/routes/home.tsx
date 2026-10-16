@@ -1,6 +1,8 @@
 import { Button } from "@agro/shared/ui/button";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { FieldScene } from "~/components/field-scene";
+import { Reveal, RevealItem } from "~/components/reveal-item";
+import { TiltCard } from "~/components/tilt-card";
 
 const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:5175";
 
@@ -72,38 +74,51 @@ export default function Landing() {
             </Button>
           </div>
           {is3D === false && <FieldScene />}
-          <p className="mx-auto mt-auto mb-6 rounded-full bg-card px-4 py-1.5 font-brand text-sm font-bold text-primary shadow-sm" aria-hidden="true">
+          <p className="glass mx-auto mt-auto mb-6 rounded-full px-4 py-1.5 font-brand text-sm font-bold text-primary shadow-sm" aria-hidden="true">
             Desliza ↓
           </p>
         </section>
 
         <section id="como-funciona" className="py-24">
           <div className="mx-auto max-w-6xl px-6">
-            <h2 className="reveal text-3xl text-primary md:text-5xl">Cómo funciona</h2>
+            <Reveal as="h2" className="text-3xl text-primary md:text-5xl">
+              Cómo funciona
+            </Reveal>
             <ol className="mt-10 grid gap-6 md:grid-cols-3">
-              {STEPS.map((s) => (
-                <li key={s.n} className="reveal rounded-lg border bg-card p-6 shadow-sm">
-                  <span className="font-brand text-sm font-black text-success tabular-nums">{s.n}</span>
-                  <h3 className="mt-2 text-lg text-primary">{s.title}</h3>
-                  <p className="mt-2 text-muted-foreground">{s.body}</p>
-                </li>
+              {STEPS.map((s, i) => (
+                <RevealItem key={s.n} delay={i * 180}>
+                  <div className="float-soft h-full" style={{ animationDelay: `${i * -1.6}s` }}>
+                    <TiltCard className="glass h-full rounded-lg border border-white/30 p-6">
+                      <span className="tilt-depth-2">
+                        <span className="tilt-num inline-flex size-9 items-center justify-center rounded-full bg-lime-deep/60 font-brand text-sm font-black text-primary tabular-nums">
+                          {s.n}
+                        </span>
+                      </span>
+                      <h3 className="tilt-depth-1 mt-3 text-lg text-primary">{s.title}</h3>
+                      <p className="mt-2 text-muted-foreground">{s.body}</p>
+                      <span className="tilt-bar" aria-hidden="true" />
+                    </TiltCard>
+                  </div>
+                </RevealItem>
               ))}
             </ol>
           </div>
         </section>
 
-        <section className="bg-background">
+        <section className="glass">
           <div className="mx-auto max-w-6xl px-6 py-20">
-            <h2 className="reveal text-2xl text-primary md:text-3xl">Distribución por hito</h2>
-            <p className="reveal mt-2 max-w-xl text-muted-foreground">
+            <Reveal as="h2" className="text-2xl text-primary md:text-3xl">
+              Distribución por hito
+            </Reveal>
+            <Reveal as="p" delay={120} className="mt-2 max-w-xl text-muted-foreground">
               Ejemplo de reparto de un hito aprobado. Los porcentajes se definen en el plan de cada cultivo.
-            </p>
-            <div className="reveal mt-8 flex h-4 overflow-hidden rounded-sm" aria-hidden="true">
+            </Reveal>
+            <Reveal delay={240} className="mt-8 flex h-4 overflow-hidden rounded-sm" aria-hidden="true">
               {SPLIT.map((s) => (
                 <div key={s.label} className={s.className} style={{ width: `${s.pct}%` }} />
               ))}
-            </div>
-            <ul className="reveal mt-4 flex flex-wrap gap-x-8 gap-y-2">
+            </Reveal>
+            <Reveal as="ul" delay={360} className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
               {SPLIT.map((s) => (
                 <li key={s.label} className="flex items-center gap-2">
                   <span className={`size-3 rounded-full ${s.className}`} aria-hidden="true" />
@@ -111,7 +126,7 @@ export default function Landing() {
                   <span className="text-muted-foreground tabular-nums">{s.pct} %</span>
                 </li>
               ))}
-            </ul>
+            </Reveal>
             <p className="mt-10 inline-block rounded-sm bg-warning px-3 py-1 text-sm font-semibold text-warning-foreground">
               ⚠ Entorno de simulación · Sin dinero real
             </p>

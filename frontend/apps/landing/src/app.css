@@ -32,11 +32,116 @@
   }
 }
 
-/* Reveal on scroll without JS where supported; elsewhere content is simply visible. */
-@supports (animation-timeline: view()) {
-  .reveal {
-    animation: fade-up linear both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 60%;
+/* Elements appear one after another when scrolled into view and fade back out when they leave; without scripting they are simply visible. */
+@media (scripting: enabled) {
+  .reveal-item {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    filter: blur(8px);
+    transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+      filter 0.9s cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .reveal-item[data-shown="true"] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* Translucent surface: the field shows through like the haze in the landscape. */
+.glass {
+  background-color: color-mix(in oklab, var(--card) 50%, transparent);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+
+@keyframes float-soft {
+  from { transform: translateY(0); }
+  to { transform: translateY(-5px); }
+}
+.float-soft {
+  animation: float-soft 5s ease-in-out infinite alternate;
+}
+
+.tilt-card {
+  position: relative;
+  overflow: hidden;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(var(--lift, 0px));
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.tilt-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(320px circle at var(--gx, 50%) var(--gy, 0%), rgb(255 255 255 / 0.45), transparent 60%);
+  transition: opacity 0.4s ease;
+}
+/* cursor-following glowing border */
+.tilt-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(240px circle at var(--gx, 50%) var(--gy, 0%), var(--gold), var(--lime-deep) 45%, transparent 75%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  transition: opacity 0.4s ease;
+}
+
+/* inner content drifts a few px against the tilt for depth */
+.tilt-depth-1,
+.tilt-depth-2 {
+  display: inline-block;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tilt-depth-1 {
+  transform: translate(calc(var(--px, 0) * 3px), calc(var(--py, 0) * 3px));
+}
+.tilt-depth-2 {
+  transform: translate(calc(var(--px, 0) * 7px), calc(var(--py, 0) * 7px));
+}
+
+/* progress bar that fills on hover, like a milestone being approved */
+.tilt-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--lime-deep), var(--gold));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tilt-card:hover {
+    --lift: -8px;
+    box-shadow: 0 24px 48px -20px rgb(21 62 49 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.6);
+    background-color: color-mix(in oklab, var(--card) 62%, transparent);
+  }
+  .tilt-card:hover::after,
+  .tilt-card:hover::before {
+    opacity: 1;
+  }
+  .tilt-card:hover .tilt-bar {
+    transform: scaleX(1);
+  }
+  .tilt-card:hover .tilt-num {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    transform: scale(1.08);
+  }
+}
+
+.tilt-num {
+  transition: background-color 0.4s ease, color 0.4s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
