@@ -1,0 +1,82 @@
+openapi: 3.0.0
+paths:
+  /payments:
+    post:
+      operationId: PaymentsController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentDto"
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponseDto"
+      summary: Create a payment
+      tags:
+        - payments
+  /payments/{id}:
+    get:
+      operationId: PaymentsController_findOne
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponseDto"
+      summary: Get a payment by id
+      tags:
+        - payments
+info:
+  title: Agro Payments API
+  description: ""
+  version: 0.1.0
+  contact: {}
+tags: []
+servers: []
+components:
+  schemas:
+    CreatePaymentDto:
+      type: object
+      properties:
+        amount:
+          type: number
+          description: Amount in major currency units, e.g. 1500
+          minimum: 1
+        currency:
+          type: string
+          description: ISO 4217 currency code, e.g. COP
+          minLength: 3
+          maxLength: 3
+      required:
+        - amount
+        - currency
+    PaymentResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+      required:
+        - id
+        - amount
+        - currency
+        - createdAt
