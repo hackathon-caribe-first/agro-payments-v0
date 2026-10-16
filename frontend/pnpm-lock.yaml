@@ -12,7 +12,7 @@ importers:
         specifier: ^2.11.8
         version: 2.11.8
 
-  frontend:
+  apps/web:
     dependencies:
       '@radix-ui/react-slot':
         specifier: ^1.5.0
