@@ -1,5 +1,44 @@
 openapi: 3.0.0
 paths:
+  /users/me:
+    get:
+      operationId: CurrentUserController_me
+      parameters: []
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUserResponseDto"
+      summary: Get the authenticated user
+      tags:
+        - users
+  /users/{id}/role:
+    patch:
+      operationId: UserRolesController_assign
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignRoleDto"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignedRoleResponseDto"
+      summary: Assign any role to a user (admin only)
+      tags:
+        - users
   /milestones:
     get:
       operationId: MilestonesController_list
@@ -133,14 +172,62 @@ tags: []
 servers: []
 components:
   schemas:
-    MilestoneStatus:
-      type: string
-      enum:
-        - draft
-        - evidence_submitted
-        - approved
-        - rejected
-    EvidenceDto:
+    CurrentUserResponseDto:
+      type: object
+      properties:
+        role:
+          enum:
+            - admin
+            - buyer
+            - seller
+            - investor
+            - fidu
+            - intermediator
+          type: string
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+      required:
+        - role
+        - id
+        - email
+        - name
+    AssignRoleDto:
+      type: object
+      properties:
+        role:
+          description: New role for the user
+          enum:
+            - admin
+            - buyer
+            - seller
+            - investor
+            - fidu
+            - intermediator
+          type: string
+      required:
+        - role
+    AssignedRoleResponseDto:
+      type: object
+      properties:
+        role:
+          enum:
+            - admin
+            - buyer
+            - seller
+            - investor
+            - fidu
+            - intermediator
+          type: string
+        id:
+          type: string
+      required:
+        - role
+        - id
+    CreatePaymentDto:
       type: object
       properties:
         description:
