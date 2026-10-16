@@ -1,0 +1,42 @@
+@import "@agro/shared/styles.css";
+
+/* Field animations. Reduced motion is handled globally in @agro/shared/styles.css */
+@theme {
+  --animate-sun-rise: sun-rise 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-draw: draw 1.4s cubic-bezier(0.65, 0, 0.35, 1) both;
+  --animate-grow: grow 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-sway: sway 4s ease-in-out infinite alternate;
+  --animate-drift: drift 40s linear infinite;
+  --animate-fade-up: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes sun-rise {
+    from { transform: translateY(60px); opacity: 0; }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes grow {
+    from { transform: scale(0); }
+  }
+  @keyframes sway {
+    from { transform: rotate(-4deg); }
+    to { transform: rotate(4deg); }
+  }
+  @keyframes drift {
+    from { transform: translateX(-120px); }
+    to { transform: translateX(720px); }
+  }
+  @keyframes fade-up {
+    from { transform: translateY(24px); opacity: 0; }
+  }
+}
+
+/* Reveal on scroll without JS where supported; elsewhere content is simply visible. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: fade-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
