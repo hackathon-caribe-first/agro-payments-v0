@@ -1,0 +1,9 @@
+node_modules
+.turbo
+build
+dist
+.react-router
+coverage
+.env*
+!.env.example
+.DS_Store
