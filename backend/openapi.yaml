@@ -1,28 +1,24 @@
 openapi: 3.0.0
 paths:
-  /payments:
-    post:
-      operationId: PaymentsController_create
+  /milestones:
+    get:
+      operationId: MilestonesController_list
       parameters: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreatePaymentDto"
       responses:
-        "201":
+        "200":
           description: ""
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaymentResponseDto"
-      summary: Create a payment
+                type: array
+                items:
+                  $ref: "#/components/schemas/MilestoneDto"
+      summary: List milestones
       tags:
-        - payments
-  /payments/{id}:
+        - milestones
+  /milestones/{id}:
     get:
-      operationId: PaymentsController_findOne
+      operationId: MilestonesController_get
       parameters:
         - name: id
           required: true
@@ -35,10 +31,99 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaymentResponseDto"
-      summary: Get a payment by id
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Get a milestone
       tags:
-        - payments
+        - milestones
+  /milestones/{id}/evidence:
+    post:
+      operationId: MilestonesController_addEvidence
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitEvidenceDto"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Producer submits evidence for verification
+      tags:
+        - milestones
+  /milestones/{id}/review:
+    post:
+      operationId: MilestonesController_review
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewMilestoneDto"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Verifier approves or rejects the evidence. Approving does not order a
+        payment.
+      tags:
+        - milestones
+  /milestones/{id}/payment:
+    post:
+      operationId: MilestonesController_pay
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Custodian orders the simulated 50/30/20 payment of an approved milestone
+      tags:
+        - milestones
+  /milestones/{id}/payment/confirmation:
+    post:
+      operationId: MilestonesController_confirm
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Custodian confirms the simulated payment was received
+      tags:
+        - milestones
 info:
   title: Agro Payments API
   description: ""
@@ -48,35 +133,153 @@ tags: []
 servers: []
 components:
   schemas:
-    CreatePaymentDto:
+    MilestoneStatus:
+      type: string
+      enum:
+        - draft
+        - evidence_submitted
+        - approved
+        - rejected
+    EvidenceDto:
       type: object
       properties:
-        amount:
-          type: number
-          description: Amount in major currency units, e.g. 1500
-          minimum: 1
-        currency:
+        description:
           type: string
-          description: ISO 4217 currency code, e.g. COP
-          minLength: 3
-          maxLength: 3
-      required:
-        - amount
-        - currency
-    PaymentResponseDto:
-      type: object
-      properties:
-        id:
-          type: string
-        amount:
-          type: number
-        currency:
-          type: string
-        createdAt:
+        submittedAt:
           format: date-time
           type: string
       required:
+        - description
+        - submittedAt
+    Decision:
+      type: string
+      enum:
+        - approved
+        - rejected
+    ReviewDto:
+      type: object
+      properties:
+        decision:
+          allOf:
+            - $ref: "#/components/schemas/Decision"
+        reason:
+          type: string
+          nullable: true
+        reviewedAt:
+          format: date-time
+          type: string
+      required:
+        - decision
+        - reason
+        - reviewedAt
+    PaymentStatus:
+      type: string
+      enum:
+        - processing
+        - confirmed
+    Recipient:
+      type: string
+      enum:
+        - productor
+        - proveedor
+        - trabajadores
+    ShareDto:
+      type: object
+      properties:
+        recipient:
+          allOf:
+            - $ref: "#/components/schemas/Recipient"
+        percent:
+          type: number
+        amount:
+          type: number
+          description: Whole currency units
+      required:
+        - recipient
+        - percent
+        - amount
+    PaymentDto:
+      type: object
+      properties:
+        status:
+          allOf:
+            - $ref: "#/components/schemas/PaymentStatus"
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareDto"
+        confirmedAt:
+          format: date-time
+          type: string
+          nullable: true
+        reference:
+          type: string
+          description: Simulated transfer reference, never a real bank reference
+        orderedAt:
+          format: date-time
+          type: string
+      required:
+        - status
+        - shares
+        - confirmedAt
+        - reference
+        - orderedAt
+    MilestoneDto:
+      type: object
+      properties:
+        status:
+          allOf:
+            - $ref: "#/components/schemas/MilestoneStatus"
+        evidence:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/EvidenceDto"
+        review:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/ReviewDto"
+        payment:
+          nullable: true
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/PaymentDto"
+        id:
+          type: string
+        title:
+          type: string
+        amount:
+          type: number
+          description: Whole currency units
+        currency:
+          type: string
+          description: ISO 4217 code
+      required:
+        - status
+        - evidence
+        - review
+        - payment
         - id
+        - title
         - amount
         - currency
-        - createdAt
+    SubmitEvidenceDto:
+      type: object
+      properties:
+        description:
+          type: string
+          description: What the producer did and what the evidence shows
+      required:
+        - description
+    ReviewMilestoneDto:
+      type: object
+      properties:
+        decision:
+          allOf:
+            - $ref: "#/components/schemas/Decision"
+        reason:
+          type: string
+          description: "Required when rejecting: what the producer must correct"
+      required:
+        - decision
