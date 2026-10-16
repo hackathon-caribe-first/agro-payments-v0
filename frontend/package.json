@@ -6,7 +6,9 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "dev:landing": "turbo run dev --filter=@agro/landing",
+    "dev:example": "turbo run dev --filter=@agro/example"
   },
   "devDependencies": {
     "turbo": "^2.11.8"
