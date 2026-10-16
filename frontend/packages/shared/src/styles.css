@@ -1,53 +1,70 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/nunito";
+@import "@fontsource-variable/inter";
 
 /* Scan shared sources so every app gets the classes used here */
 @source "./";
 
-@custom-variant dark (&:is(.dark *));
-
-/* Design tokens: placeholder (shadcn neutral). Replace with the corporate design system. */
+/* Surco design system — spec: .claude/skills/surco-design/references/DESIGN.md
+   ponytail: light theme only; the spec defines no dark mode. */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-}
+  /* Brand palette (the 10 base colors, do not add without updating DESIGN.md) */
+  --ink: #153e31;
+  --ink-deep: #10382b;
+  --gray: #737b73;
+  --fog: #f6f7f1;
+  --surface: #ffffff;
+  --line: #e6e9df;
+  --lime: #d4eb9d;
+  --lime-deep: #b7da71;
+  --gold: #f9ca87;
+  --red: #bc614e;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* Accessible semantic ink */
+  --text-primary: #1a2f26;
+  --text-secondary: #53675a;
+  --danger-text: #8c4032;
+  --success-text: #32684a;
+  --warning-text: #765322;
+  --focus-strong: #32684a;
+
+  /* shadcn semantic mapping */
+  --background: var(--fog);
+  --foreground: var(--text-primary);
+  --card: var(--surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--ink);
+  --primary-foreground: var(--surface);
+  --secondary: var(--lime);
+  --secondary-foreground: var(--ink);
+  --muted: var(--fog);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--line);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger-text);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--focus-strong);
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Nunito Variable", "Trebuchet MS", sans-serif;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -60,6 +77,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Surco extras */
+  --color-sidebar: var(--ink-deep);
+  --color-sidebar-foreground: var(--surface);
+  --color-lime-deep: var(--lime-deep);
+  --color-warning: var(--gold);
+  --color-warning-foreground: var(--warning-text);
+  --color-success: var(--success-text);
+  --color-chart-planned: var(--ink);
+  --color-chart-executed: var(--gold);
 }
 
 @layer base {
@@ -67,6 +94,19 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-base text-foreground antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-brand font-extrabold;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
