@@ -9,3 +9,7 @@ coverage
 .DS_Store
 .claude/settings.local.json
 .claude/worktrees
+
+# Impeccable runtime state
+.impeccable/live/
+**/.impeccable/hook.cache.json
