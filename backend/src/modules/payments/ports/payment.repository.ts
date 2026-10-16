@@ -6,7 +6,7 @@ export type Payment = {
 };
 
 // Abstract class (not interface) so it doubles as the Nest DI token.
-export abstract class PaymentRepositoryPort {
+export abstract class PaymentRepository {
   abstract save(payment: Payment): Promise<void>;
   abstract findById(id: string): Promise<Payment | null>;
 }
