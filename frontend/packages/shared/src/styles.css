@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Scan shared sources so every app gets the classes used here */
+@source "./";
+
 @custom-variant dark (&:is(.dark *));
 
 /* Design tokens: placeholder (shadcn neutral). Replace with the corporate design system. */

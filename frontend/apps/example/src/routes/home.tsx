@@ -1,4 +1,4 @@
-import { Button } from "~/shared/ui/button";
+import { Button } from "@agro/shared/ui/button";
 
 export default function Home() {
   return (
