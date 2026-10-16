@@ -1,0 +1,6 @@
+# Install scripts allowed (true) or deliberately blocked (false); pnpm 10 blocks unlisted ones.
+allowBuilds:
+  "@swc/core": true
+  "@scarf/scarf": false # telemetry
+  "@prisma/client": false # optional better-auth peer; we use TypeORM + pg
+  "better-sqlite3": false # optional better-auth peer; we use Postgres
