@@ -2,6 +2,8 @@ import { Button } from "@agro/shared/ui/button";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { FieldScene } from "~/components/field-scene";
 
+const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:5175";
+
 // three.js only loads when the 3D scene is actually shown
 const FieldCanvas = lazy(() => import("~/components/field-canvas"));
 
@@ -66,7 +68,7 @@ export default function Landing() {
               Financia tu cultivo por etapas: cada avance verificado en el campo libera el siguiente desembolso.
             </p>
             <Button size="lg" asChild className="animate-fade-up [animation-delay:300ms]">
-              <a href="#como-funciona">Ver cómo funciona</a>
+              <a href={APP_URL}>Probar la demo</a>
             </Button>
           </div>
           {is3D === false && <FieldScene />}

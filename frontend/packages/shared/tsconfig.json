@@ -2,7 +2,7 @@
   "include": ["src", "vitest.setup.ts"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
