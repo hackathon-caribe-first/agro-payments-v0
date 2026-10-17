@@ -1,0 +1,18 @@
+{
+  "name": "@surco/live-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "playwright test --project=demo",
+    "demo:full": "playwright test scenarios/full-journey.spec.ts --project=demo",
+    "demo:smoke": "playwright test scenarios/smoke.spec.ts --project=smoke",
+    "demo:approve": "playwright test scenarios/review-approve.spec.ts --project=demo",
+    "demo:observe": "playwright test scenarios/review-observe.spec.ts --project=demo",
+    "demo:grants": "playwright test scenarios/grants.spec.ts --project=demo",
+    "demo:payments": "playwright test scenarios/payments.spec.ts --project=demo",
+    "report": "playwright show-report artifacts/report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0"
+  }
+}
