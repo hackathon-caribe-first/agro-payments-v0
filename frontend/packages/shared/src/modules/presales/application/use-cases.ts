@@ -1,9 +1,12 @@
+import type { GrantRepository } from "../../grants/application/grant-repository";
 import type { MilestoneRepository } from "../../milestones/application/milestone-repository";
 import { err, ok } from "../../milestones/domain/errors";
 import { toFieldErrors } from "../../milestones/schemas/evidence-log";
 import type { MilestoneSummary } from "../../milestones/domain/milestone";
 import type { Project } from "../../projects/domain/project";
 import { projectQuotationTotal } from "../../projects/domain/project-rules";
+import type { PaymentAuthorization } from "../../payment-authorization/domain/authorization";
+import type { PaymentAuthorizationRepository } from "../../payment-authorization/application/payment-authorization-repository";
 import type { ProjectRepository } from "../../projects/application/project-repository";
 import { attemptPresale, type PresaleError, type PresaleResult } from "../domain/errors";
 import type { Actor, ListingUnit, OpenRequest, OpenRequestView, QuoteRequest, SaleQuote } from "../domain/presale";
@@ -37,6 +40,10 @@ export interface PresaleDeps {
   presales: PresaleRepository;
   projects: ProjectRepository;
   milestones: MilestoneRepository;
+  // Payment authorizations (read side).
+  paymentAuthorizations: PaymentAuthorizationRepository;
+  // Milestone grants (read side, producer project page).
+  grants: Pick<GrantRepository, "getProjectGrants">;
   // Injected clock (yyyy-mm-dd) so rules stay pure and testable.
   today: () => string;
   // The producer this app acts as; null when the caller is not a producer (a legacy null owner always matches).
@@ -60,6 +67,8 @@ export interface RequestDetail extends RequestEntry {
   milestone: MilestoneSummary | null;
   // The project quotation total for a PROJECT negotiation: frozen once agreed, otherwise the live preview.
   quotationTotal: number | null;
+  // The payment authorization granted for this PROJECT agreement (empty until the buyer authorizes).
+  authorizations: PaymentAuthorization[];
 }
 
 export interface OpenRequestEntry {
@@ -101,7 +110,7 @@ export function withEffectiveStatus(request: QuoteRequest, today: string): Quote
   };
 }
 
-async function toEntries(deps: PresaleDeps, requests: QuoteRequest[]): Promise<RequestEntry[]> {
+export async function toEntries(deps: PresaleDeps, requests: QuoteRequest[]): Promise<RequestEntry[]> {
   const today = deps.today();
   const titles = new Map<string, string>();
   const milestones = new Map<string, MilestoneSummary[]>();
@@ -209,14 +218,14 @@ export const acceptSaleQuote = (deps: PresaleDeps, requestId: string, rawRevisio
     const decision = await loadDecision(deps, requestId, rawRevision, actor, "accept");
     if (decision.failure) return err(decision.failure);
 
-    // Project negotiations: the server re-checks the agreement guards and, for the buyer on a PROJECT offer, deposits in the same step.
+    // Project negotiations: the server re-checks the agreement guards and, for the buyer on a PROJECT offer, authorizes the payment in the same step.
     if (decision.request.scope === "PROJECT" || decision.request.scope === "MILESTONE") {
       let expectedTotal: number | undefined;
       if (decision.request.scope === "PROJECT") {
         const given = (raw as { expectedTotal?: unknown } | null | undefined)?.expectedTotal;
         if (actor === "BUYER" || given !== undefined) {
           const parsed = expectedTotalSchema.safeParse({ expectedTotal: given });
-          if (!parsed.success) return err({ kind: "validation", fieldErrors: { expectedTotal: ["Confirma el total del depósito."] } });
+          if (!parsed.success) return err({ kind: "validation", fieldErrors: { expectedTotal: ["Confirma el total a autorizar."] } });
           expectedTotal = parsed.data.expectedTotal;
         }
       }
@@ -270,11 +279,16 @@ export const getRequestDetail = (deps: PresaleDeps, requestId: string, viewer: A
     ]);
     let quotationTotal: number | null = null;
     if (request.scope === "PROJECT") {
-      if (request.deposit) quotationTotal = request.deposit.agreedTotal;
+      if (request.authorization) quotationTotal = request.authorization.agreedTotal;
       else {
         const prices = agreedMilestonePrices(await deps.presales.listBuyerRequests(request.buyerId), request.buyerId);
         quotationTotal = projectQuotationTotal(milestones, prices);
       }
+    }
+    let authorizations: PaymentAuthorization[] = [];
+    if (request.scope === "PROJECT" && request.authorization?.status === "AUTHORIZED") {
+      const granted = await deps.paymentAuthorizations.listProjectAuthorizations(request.projectId);
+      authorizations = (granted ?? []).filter((a) => a.negotiationId === request.id);
     }
     return ok({
       request,
@@ -285,6 +299,7 @@ export const getRequestDetail = (deps: PresaleDeps, requestId: string, viewer: A
       milestone: request.milestoneId ? (milestones.find((m) => m.id === request.milestoneId) ?? null) : null,
       milestoneTitle: request.milestoneId ? (milestones.find((m) => m.id === request.milestoneId)?.title ?? null) : null,
       quotationTotal,
+      authorizations,
       turn: whoseTurn(request, deps.today()),
     });
   });

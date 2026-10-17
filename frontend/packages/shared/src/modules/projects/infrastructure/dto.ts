@@ -17,6 +17,8 @@ export const projectDtoSchema = z.object({
   start_date: z.string(),
   estimated_end_date: z.string(),
   currency: z.string(),
+  producer_wallet: z.string().nullable().optional(),
+  contingency_bps: z.number().int().nonnegative().nullable().optional(),
 });
 
 export type ProjectDto = z.infer<typeof projectDtoSchema>;
@@ -28,6 +30,8 @@ export const createProjectRequestDtoSchema = z.object({
   production_type: z.string(),
   start_date: z.string(),
   estimated_end_date: z.string(),
+  producer_wallet: z.string().optional(),
+  contingency_bps: z.number().int().nonnegative().optional(),
   milestones: z.array(
     z.object({
       title: z.string(),

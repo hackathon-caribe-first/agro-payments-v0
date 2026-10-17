@@ -5,7 +5,7 @@ import { isoDate, positiveInt } from "./fields";
 
 export const NO_CHANGE_MESSAGE = "La contraoferta debe cambiar al menos una condición.";
 
-// The terms of a PROJECT offer: registered only, they never change the deposit. No availability cap, no unit-match rule.
+// The terms of a PROJECT offer: registered only, they never change the authorized total. No availability cap, no unit-match rule.
 export const buildProjectTermsSchema = (today: string) =>
   z.object({
     quantity: positiveInt("Cantidad"),

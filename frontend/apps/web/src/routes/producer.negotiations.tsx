@@ -24,7 +24,7 @@ export default function ProducerNegotiations({ loaderData }: Route.ComponentProp
         className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4"
       >
         <ArrowLeft aria-hidden="true" className="size-4" />
-        {projectId ? "Volver a la publicación" : "Volver a mis proyectos"}
+        {projectId ? "Volver al proyecto" : "Volver a mis proyectos"}
       </Link>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>

@@ -29,6 +29,8 @@ const fromDto = (dto: ProjectDto): Project => ({
   startDate: dto.start_date,
   estimatedEndDate: dto.estimated_end_date,
   currency: dto.currency,
+  producerWallet: dto.producer_wallet ?? null,
+  contingencyBps: dto.contingency_bps ?? null,
 });
 
 export const toProject = (data: unknown): Project => fromDto(parse(projectDtoSchema, data, "project"));
@@ -41,6 +43,8 @@ export const toCreateProjectRequestDto = (input: CreateProjectInput): CreateProj
   production_type: input.productionType,
   start_date: input.startDate,
   estimated_end_date: input.estimatedEndDate,
+  ...(input.producerWallet ? { producer_wallet: input.producerWallet } : {}),
+  ...(input.contingencyBps !== undefined ? { contingency_bps: input.contingencyBps } : {}),
   milestones: withSequence(input.milestones).map((m) => ({
     title: m.title,
     description: m.description,

@@ -10,6 +10,7 @@ import { presaleErrorMessage, toActionData, type PresaleActionData } from "~/com
 import { formatDay, formatQuantity, unitText } from "~/components/presale/format";
 import { RequestStatusBadge } from "~/components/presale/status-badges";
 import { producerPresales } from "~/producer/presales";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/producer.open-request";
 
 export const meta = () => [{ title: "Solicitud abierta · Surco" }];
@@ -26,6 +27,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 const text = (form: FormData, name: string) => String(form.get(name) ?? "");
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData | Response> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.formData();
   if (form.get("intent") !== "start") return { fieldErrors: { _form: ["Acción desconocida."] } };
   const result = await producerPresales.startOpenRequestNegotiation(params.openRequestId, {

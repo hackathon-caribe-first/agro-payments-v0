@@ -29,7 +29,14 @@ export interface ProjectDraft {
   startDate: string;
   estimatedEndDate: string;
   milestones: NewMilestoneDraft[];
+  // RF-01: wallet address of the producer; the project form requires it, the transport accepts projects without it.
+  producerWallet?: string;
+  // RF-21 / D-05: contingency reserve in basis points (0 to 2000). The form defaults it to 5 % (500).
+  contingencyBps?: number;
 }
+
+export const DEFAULT_CONTINGENCY_BPS = 500;
+export const MAX_CONTINGENCY_PCT = 20;
 
 // Validated input handed to the repository (after the zod schema).
 export type CreateProjectInput = ProjectDraft;

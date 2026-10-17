@@ -70,6 +70,7 @@ const CACAO = "proj-cacao-arauca";
 const AGUACATE = "proj-aguacate-tolima";
 const PANELA = "proj-panela-cundinamarca";
 const PLATANO = "proj-platano-meta";
+const LIMON = "proj-limon-valle";
 const SIERRA = "ext-sierra-cafe";
 const TOLIMA = "ext-tolima-cacao";
 
@@ -88,6 +89,8 @@ const SPECS = [
   { id: "ms-31", projectId: PANELA, order: 1, title: "Renovación del cultivo", description: "Corte y resiembra de caña panelera.", status: "COMPLETED_AND_PAID", supplies: 4200000, labor: 2600000 },
   { id: "ms-32", projectId: PANELA, order: 2, title: "Fertilización orgánica", description: "Aplicación de abono orgánico en el cultivo.", status: "COMPLETED_AND_PAID", supplies: 3600000, labor: 1800000 },
   { id: "ms-33", projectId: PANELA, order: 3, title: "Corte y molienda", description: "Corte de caña y molienda en trapiche.", status: "TECHNICALLY_APPROVED", supplies: 2200000, labor: 5100000 },
+  { id: "ms-51", projectId: LIMON, order: 1, title: "Preparación del lote y riego", description: "Limpieza del lote e instalación del riego por goteo.", status: "LOCKED", supplies: 5500000, labor: 2500000, estimated: "2027-01-31" },
+  { id: "ms-52", projectId: LIMON, order: 2, title: "Renovación de árboles", description: "Poda de renovación y fertilización de los árboles.", status: "LOCKED", supplies: 4500000, labor: 2500000, estimated: "2027-05-15" },
   { id: "ms-41", projectId: PLATANO, order: 1, title: "Adecuación del terreno", description: "Drenajes y trazado del lote de plátano.", status: "ACTIVE", supplies: 3800000, labor: 2000000 },
   { id: "ms-42", projectId: PLATANO, order: 2, title: "Siembra de cormos", description: "Siembra de cormos de plátano Hartón.", status: "LOCKED", supplies: 7200000, labor: 2900000 },
   { id: "ms-43", projectId: PLATANO, order: 3, title: "Manejo de plagas", description: "Control fitosanitario del cultivo.", status: "LOCKED", supplies: 4500000, labor: 3600000 },

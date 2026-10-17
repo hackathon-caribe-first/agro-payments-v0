@@ -32,4 +32,8 @@ export interface Project {
   startDate: string;
   estimatedEndDate: string;
   currency: string;
+  // RF-01: validated billetera (Open Payments wallet address) where the producer is paid. Absent on projects created before it.
+  producerWallet?: string | null;
+  // RF-21 / D-05: share of each milestone budget kept as contingency reserve, in basis points (500 = 5 %). Absent = no reserve.
+  contingencyBps?: number | null;
 }

@@ -4,6 +4,7 @@ import { OpenRequestBoardView } from "~/components/open-request/board";
 import { OpenRequestViewBadge } from "~/components/open-request/view-badge";
 import { presaleErrorMessage, toActionData, type PresaleActionData } from "~/components/presale/error-copy";
 import { buyer } from "~/buyer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/buyer.open-request";
 
 export const meta = () => [{ title: "Solicitud abierta · Surco" }];
@@ -18,6 +19,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 }
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.formData();
   if (form.get("intent") !== "close") return { fieldErrors: { _form: ["Acción desconocida."] } };
   const result = await buyer.closeOpenRequest(params.openRequestId);

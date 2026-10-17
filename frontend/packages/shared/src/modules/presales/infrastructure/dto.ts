@@ -52,11 +52,11 @@ export const quoteRequestDtoSchema = z.object({
   created_at: z.string(),
   quotes: z.array(saleQuoteDtoSchema),
   history: z.array(historyEntryDtoSchema),
-  // Present once a PROJECT offer is accepted: the frozen total and the deposit state.
+  // Present once a PROJECT offer is accepted: the frozen total and the payment authorization state.
   agreed_total: z.number().optional(),
-  deposit_status: z.string().optional(),
-  deposited_at: z.string().nullable().optional(),
-  ledger_entry_id: z.string().nullable().optional(),
+  authorization_status: z.string().optional(),
+  authorized_at: z.string().nullable().optional(),
+  payment_authorization_id: z.string().nullable().optional(),
 });
 
 export const openRequestDtoSchema = z.object({
@@ -73,7 +73,7 @@ export const openRequestDtoSchema = z.object({
   delivery_location: z.string(),
   notes: z.string(),
   status: z.string(),
-  // Server-derived, like a listing's committed quantity.
+  // Server-derived, the sum of the accepted quantities.
   awarded_quantity: z.number().optional(),
   created_at: z.string(),
 });
@@ -129,8 +129,8 @@ export const startNegotiationDtoSchema = z.discriminatedUnion("scope", [
   }),
 ]);
 
-// POST /negotiations/:id/deposit
-export const depositBodyDtoSchema = z.object({ buyer_id: z.string(), expected_total: z.number().optional() });
+// POST /negotiations/:id/payment-authorization
+export const authorizePaymentBodyDtoSchema = z.object({ buyer_id: z.string(), expected_total: z.number().optional() });
 
 export const createOpenRequestDtoSchema = z.object({
   buyer_id: z.string(),
@@ -162,7 +162,7 @@ export type QuoteRequestDto = z.infer<typeof quoteRequestDtoSchema>;
 export type OpenRequestDto = z.infer<typeof openRequestDtoSchema>;
 export type CatalogProjectDto = z.infer<typeof catalogProjectDtoSchema>;
 export type StartNegotiationDto = z.infer<typeof startNegotiationDtoSchema>;
-export type DepositBodyDto = z.infer<typeof depositBodyDtoSchema>;
+export type AuthorizePaymentBodyDto = z.infer<typeof authorizePaymentBodyDtoSchema>;
 export type RespondRequestDto = z.infer<typeof respondRequestDtoSchema>;
 export type CreateOpenRequestDto = z.infer<typeof createOpenRequestDtoSchema>;
 export type StartOpenRequestNegotiationDto = z.infer<typeof startOpenRequestNegotiationDtoSchema>;

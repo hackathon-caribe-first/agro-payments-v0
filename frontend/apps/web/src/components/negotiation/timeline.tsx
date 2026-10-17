@@ -17,18 +17,18 @@ const KIND_LABELS: Record<string, string> = {
   EXPIRE: "La oferta venció",
   STATUS_CHANGED: "Cambio de estado",
   AUTO_CLOSE: "Negociación cerrada",
-  DEPOSIT: "Depositó en la fiducia",
+  AUTHORIZE_PAYMENT: "Autorizó el pago",
 };
 
 function termsLine(entry: HistoryEntry, unit: UnitRef | null, scope: NegotiationScope | null): string | null {
   const p = entry.payload;
-  if (entry.kind === "DEPOSIT" && p && typeof p.amount === "number") return `Monto ${formatMoney(p.amount, "COP")}`;
+  if (entry.kind === "AUTHORIZE_PAYMENT" && p && typeof p.cap === "number") return `Tope ${formatMoney(p.cap, "COP")}`;
   if (entry.kind === "AUTO_CLOSE") return null;
   if (!p) return null;
   if (typeof p.price === "number") return `Precio del hito ${formatMoney(p.price, "COP")}`;
   if (entry.kind === "ACCEPT" && typeof p.agreed_total === "number") return `Total acordado ${formatMoney(p.agreed_total, "COP")}`;
   if (typeof p.quantity !== "number" || typeof p.unit_price !== "number") return null;
-  // A PROJECT offer's value is only registered: it is not the deposit, so the line carries no total.
+  // A PROJECT offer's value is only registered: it is not the authorized total, so the line carries no total.
   if (scope === "PROJECT") return `${formatQuantity(p.quantity, unit)} a ${formatMoney(p.unit_price, "COP")}`;
   const total = typeof p.total === "number" ? p.total : p.quantity * p.unit_price;
   return `${formatQuantity(p.quantity, unit)} a ${formatMoney(p.unit_price, "COP")} · Total ${formatMoney(total, "COP")}`;

@@ -25,7 +25,7 @@ export interface PresaleRepository {
   startNegotiation(projectId: string, buyer: PartyIdentity, target: StartTarget): Promise<QuoteRequest>;
   counterProject(requestId: string, author: Actor, input: ProjectTermsInput): Promise<QuoteRequest>;
   counterMilestone(requestId: string, author: Actor, input: MilestoneTermsInput): Promise<QuoteRequest>;
-  deposit(requestId: string, buyer: PartyIdentity, expectedTotal: number): Promise<QuoteRequest>;
+  authorizePayment(requestId: string, buyer: PartyIdentity, expectedTotal: number): Promise<QuoteRequest>;
 
   // negotiations
   getRequest(requestId: string): Promise<QuoteRequest | null>;

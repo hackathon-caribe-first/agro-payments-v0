@@ -1,25 +1,28 @@
 import { err, ok } from "../../milestones/domain/errors";
 import { toFieldErrors } from "../../milestones/schemas/evidence-log";
+import type { MilestoneGrant } from "../../grants/domain/grant";
 import type { MilestoneSummary } from "../../milestones/domain/milestone";
 import { projectQuotationTotal } from "../../projects/domain/project-rules";
 import { attemptPresale } from "../domain/errors";
-import type { CatalogProject, DepositState, QuoteRequest } from "../domain/presale";
+import type { AuthorizationState, CatalogProject, QuoteRequest } from "../domain/presale";
 import {
   agreedMilestonePrices,
-  canDeposit,
+  canAuthorizePayment,
   canStart,
   findLiveNegotiation,
   isAgreed,
   type StartBlock,
 } from "../domain/negotiation-rules";
-import { depositSchema } from "../schemas/revision";
+import { authorizePaymentSchema } from "../schemas/revision";
 import { buildStartMilestoneNegotiationSchema } from "../schemas/start-milestone-negotiation";
 import { buildStartProjectNegotiationSchema } from "../schemas/start-project-negotiation";
 import type { PartyIdentity } from "./presale-repository";
-import { withEffectiveStatus, type PresaleDeps } from "./use-cases";
+import type { PaymentAuthorization } from "../../payment-authorization/domain/authorization";
+import type { Project } from "../../projects/domain/project";
+import { toEntries, withEffectiveStatus, type PresaleDeps, type RequestEntry } from "./use-cases";
 
-// Flow A: the buyer browses projects, negotiates the whole project or one milestone, and an agreed project is deposited
-// into the escrow custody account. One use case per loader/action.
+// Flow A: the buyer browses projects, negotiates the whole project or one milestone, and an agreed project is covered by a
+// payment authorization (the money stays in the buyer wallet). One use case per loader/action.
 
 const sortBySequence = (a: MilestoneSummary, b: MilestoneSummary) => a.sequenceOrder - b.sequenceOrder;
 
@@ -98,7 +101,7 @@ export interface MilestoneRow {
 
 export interface ProjectAgreement {
   negotiationId: string;
-  deposit: DepositState | null;
+  authorization: AuthorizationState | null;
 }
 
 export interface BuyerProjectDetail {
@@ -107,7 +110,7 @@ export interface BuyerProjectDetail {
   total: number;
   projectStartBlock: StartBlock | null;
   myLiveProjectId: string | null;
-  // The buyer's own agreed PROJECT negotiation, with its deposit state.
+  // The buyer's own agreed PROJECT negotiation, with its payment authorization state.
   agreement: ProjectAgreement | null;
 }
 
@@ -138,10 +141,10 @@ export const getBuyerProjectDetail = (deps: PresaleDeps, projectId: string, buye
     return ok({
       catalog,
       milestones: rows,
-      total: agreed?.deposit ? agreed.deposit.agreedTotal : projectQuotationTotal(summaries, prices),
+      total: agreed?.authorization ? agreed.authorization.agreedTotal : projectQuotationTotal(summaries, prices),
       projectStartBlock: project.block,
       myLiveProjectId: project.live?.id ?? null,
-      agreement: agreed ? { negotiationId: agreed.id, deposit: agreed.deposit } : null,
+      agreement: agreed ? { negotiationId: agreed.id, authorization: agreed.authorization } : null,
     });
   });
 
@@ -210,21 +213,92 @@ export const startNegotiation = (
     return ok(await deps.presales.startNegotiation(target.projectId, buyer, { scope: "PROJECT", input: parsed.data }));
   });
 
-// ---- deposit ----
+// ---- the producer's project page ----
 
-// The buyer executes the pending deposit of an agreed PROJECT negotiation with the total they saw.
-export const depositProjectAgreement = (deps: PresaleDeps, negotiationId: string, buyer: PartyIdentity, raw: unknown) =>
+export interface ProducerProjectView {
+  project: Project;
+  milestones: MilestoneSummary[];
+  // Negotiations on this project (both scopes), newest first.
+  negotiations: RequestEntry[];
+  // The agreed PROJECT negotiation, with its payment authorization state, if any.
+  agreement: QuoteRequest | null;
+  // Payment authorizations granted on this project, newest first.
+  authorizations: PaymentAuthorization[];
+  // Investor grants on this project's milestones (read-only), in milestone order.
+  grants: MilestoneGrant[];
+  // Milestones with an agreed MILESTONE negotiation: price, delivery date and buyer, in milestone order.
+  agreedMilestones: AgreedMilestone[];
+}
+
+export interface AgreedMilestone {
+  milestoneId: string;
+  sequenceOrder: number;
+  title: string;
+  price: number;
+  deliveryDate: string;
+  buyerName: string;
+  negotiationId: string;
+}
+
+// One read for the whole producer project page: project, milestones, negotiations and payment authorizations.
+export const getProducerProjectView = (deps: PresaleDeps, projectId: string) =>
+  attemptPresale<ProducerProjectView>(async () => {
+    const project = await deps.projects.getProject(projectId);
+    if (!project) return err({ kind: "not_found" });
+    const [milestones, requests, authorizationList, grantsView] = await Promise.all([
+      deps.milestones.listByProject(projectId),
+      deps.presales.listProducerRequests(projectId, deps.ownProducerId ?? undefined),
+      deps.paymentAuthorizations.listProjectAuthorizations(projectId),
+      // Secondary read-only card: an unavailable grants endpoint must not take the whole page down.
+      deps.grants.getProjectGrants(projectId).catch(() => null),
+    ]);
+    const order = new Map(milestones.map((m) => [m.id, m.sequenceOrder]));
+    const grants = [...(grantsView?.grants ?? [])].sort((a, b) => (order.get(a.milestoneId) ?? 0) - (order.get(b.milestoneId) ?? 0));
+    const negotiations = await toEntries(deps, requests);
+    const authorizations = [...(authorizationList ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const agreedMilestones: AgreedMilestone[] = [];
+    for (const { request } of negotiations) {
+      if (request.scope !== "MILESTONE" || !request.milestoneId || !isAgreed(request)) continue;
+      const summary = milestones.find((m) => m.id === request.milestoneId);
+      const terms = request.quotes.find((q) => q.status === "ACCEPTED")?.terms;
+      if (!summary || terms?.kind !== "MILESTONE") continue;
+      agreedMilestones.push({
+        milestoneId: summary.id,
+        sequenceOrder: summary.sequenceOrder,
+        title: summary.title,
+        price: terms.price,
+        deliveryDate: terms.deliveryDate,
+        buyerName: request.buyerName,
+        negotiationId: request.id,
+      });
+    }
+    agreedMilestones.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    return ok({
+      project,
+      milestones: [...milestones].sort(sortBySequence),
+      agreedMilestones,
+      negotiations,
+      agreement: negotiations.find((e) => e.request.scope === "PROJECT" && isAgreed(e.request))?.request ?? null,
+      authorizations,
+      grants,
+    });
+  });
+
+// ---- payment authorization ----
+
+// The buyer executes the pending payment authorization of an agreed PROJECT negotiation with the total they saw.
+export const authorizeProjectPayment = (deps: PresaleDeps, negotiationId: string, buyer: PartyIdentity, raw: unknown) =>
   attemptPresale<QuoteRequest>(async () => {
     const request = await deps.presales.getRequest(negotiationId);
     if (!request || request.buyerId !== buyer.id) return err({ kind: "not_found" });
     const catalog = await deps.presales.getCatalogProject(request.projectId);
     if (!catalog) return err({ kind: "not_found" });
 
-    const block = canDeposit(request, "BUYER", buyer.id, catalog.project);
-    if (block) return err({ kind: "deposit_unavailable", reason: block });
+    const block = canAuthorizePayment(request, "BUYER", buyer.id, catalog.project);
+    if (block) return err({ kind: "authorization_unavailable", reason: block });
 
-    const parsed = depositSchema.safeParse(raw);
-    if (!parsed.success) return err({ kind: "validation", fieldErrors: { expectedTotal: ["Confirma el total del depósito."] } });
-    return ok(await deps.presales.deposit(negotiationId, buyer, parsed.data.expectedTotal));
+    const parsed = authorizePaymentSchema.safeParse(raw);
+    if (!parsed.success) return err({ kind: "validation", fieldErrors: { expectedTotal: ["Confirma el total a autorizar."] } });
+    return ok(await deps.presales.authorizePayment(negotiationId, buyer, parsed.data.expectedTotal));
   });
 

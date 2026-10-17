@@ -128,6 +128,16 @@ export function EvidenceForm({ requirements, currentData, photoOptions }: Props)
   const fieldErrors = result?.fieldErrors ?? {};
   const saved = fetcher.data?.ok === true;
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Focus the first invalid control after a failed save.
+  useEffect(() => {
+    if (!result) return;
+    const frame = requestAnimationFrame(() => {
+      formRef.current?.querySelector<HTMLElement>('input[aria-invalid="true"], textarea[aria-invalid="true"], button[aria-invalid="true"]')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [result]);
 
   // Notes belong to a single log: clear them once it is saved.
   useEffect(() => {
@@ -135,7 +145,7 @@ export function EvidenceForm({ requirements, currentData, photoOptions }: Props)
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <fetcher.Form method="post" className="flex flex-col gap-4">
+    <fetcher.Form method="post" ref={formRef} className="flex flex-col gap-4">
       <input type="hidden" name="intent" value="evidence" />
 
       <div className="flex flex-col gap-1.5">
