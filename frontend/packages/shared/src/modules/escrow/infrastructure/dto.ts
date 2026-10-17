@@ -8,8 +8,10 @@ export const ledgerEntryDtoSchema = z.object({
   category: z.string(),
   amount: z.number(),
   currency: z.string(),
-  negotiation_id: z.string(),
-  buyer_id: z.string(),
+  // Buyer deposits carry the negotiation and buyer; investor capital (INVESTOR_CAPITAL) carries investment_id instead.
+  negotiation_id: z.string().default(""),
+  buyer_id: z.string().default(""),
+  investment_id: z.string().optional(),
   created_at: z.string(),
 });
 

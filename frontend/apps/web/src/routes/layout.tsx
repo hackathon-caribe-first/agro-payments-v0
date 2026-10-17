@@ -1,4 +1,4 @@
-import { ChevronsLeft, ChevronsRight, ClipboardCheck, Landmark, Menu, ShoppingBasket, Sprout, type LucideIcon } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, ClipboardCheck, HandCoins, Landmark, Menu, ShoppingBasket, Sprout, type LucideIcon } from "lucide-react";
 import { NavLink, Outlet, isRouteErrorResponse, useLocation, useRouteError } from "react-router";
 import {
   Sidebar,
@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@agro/shared/ui/tooltip
 const MODULES: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/producer", label: "Productor", icon: Sprout },
   { to: "/buyer", label: "Comprador", icon: ShoppingBasket },
+  { to: "/investor", label: "Inversionista", icon: HandCoins },
   { to: "/verifier", label: "Verificador", icon: ClipboardCheck },
   { to: "/custodian", label: "Operador", icon: Landmark },
 ];
