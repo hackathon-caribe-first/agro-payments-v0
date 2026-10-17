@@ -1,0 +1,77 @@
+name: Verify Surco
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend build, migrations and tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: agro
+          POSTGRES_PASSWORD: agro
+          POSTGRES_DB: agro_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agro -d agro_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://agro:agro@127.0.0.1:5432/agro_test
+      BETTER_AUTH_SECRET: github-actions-ci-only-not-production-secret
+      API_URL: http://localhost:3010
+      WEB_ORIGIN: http://localhost:5175
+      PAYMENT_GATEWAY: simulated
+      DEMO_IDENTITY: "false"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Compile NestJS
+        run: pnpm build
+      - name: Apply Better Auth schema to test database
+        run: pnpm auth:migrate
+      - name: Run backend tests
+        run: pnpm test
+
+  frontend:
+    name: Frontend build and checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build web
+        run: pnpm --filter @agro/web build
+      - name: Frontend tests
+        run: pnpm test
