@@ -1,5 +1,6 @@
 import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
 import { FakeGateway, FakeRepository, ThrowingGateway } from "../../milestones/application/testing";
+import { applyLineResult, review, submitEvidence } from "../../milestones/application/milestone";
 import type { PaymentGateway } from "../../milestones/ports/payment-gateway";
 import { CreateProjectUseCase } from "../../projects/application/create-project.use-case";
 import { PROJECT_STATUS, type Viewer } from "../../projects/application/project";
@@ -24,7 +25,8 @@ async function setup(
   // Simulated mode by default: payouts need no liquidation grant there.
   liquidation: LiquidationFunding = new SimulatedLiquidationFunding(),
 ) {
-  const projects = new FakeProjectRepository(new FakeRepository(new Map()));
+  const milestones = new FakeRepository(new Map());
+  const projects = new FakeProjectRepository(milestones);
   const project = await new CreateProjectUseCase(projects, wallets).execute(owner, {
     title: "Tomate bajo invernadero",
     description: "Ciclo de 120 días",
@@ -34,8 +36,18 @@ async function setup(
     estimatedEndDate: "2027-03-01",
     milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100, laborBudget: 200, requirements: [] }],
   });
+  // RF-24: the cascade runs once the buyer confirmed reception of the harvest.
+  await projects.updateStatus(project.id, PROJECT_STATUS.DELIVERED_TO_BUYER);
   const settlements = new FakeSettlementRepository();
-  return { projects, project, settlements, gateway, liquidation, useCases: new SettlementUseCases(projects, settlements, gateway, wallets, liquidation) };
+  return {
+    projects,
+    project,
+    milestones,
+    settlements,
+    gateway,
+    liquidation,
+    useCases: new SettlementUseCases(projects, settlements, gateway, wallets, liquidation, undefined, milestones),
+  };
 }
 
 describe("SettlementUseCases.preview", () => {
@@ -57,6 +69,20 @@ describe("SettlementUseCases.preview", () => {
   it("answers 404 for an unknown project", async () => {
     const { useCases } = await setup();
     await expect(useCases.preview("nope", admin, { ...sampleTerms(), days: null })).rejects.toThrow(NotFoundError);
+  });
+
+  it("defaults L to what is still in custody (credited balance minus milestone lines paid) when the request omits proceeds", async () => {
+    const { useCases, project, projects, milestones } = await setup();
+    const stored = await projects.findById(project.id);
+    if (stored) stored.custodyBalance = 250_000_000;
+    let [m] = await milestones.findByProject(project.id);
+    m = review(submitEvidence({ ...m, fundedAt: new Date() }, "Fotos", new Date()), "approved", null, new Date());
+    m = applyLineResult(m, m.lines[0].id, { status: "completado", reference: "R" }, new Date());
+    await milestones.save(m);
+    const preview = await useCases.preview(project.id, admin, { ...sampleTerms(), proceeds: null, days: 365 });
+    expect(preview.terms.proceeds).toBe(250_000_000 - m.lines[0].amount);
+    const explicit = await useCases.preview(project.id, admin, { ...sampleTerms(), days: 365 });
+    expect(explicit.terms.proceeds).toBe(200_000_000);
   });
 });
 
@@ -127,6 +153,15 @@ describe("SettlementUseCases create → approve → execute", () => {
     await expect(useCases.execute(draft.id)).rejects.toThrow(DomainError);
     const stored = await settlements.findById(draft.id);
     expect(stored?.payouts.map((p) => p.status)).toEqual([PAYOUT_STATUS.EXECUTING, PAYOUT_STATUS.EXECUTING, PAYOUT_STATUS.PENDING, PAYOUT_STATUS.PENDING, PAYOUT_STATUS.PENDING]);
+  });
+
+  it("refuses to execute (409) before the buyer confirmed reception of the harvest (DELIVERED_TO_BUYER)", async () => {
+    const { useCases, project, projects, gateway } = await setup();
+    const draft = await useCases.create(project.id, admin, { ...sampleTerms(), days: 365 });
+    await useCases.approve(draft.id, admin);
+    await projects.updateStatus(project.id, PROJECT_STATUS.MARKET_PAYMENT_HELD);
+    await expect(useCases.execute(draft.id)).rejects.toThrow(/DELIVERED_TO_BUYER/);
+    expect((gateway as FakeGateway).requests).toHaveLength(0);
   });
 
   it("refuses to execute a draft", async () => {

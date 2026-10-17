@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
-import type { LineResult } from "../../milestones/application/milestone";
+import { type LineResult, spentFromCustody } from "../../milestones/application/milestone";
+import { MilestoneRepository } from "../../milestones/ports/milestone.repository";
 import { PaymentGateway } from "../../milestones/ports/payment-gateway";
-import { canView, PROJECT_STATUS, type Project, type ProjectWallets, type Viewer } from "../../projects/application/project";
+import { canView, PROJECT_STATUS, type Project, type ProjectStatus, type ProjectWallets, type Viewer } from "../../projects/application/project";
 import { PROJECT_WALLETS } from "../../projects/application/project-wallets";
 import { ProjectRepository } from "../../projects/ports/project.repository";
 import { CapturedInvestors } from "../ports/captured-investors";
@@ -25,15 +26,24 @@ import {
   startExecution,
 } from "./settlement";
 
-/** Terms as the API sends them; null days means the project's cycle (start to estimated end), null investors its captured investments. */
-export type SettlementRequest = Omit<SettlementTerms, "days" | "investors"> & { days: number | null; investors: InvestorPosition[] | null };
+/**
+ * Terms as the API sends them; null days means the project's cycle (start to estimated end), null investors its captured investments,
+ * null proceeds what is still in custody (RF-24: B_d plus the harvest payment).
+ */
+export type SettlementRequest = Omit<SettlementTerms, "days" | "investors" | "proceeds"> & {
+  proceeds: number | null;
+  days: number | null;
+  investors: InvestorPosition[] | null;
+};
 
 const DAY_MS = 86_400_000;
+const EXECUTABLE_PROJECT: readonly ProjectStatus[] = [PROJECT_STATUS.DELIVERED_TO_BUYER, PROJECT_STATUS.SETTLEMENT_PROCESSING];
 const cycleDays = (p: Project) => Math.max(0, Math.round((Date.parse(`${p.estimatedEndDate}T00:00:00Z`) - Date.parse(`${p.startDate}T00:00:00Z`)) / DAY_MS));
 
-// ponytail: proceeds come in the request; L will come from the custody balance once the harvest payment (RF-24) exists, and no
-// project status gates the settlement yet. Investor positions come from the captured investments (RF-10) unless the request
-// sends them explicitly.
+// L defaults to what is still in custody: the credited balance (capital, deposits, the harvest payment of RF-24) minus the milestone
+// lines paid from it. ponytail: no τ_par/τ_ret, indemnity or ICR yet (A7); an explicit `proceeds` still overrides it.
+// Execution waits for DELIVERED_TO_BUYER (the buyer confirmed reception). Investor positions come from the captured investments
+// (RF-10) unless the request sends them explicitly.
 @Injectable()
 export class SettlementUseCases {
   constructor(
@@ -43,6 +53,7 @@ export class SettlementUseCases {
     @Inject(PROJECT_WALLETS) private readonly wallets: ProjectWallets,
     private readonly liquidation: LiquidationFunding,
     @Optional() private readonly captured?: CapturedInvestors,
+    @Optional() private readonly milestones?: MilestoneRepository,
   ) {}
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
@@ -65,7 +76,13 @@ export class SettlementUseCases {
   private async terms(project: Project, request: SettlementRequest): Promise<SettlementTerms> {
     const investors = request.investors ?? (await this.captured?.forProject(project.id)) ?? [];
     if (investors.length === 0) throw new ValidationError({ investors: ["El proyecto no tiene inversiones captadas: agrega los inversionistas."] }, "No investors");
-    return { ...request, investors, days: request.days ?? cycleDays(project) };
+    return { ...request, investors, days: request.days ?? cycleDays(project), proceeds: request.proceeds ?? (await this.custodyLeft(project)) };
+  }
+
+  /** RF-21: the credited custody balance minus the milestone lines paid or in flight from it. */
+  private async custodyLeft(project: Project): Promise<number> {
+    const milestones = (await this.milestones?.findByProject(project.id)) ?? [];
+    return Math.max(0, project.custodyBalance - milestones.reduce((sum, m) => sum + spentFromCustody(m), 0));
   }
 
   /** The cascade and its payouts for these terms; nothing is stored. */
@@ -108,6 +125,11 @@ export class SettlementUseCases {
   async execute(id: string): Promise<Settlement> {
     const current = await this.settlement(id);
     // RF-26: payouts leave custody only through the liquidation grant the fiduciaria approved (open-payments mode).
+    const project = await this.projects.findById(current.projectId);
+    // RF-24 → RF-26: the cascade pays out only after the buyer confirmed reception (re-runs continue while processing).
+    if (!project || !EXECUTABLE_PROJECT.includes(project.currentStatus)) {
+      throw new DomainError(`Project ${current.projectId} is ${project?.currentStatus ?? "missing"}; the settlement executes after DELIVERED_TO_BUYER`);
+    }
     if (!(await this.liquidation.ready(id))) throw new DomainError(`Settlement ${id} needs the fiduciaria's liquidation grant before executing`);
     let settlement = startExecution(current);
     await this.settlements.save(settlement);

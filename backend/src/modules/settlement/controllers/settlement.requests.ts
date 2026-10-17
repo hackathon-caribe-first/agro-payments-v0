@@ -54,7 +54,8 @@ function investors(errors: FieldErrors, value: unknown): InvestorPosition[] | nu
 export function parseSettlementRequest(body: unknown): SettlementRequest {
   if (!isObject(body)) throw new ValidationError({ [FORM_LEVEL_KEY]: ["La solicitud no tiene el formato esperado."] }, "Invalid request shape");
   const errors: FieldErrors = {};
-  const proceeds = pesos(errors, "proceeds", body.proceeds);
+  // Omitted (or null): the use case takes what is still in custody.
+  const proceeds = body.proceeds === undefined || body.proceeds === null ? null : pesos(errors, "proceeds", body.proceeds);
   const integratorDebt = pesos(errors, "integrator_debt", body.integrator_debt, { optional: true });
   const wallet = body.integrator_wallet_address;
   if (wallet !== undefined && wallet !== null && !isHttpsUrl(wallet)) addFieldError(errors, "integrator_wallet_address", "Ingresa la dirección https de la billetera del integrador.");

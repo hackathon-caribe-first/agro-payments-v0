@@ -157,6 +157,15 @@ const allocated = (lines: readonly Pick<Line, "amount">[]) => lines.reduce((sum,
 /** What the grant cap still leaves for new supplier lines, in minor units. */
 export const remainingCap = (m: Pick<Milestone, "amount" | "lines">) => m.amount - allocated(m.lines);
 
+/**
+ * RF-21 / RF-27: what left custody under this milestone's grant — lines completado or en_cola (a queued payment already debits the
+ * grant), at the debit the wallet reported when it is in the milestone's asset, else the line amount.
+ */
+export const spentFromCustody = (m: Pick<Milestone, "currency" | "lines">) =>
+  m.lines
+    .filter((l) => l.status === LINE_STATUS.COMPLETADO || l.status === LINE_STATUS.EN_COLA)
+    .reduce((sum, l) => sum + (l.receipt?.debitAmount && l.receipt.debitAmount.assetCode === m.currency ? l.receipt.debitAmount.value : l.amount), 0);
+
 // RF-22: closed means approved with every existing line final; closing is what revokes the grant.
 const closedAtIfDone = (status: MilestoneStatus, lines: readonly Line[], now: Date) =>
   status === MILESTONE_STATUS.APPROVED && lines.every(isFinal) ? now : null;

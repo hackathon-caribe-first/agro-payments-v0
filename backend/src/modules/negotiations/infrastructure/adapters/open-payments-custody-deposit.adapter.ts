@@ -14,6 +14,42 @@ import { CustodyDeposit, type DepositOrder } from "../../ports/custody-deposit";
 export const depositDebitLimit = (amount: number) => amount + Math.ceil(amount / 100);
 
 type Wallet = { id: string; assetCode: string; assetScale: number };
+type CustodyAmount = { amount: number; currency: string; assetScale: number };
+
+// ponytail: no FX, like the milestone lines.
+export function assertWalletAsset(wallet: Wallet, order: CustodyAmount) {
+  if (wallet.assetCode !== order.currency || wallet.assetScale !== order.assetScale) {
+    throw new DomainError(`Wallet ${wallet.id} holds ${wallet.assetCode}/${wallet.assetScale} but the payment is ${order.currency}/${order.assetScale}`);
+  }
+}
+
+/**
+ * The payer → custody move shared by the buyer's deposit and the harvest payment (RF-24): incoming payment on custody for the exact
+ * amount, quote on the payer's wallet with that receiver, outgoing payment under the just-finalized grant. Resolves the outgoing payment id.
+ */
+export async function payIntoCustody(
+  op: OpenPayments,
+  grant: { access: { accessToken: string }; payerWalletAddress: string; debitLimit: number },
+  order: CustodyAmount,
+  what: string,
+): Promise<{ reference: string }> {
+  const { client, custodyWalletAddress } = op;
+  const payer = await client.walletAddress.get({ url: grant.payerWalletAddress });
+  const custody = await client.walletAddress.get({ url: custodyWalletAddress });
+  const incomingToken = await requestToken(op, custody.authServer, { type: "incoming-payment", actions: ["create", "read"] });
+  const incoming = await client.incomingPayment.create(
+    { url: custody.resourceServer, accessToken: incomingToken },
+    { walletAddress: custody.id, incomingAmount: { value: String(order.amount), assetCode: order.currency, assetScale: order.assetScale } },
+  );
+  const quoteToken = await requestToken(op, payer.authServer, { type: "quote", actions: ["create", "read"] });
+  const quote = await client.quote.create({ url: payer.resourceServer, accessToken: quoteToken }, { walletAddress: payer.id, receiver: incoming.id, method: "ilp" });
+  const debit = Number(quote.debitAmount?.value ?? 0);
+  if (debit > grant.debitLimit) throw new DomainError(`${what} would debit ${debit}, above the approved ${grant.debitLimit}`);
+  // The token is fresh from the continue call, so no rotation is needed here.
+  const outgoing = await client.outgoingPayment.create({ url: payer.resourceServer, accessToken: grant.access.accessToken }, { walletAddress: payer.id, quoteId: quote.id });
+  // ponytail: a created outgoing payment counts as paid; confirm by polling the incoming payment's completion later.
+  return { reference: outgoing.id };
+}
 
 // PRD v3: the buyer moves the agreed project total from their wallet into the custody wallet. start() asks the buyer's wallet for
 // one interactive outgoing grant; complete() verifies the redirect, then pays: incoming payment on custody for the exact total,
@@ -28,20 +64,13 @@ export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
     super();
   }
 
-  private assertAsset(wallet: Wallet, order: DepositOrder) {
-    if (wallet.assetCode !== order.currency || wallet.assetScale !== order.assetScale) {
-      throw new DomainError(`Wallet ${wallet.id} holds ${wallet.assetCode}/${wallet.assetScale} but the deposit is ${order.currency}/${order.assetScale}`);
-    }
-  }
-
   async start(order: DepositOrder) {
     if (!this.buyerWalletAddress) throw new DomainError("OP_BUYER_WALLET_ADDRESS is not set: the buyer has no wallet to deposit from");
     const { client, grants, custodyWalletAddress } = this.op;
     const buyer = await client.walletAddress.get({ url: this.buyerWalletAddress });
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
-    // ponytail: no FX, like the milestone lines.
-    this.assertAsset(buyer, order);
-    this.assertAsset(custody, order);
+    assertWalletAsset(buyer, order);
+    assertWalletAsset(custody, order);
 
     const limit = depositDebitLimit(order.amount);
     const finishUri = `${this.apiUrl}/api/negotiations/${encodeURIComponent(order.negotiationId)}/deposit/callback`;
@@ -67,25 +96,8 @@ export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
   }
 
   async complete(order: DepositOrder, callback: FundingCallback) {
-    const { client, grants, custodyWalletAddress } = this.op;
-    const grant = await grants.findLatestForNegotiation(order.negotiationId);
-    const { access, payerWalletAddress, debitLimit } = await finalizeInteractiveGrant(this.op, grant, callback, `Deposit ${order.negotiationId}`);
-    const buyer = await client.walletAddress.get({ url: payerWalletAddress });
-    const custody = await client.walletAddress.get({ url: custodyWalletAddress });
-
-    const incomingToken = await requestToken(this.op, custody.authServer, { type: "incoming-payment", actions: ["create", "read"] });
-    const incoming = await client.incomingPayment.create(
-      { url: custody.resourceServer, accessToken: incomingToken },
-      { walletAddress: custody.id, incomingAmount: { value: String(order.amount), assetCode: order.currency, assetScale: order.assetScale } },
-    );
-    const quoteToken = await requestToken(this.op, buyer.authServer, { type: "quote", actions: ["create", "read"] });
-    const quote = await client.quote.create({ url: buyer.resourceServer, accessToken: quoteToken }, { walletAddress: buyer.id, receiver: incoming.id, method: "ilp" });
-    const debit = Number(quote.debitAmount?.value ?? 0);
-    if (debit > debitLimit) throw new DomainError(`Deposit ${order.negotiationId} would debit ${debit}, above the approved ${debitLimit}`);
-
-    // The token is fresh from the continue call, so no rotation is needed here.
-    const outgoing = await client.outgoingPayment.create({ url: buyer.resourceServer, accessToken: access.accessToken }, { walletAddress: buyer.id, quoteId: quote.id });
-    // ponytail: a created outgoing payment counts as deposited; confirm by polling the incoming payment's completion later.
-    return { reference: outgoing.id };
+    const grant = await this.op.grants.findLatestForNegotiation(order.negotiationId);
+    const active = await finalizeInteractiveGrant(this.op, grant, callback, `Deposit ${order.negotiationId}`);
+    return payIntoCustody(this.op, active, order, `Deposit ${order.negotiationId}`);
   }
 }

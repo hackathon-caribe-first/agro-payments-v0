@@ -7,6 +7,7 @@ import { CreateSettlements1792195200000 } from "./settlement-1792195200000-creat
 import { AssistantCreateTables1792290000000 } from "./1792290000000-assistant-create-tables";
 import { CreateSimulationRuns1792368000000 } from "./simulation-1792368000000-create-simulation-runs";
 import { PayoutsSuppliersAndLiquidationGrants1792454400000 } from "./payouts-1792454400000-suppliers-and-liquidation-grants";
+import { CreateHarvests1792627200000 } from "./harvest-1792627200000-create-harvests";
 
 // Listed explicitly, in order, rather than globbed: a glob must match .ts under vitest and .js under nest's dist output,
 // and a typo in it silently runs nothing. Every module's migrations live here so they share one ordered history.
@@ -20,4 +21,5 @@ export const MIGRATIONS = [
   AssistantCreateTables1792290000000,
   CreateSimulationRuns1792368000000,
   PayoutsSuppliersAndLiquidationGrants1792454400000,
+  CreateHarvests1792627200000,
 ];

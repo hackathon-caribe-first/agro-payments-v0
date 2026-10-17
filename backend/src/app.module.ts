@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AssistantModule } from "./modules/assistant/assistant.module";
+import { HarvestModule } from "./modules/harvest/harvest.module";
 import { InvestmentsModule } from "./modules/investments/investments.module";
 import { MilestonesModule } from "./modules/milestones/milestones.module";
 import { NegotiationsModule } from "./modules/negotiations/negotiations.module";
@@ -23,6 +24,7 @@ import { DatabaseModule } from "./shared/database/database.module";
     SimulationModule,
     AssistantModule,
     PayoutsModule,
+    HarvestModule,
   ],
 })
 export class AppModule {}

@@ -31,6 +31,12 @@ import { simulate } from "../../../simulation/application/motor";
 import { PRESETS } from "../../../simulation/application/presets";
 import type { SimulationRun } from "../../../simulation/application/simulation-run";
 import { TypeOrmSimulationRunAdapter } from "../../../simulation/infrastructure/persistence/typeorm-simulation-run.adapter";
+import { HarvestUseCases } from "../../../harvest/application/harvest.use-cases";
+import { InvestorPanelUseCases } from "../../../harvest/application/investor-panel.use-cases";
+import { FakeHarvestPayment, HARVEST_BUYER, PRODUCER as HARVEST_PRODUCER, VERIFIER } from "../../../harvest/application/testing";
+import { TypeOrmHarvestStore } from "../../../harvest/infrastructure/persistence/typeorm-harvest-store.adapter";
+import { TypeOrmPanelSources } from "../../../harvest/infrastructure/persistence/typeorm-panel-sources.adapter";
+import { PROJECT_STATUS } from "../../../projects/application/project";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -665,5 +671,61 @@ describe("TypeOrmSimulationRunAdapter", () => {
     await repo.save(run("r1", now));
     expect((await repo.findLatest("p1"))?.id).toBe("r2");
     await expect(repo.save({ ...run("r3", now), projectId: "nope" })).rejects.toThrow();
+  });
+});
+
+describe("TypeOrmHarvestStore (RF-24) and the custody statement (RF-21)", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const input: NewProjectInput = {
+    title: "Café de altura",
+    description: "Ciclo de café",
+    productionType: "CAFE_ESPECIAL",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100_000, laborBudget: 200_000, requirements: [] }],
+  };
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+    if (!dataSource) return;
+    const { project, milestones } = buildProject({ id: "p-h", ownerUserId: HARVEST_PRODUCER.id, input, wallets, now });
+    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+    await dataSource.query("UPDATE projects SET current_status = $1, custody_balance = $2 WHERE id = 'p-h'", [PROJECT_STATUS.IN_EXECUTION, 30_900_000]);
+  });
+
+  const wire = (ds: DataSource) => {
+    const store = new TypeOrmHarvestStore(ds);
+    return { store, useCases: new HarvestUseCases(store, new FakeHarvestPayment(false), { now: () => now }) };
+  };
+  const status = async (ds: DataSource) => (await ds.query("SELECT current_status, custody_balance FROM projects WHERE id = 'p-h'"))[0];
+
+  it("runs declare → certify → pay → reception, booking one HARVEST_PAYMENT credit with the custody balance in one transaction", async (ctx) => {
+    const ds = db(ctx);
+    const { store, useCases } = wire(ds);
+    await useCases.declare("p-h", HARVEST_PRODUCER, { quantityKg: 1_000, qualityGrade: "Excelso", evidence: "Fotos en bodega" });
+    expect((await status(ds)).current_status).toBe(PROJECT_STATUS.HARVEST_DECLARED);
+    const certified = await useCases.certify("p-h", VERIFIER, { quantityKg: 900, qualityGrade: "Excelso", notes: null, price: { kind: "fixed", pricePerKg: 12_000 } });
+    expect(await store.findHarvest("p-h")).toEqual(certified);
+    const { harvest } = await useCases.pay("p-h", HARVEST_BUYER);
+    expect(await store.findHarvest("p-h")).toEqual(harvest);
+    expect(await status(ds)).toEqual({ current_status: PROJECT_STATUS.MARKET_PAYMENT_HELD, custody_balance: String(30_900_000 + 900 * 12_000 * 100) });
+    expect(await store.creditsByCategory("p-h")).toEqual({ HARVEST_PAYMENT: 900 * 12_000 * 100 });
+    await useCases.confirmReception("p-h", HARVEST_BUYER);
+    expect((await status(ds)).current_status).toBe(PROJECT_STATUS.DELIVERED_TO_BUYER);
+  });
+
+  it("refuses a second HARVEST_PAYMENT credit for the same project and a credit without a buyer", async (ctx) => {
+    const ds = db(ctx);
+    const store = new TypeOrmHarvestStore(ds);
+    const credit = { id: "led-1", projectId: "p-h", amount: 100, currency: "COP", buyerUserId: "u-buyer", paymentReference: null, createdAt: now.toISOString() };
+    await store.creditHarvest(credit, 10_000);
+    await expect(store.creditHarvest({ ...credit, id: "led-2" }, 10_000)).rejects.toThrow();
+    await expect(store.creditHarvest({ ...credit, id: "led-3", buyerUserId: null as unknown as string }, 10_000)).rejects.toThrow();
+  });
+
+  it("reads the custody statement through the panel sources", async (ctx) => {
+    const ds = db(ctx);
+    const panel = new InvestorPanelUseCases(new TypeOrmHarvestStore(ds), new TypeOrmMilestoneAdapter(ds), new TypeOrmPanelSources(ds));
+    expect(await panel.custody("p-h", HARVEST_PRODUCER)).toMatchObject({ credited: 30_900_000, milestoneDebits: 0, settlementDebits: 0, balance: 30_900_000 });
   });
 });

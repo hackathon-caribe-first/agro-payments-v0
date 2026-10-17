@@ -48,6 +48,11 @@ describe("parseSettlementRequest", () => {
     expect(parseSettlementRequest({ proceeds }).investors).toBeNull();
   });
 
+  // RF-24 → RF-26: without proceeds the use case takes the project's custody balance (B_d plus the harvest payment).
+  it.each([undefined, null])("leaves proceeds null when the body sends %s", (proceeds) => {
+    expect(parseSettlementRequest({ ...body(), proceeds }).proceeds).toBeNull();
+  });
+
   it("rejects a body that is not an object", () => {
     expect(errorsOf([])).toEqual({ _form: ["La solicitud no tiene el formato esperado."] });
   });
@@ -55,7 +60,6 @@ describe("parseSettlementRequest", () => {
   it.each([
     { name: "negative proceeds", patch: { proceeds: -1 }, path: "proceeds" },
     { name: "fractional proceeds", patch: { proceeds: 1.5 }, path: "proceeds" },
-    { name: "missing proceeds", patch: { proceeds: undefined }, path: "proceeds" },
     { name: "debt as text", patch: { integrator_debt: "100" }, path: "integrator_debt" },
     { name: "debt without wallet", patch: { integrator_wallet_address: undefined }, path: "integrator_wallet_address" },
     { name: "http integrator wallet", patch: { integrator_wallet_address: "http://wallet.test/i" }, path: "integrator_wallet_address" },
