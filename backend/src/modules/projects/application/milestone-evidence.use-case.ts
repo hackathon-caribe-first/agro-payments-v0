@@ -14,16 +14,16 @@ export class MilestoneEvidenceUseCase {
   ) {}
 
   async addLog(id: string, viewer: Viewer, request: EvidenceLogRequest) {
-    const { milestone, siblings } = await this.queries.load(id, viewer);
-    const next = addEvidenceLog(milestone, siblings, request, new Date());
+    const { milestone, siblings, gate } = await this.queries.load(id, viewer);
+    const next = addEvidenceLog(milestone, siblings, request, new Date(), gate);
     await this.milestones.save(next);
     return next.evidenceLogs.at(-1)!;
   }
 
   async submit(id: string, viewer: Viewer): Promise<MilestoneView> {
-    const { milestone, siblings } = await this.queries.load(id, viewer);
-    const next = submitForReview(milestone, siblings, new Date());
+    const { milestone, siblings, gate } = await this.queries.load(id, viewer);
+    const next = submitForReview(milestone, siblings, new Date(), gate);
     await this.milestones.save(next);
-    return { milestone: next, status: progressStatus(next, siblings) };
+    return { milestone: next, status: progressStatus(next, siblings, gate) };
   }
 }

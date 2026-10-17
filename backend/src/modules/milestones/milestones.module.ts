@@ -29,7 +29,8 @@ import { PaymentGateway } from "./ports/payment-gateway";
 
 // PAYMENT_GATEWAY picks the adapters: simulated (default) or open-payments, which shares one client and grant store.
 // Milestones persist in Postgres in both modes; grants (and their encryption key) exist only in open-payments mode.
-const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
+/** The shared client + grant store, or null in simulated mode. Exported for the buyer custody deposit (NegotiationsModule). */
+export const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
 
 @Module({
   imports: [AuthModule, TypeOrmModule.forFeature(MILESTONE_ENTITIES)],
@@ -84,6 +85,6 @@ const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
       },
     },
   ],
-  exports: [MilestoneRepository],
+  exports: [MilestoneRepository, OPEN_PAYMENTS],
 })
 export class MilestonesModule {}

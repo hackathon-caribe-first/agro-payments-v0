@@ -6,7 +6,8 @@
 //   TECHNICALLY_APPROVED  approved, lines still pending
 //   SUBMITTED_FOR_REVIEW  evidence_submitted
 //   CHANGES_REQUESTED     observado
-//   LOCKED                draft and an earlier milestone of the same project is not approved yet (milestones open in order)
+//   LOCKED                draft and either the project's custody is not funded yet (gate.custodyFunded false: the buyer's
+//                         deposit opens the project) or an earlier milestone of the same project is not approved yet
 //   SUPPLIES_ORDERED      draft and a proveedor line is en_cola (the supplier payment is in flight)
 //   IN_FIELD_EXECUTION    draft, every proveedor line completado and at least one evidence log recorded
 //   SUPPLIES_PAID         draft, every proveedor line completado, no log yet
@@ -56,6 +57,9 @@ const SUBMIT_ALLOWED: ReadonlySet<ProgressStatus> = new Set([
   PROGRESS_STATUS.CHANGES_REQUESTED,
 ]);
 
+/** Whether the milestone's project holds its buyer's deposit in custody. Omitted for projectless legacy milestones (never gated). */
+export type CustodyGate = { custodyFunded: boolean };
+
 export const canRecordEvidence = (status: ProgressStatus) => EVIDENCE_ALLOWED.has(status);
 export const canSubmitForReview = (status: ProgressStatus) => SUBMIT_ALLOWED.has(status);
 
@@ -68,7 +72,7 @@ function isLocked(m: Milestone, siblings: readonly Milestone[]) {
   );
 }
 
-export function progressStatus(m: Milestone, siblings: readonly Milestone[]): ProgressStatus {
+export function progressStatus(m: Milestone, siblings: readonly Milestone[], gate?: CustodyGate): ProgressStatus {
   if (m.closedAt) return PROGRESS_STATUS.COMPLETED_AND_PAID;
   switch (m.status) {
     case MILESTONE_STATUS.APPROVED:
@@ -80,7 +84,7 @@ export function progressStatus(m: Milestone, siblings: readonly Milestone[]): Pr
     case MILESTONE_STATUS.OBSERVADO:
       return PROGRESS_STATUS.CHANGES_REQUESTED;
     case MILESTONE_STATUS.DRAFT: {
-      if (isLocked(m, siblings)) return PROGRESS_STATUS.LOCKED;
+      if (gate?.custodyFunded === false || isLocked(m, siblings)) return PROGRESS_STATUS.LOCKED;
       const supplies = m.lines.filter((l) => l.kind === LINE_KIND.PROVEEDOR);
       if (supplies.some((l) => l.status === LINE_STATUS.EN_COLA)) return PROGRESS_STATUS.SUPPLIES_ORDERED;
       if (supplies.length > 0 && supplies.every((l) => l.status === LINE_STATUS.COMPLETADO)) {
@@ -143,8 +147,8 @@ export function validateEvidenceLog(requirements: readonly Requirement[], input:
 }
 
 // 409 for the status first, then 400 for the payload: a closed door is reported before what was carried to it.
-export function addEvidenceLog(m: Milestone, siblings: readonly Milestone[], input: EvidenceLogRequest, now: Date): Milestone {
-  const status = progressStatus(m, siblings);
+export function addEvidenceLog(m: Milestone, siblings: readonly Milestone[], input: EvidenceLogRequest, now: Date, gate?: CustodyGate): Milestone {
+  const status = progressStatus(m, siblings, gate);
   if (!canRecordEvidence(status)) throw new DomainError(`Evidence is not accepted in status ${status}`);
   const log: EvidenceLog = { id: `${m.id}-log-${m.evidenceLogs.length + 1}`, ...validateEvidenceLog(m.requirements, input), createdAt: now };
   return { ...m, evidenceLogs: [...m.evidenceLogs, log] };
@@ -171,8 +175,8 @@ export const missingRequirements = (requirements: readonly Requirement[], data: 
   requirements.filter((r) => !isSatisfied(r, data[r.fieldKey])).map((r) => r.fieldKey);
 
 // Reuses the legacy submitEvidence transition, so the verifier's POST /milestones/:id/review keeps working on these milestones.
-export function submitForReview(m: Milestone, siblings: readonly Milestone[], now: Date): Milestone {
-  const status = progressStatus(m, siblings);
+export function submitForReview(m: Milestone, siblings: readonly Milestone[], now: Date, gate?: CustodyGate): Milestone {
+  const status = progressStatus(m, siblings, gate);
   if (!canSubmitForReview(status)) throw new DomainError(`Milestone ${m.id} cannot be submitted for review while ${status}`);
   const missing = missingRequirements(m.requirements, currentFieldData(m.evidenceLogs));
   if (missing.length > 0) throw new DomainError(`Milestone ${m.id} has unmet requirements: ${missing.join(", ")}`);

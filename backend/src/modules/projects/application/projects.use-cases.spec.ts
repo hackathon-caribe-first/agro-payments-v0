@@ -40,7 +40,14 @@ function setup(...seed: Milestone[]) {
   const milestones = new FakeRepository(new Map(seed.map((m) => [m.id, m])));
   const projects = new FakeProjectRepository(milestones);
   const queries = new ProjectQueries(projects, milestones);
-  return { milestones, projects, queries, create: new CreateProjectUseCase(projects, wallets), evidence: new MilestoneEvidenceUseCase(queries, milestones) };
+  const create = new CreateProjectUseCase(projects, wallets);
+  // Block 3: milestones open only once a buyer's deposit funds the custody, so the evidence flow starts from a funded project.
+  const createFunded = async (viewer: Viewer) => {
+    const project = await create.execute(viewer, input());
+    (await projects.findById(project.id))!.currentStatus = "FUNDED_IN_CUSTODY";
+    return project;
+  };
+  return { milestones, projects, queries, create, createFunded, evidence: new MilestoneEvidenceUseCase(queries, milestones) };
 }
 
 describe("CreateProjectUseCase", () => {
@@ -77,8 +84,8 @@ describe("ProjectQueries", () => {
   });
 
   it("lists a project's milestones in order with their derived status", async () => {
-    const { create, queries } = setup();
-    const project = await create.execute(producer, input());
+    const { createFunded, queries } = setup();
+    const project = await createFunded(producer);
     const views = await queries.milestones(project.id, producer);
     expect(views.map((v) => [v.milestone.sequenceOrder, v.status])).toEqual([
       [1, PROGRESS_STATUS.ACTIVE],
@@ -95,30 +102,38 @@ describe("ProjectQueries", () => {
     await expect(queries.milestone("nope", producer)).rejects.toThrow(NotFoundError);
     expect((await queries.milestone("legacy", otherProducer)).status).toBe(PROGRESS_STATUS.ACTIVE);
   });
+
+  it("keeps every milestone LOCKED until the project is FUNDED_IN_CUSTODY", async () => {
+    const { create, queries, evidence } = setup();
+    const project = await create.execute(producer, input());
+    expect((await queries.milestones(project.id, producer)).map((v) => v.status)).toEqual([PROGRESS_STATUS.LOCKED, PROGRESS_STATUS.LOCKED]);
+    expect((await queries.milestone(`${project.id}-ms-1`, producer)).status).toBe(PROGRESS_STATUS.LOCKED);
+    await expect(evidence.addLog(`${project.id}-ms-1`, producer, { logType: "IOT_READING", notes: "", evidencePayload: { ok: true } })).rejects.toThrow(DomainError);
+  });
 });
 
 describe("MilestoneEvidenceUseCase", () => {
   const log = { logType: "IOT_READING", notes: "lectura", evidencePayload: { ok: true } };
 
   it("records a log and persists it", async () => {
-    const { create, evidence, milestones } = setup();
-    const project = await create.execute(producer, input());
+    const { createFunded, evidence, milestones } = setup();
+    const project = await createFunded(producer);
     const recorded = await evidence.addLog(`${project.id}-ms-1`, producer, log);
     expect(recorded).toMatchObject({ id: `${project.id}-ms-1-log-1`, logType: "IOT_READING", evidencePayload: { ok: true } });
     expect((await milestones.findById(`${project.id}-ms-1`))?.evidenceLogs).toHaveLength(1);
   });
 
   it("refuses a locked milestone (409), a bad payload (400) and another producer (404)", async () => {
-    const { create, evidence } = setup();
-    const project = await create.execute(producer, input());
+    const { createFunded, evidence } = setup();
+    const project = await createFunded(producer);
     await expect(evidence.addLog(`${project.id}-ms-2`, producer, { ...log, evidencePayload: {} })).rejects.toThrow(DomainError);
     await expect(evidence.addLog(`${project.id}-ms-1`, producer, { ...log, evidencePayload: { ok: "yes" } })).rejects.toThrow(ValidationError);
     await expect(evidence.addLog(`${project.id}-ms-1`, otherProducer, log)).rejects.toThrow(NotFoundError);
   });
 
   it("submits once the requirements are met and returns the new view", async () => {
-    const { create, evidence } = setup();
-    const project = await create.execute(producer, input());
+    const { createFunded, evidence } = setup();
+    const project = await createFunded(producer);
     const id = `${project.id}-ms-1`;
     await expect(evidence.submit(id, producer)).rejects.toThrow(/unmet requirements: ok/);
     await evidence.addLog(id, producer, log);

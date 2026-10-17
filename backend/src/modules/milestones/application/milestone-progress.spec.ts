@@ -267,3 +267,30 @@ describe("submitForReview", () => {
     expect(submitForReview(observed, [observed], later).status).toBe("evidence_submitted");
   });
 });
+
+// Block 3: a buyer's custody deposit is what opens a project's milestones (PRD v3: FUNDED_IN_CUSTODY releases the first one).
+describe("custody gate", () => {
+  const first = projectMilestone(1, { requirements });
+  const second = projectMilestone(2);
+  const unfunded = { custodyFunded: false };
+  const funded = { custodyFunded: true };
+
+  it("locks every draft milestone while the project's custody is not funded, and keeps the order rule once it is", () => {
+    expect(progressStatus(first, [first, second], unfunded)).toBe(PROGRESS_STATUS.LOCKED);
+    expect(progressStatus(second, [first, second], unfunded)).toBe(PROGRESS_STATUS.LOCKED);
+    expect(progressStatus(first, [first, second], funded)).toBe(PROGRESS_STATUS.ACTIVE);
+    expect(progressStatus(second, [first, second], funded)).toBe(PROGRESS_STATUS.LOCKED);
+  });
+
+  it("does not hide progress already made: only draft milestones are gated", () => {
+    const submitted = submitEvidence(first, "x", now);
+    expect(progressStatus(submitted, [submitted], unfunded)).toBe(PROGRESS_STATUS.SUBMITTED_FOR_REVIEW);
+  });
+
+  it("refuses evidence and submission (409) until the custody is funded", () => {
+    expect(() => addEvidenceLog(first, [first], goodLog(), now, unfunded)).toThrow(DomainError);
+    const logged = addEvidenceLog(first, [first], goodLog(), now, funded);
+    expect(() => submitForReview(logged, [logged], now, unfunded)).toThrow(DomainError);
+    expect(submitForReview(logged, [logged], now, funded).status).toBe("evidence_submitted");
+  });
+});

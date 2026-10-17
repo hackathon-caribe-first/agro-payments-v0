@@ -13,6 +13,8 @@ export type OpenPaymentsEnv = {
   custodyWalletAddress: string;
   /** Wallet every seeded line pays to. */
   receiverWalletAddress: string;
+  /** Block 3 payer of buyer custody deposits (OP_BUYER_WALLET_ADDRESS). Null when unset: startup still works and only a deposit refuses. */
+  buyerWalletAddress: string | null;
   assetCode: string;
   assetScale: number;
   /** Base64 AES-256 key (32 bytes) that encrypts grant tokens at rest. */
@@ -57,6 +59,8 @@ function openPaymentsEnv(): OpenPaymentsEnv {
     // Falls back to the pre-v3 investor wallet so existing .env files keep working.
     custodyWalletAddress: process.env.OP_CUSTODY_WALLET_ADDRESS || required("OP_INVESTOR_WALLET_ADDRESS"),
     receiverWalletAddress: required("OP_RECEIVER_WALLET_ADDRESS"),
+    // ponytail: not required() so a running deployment without it keeps booting; set it to enable buyer deposits in open-payments mode.
+    buyerWalletAddress: process.env.OP_BUYER_WALLET_ADDRESS || null,
     assetCode: required("OP_ASSET_CODE"),
     assetScale,
     grantEncryptionKey: required("GRANT_ENCRYPTION_KEY"),

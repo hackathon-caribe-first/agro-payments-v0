@@ -4,6 +4,7 @@
 import { addFieldError, DomainError, type FieldErrors, ValidationError } from "../../../shared/domain-errors";
 import type { Role } from "../../auth/ports/role";
 import { createMilestone, LINE_KIND, type LineInput, type Milestone, type Requirement } from "../../milestones/application/milestone";
+import type { CustodyGate } from "../../milestones/application/milestone-progress";
 
 export const PROJECT_STATUS = {
   DRAFT: "DRAFT",
@@ -236,6 +237,10 @@ export function buildProject({ id, ownerUserId, input, wallets, now }: BuildProj
   };
   return { project, milestones };
 }
+
+// Before the buyer's deposit lands in custody the project's milestones stay LOCKED (PRD v3: FUNDED_IN_CUSTODY opens the first).
+const PRE_CUSTODY: readonly ProjectStatus[] = [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED, PROJECT_STATUS.FUNDING_IN_PROGRESS];
+export const custodyGate = (project: Pick<Project, "currentStatus">): CustodyGate => ({ custodyFunded: !PRE_CUSTODY.includes(project.currentStatus) });
 
 const READ_ANY: readonly Role[] = ["admin", "fidu", "investor"];
 

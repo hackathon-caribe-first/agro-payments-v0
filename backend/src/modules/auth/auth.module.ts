@@ -2,7 +2,8 @@ import { Logger, Module } from "@nestjs/common";
 import { loadEnv } from "../../shared/config/env";
 import { AssignRoleUseCase } from "./application/assign-role.use-case";
 import { GetCurrentUserUseCase } from "./application/get-current-user.use-case";
-import { DEMO_IDENTITY, DEMO_PRODUCER_EMAIL, ResolveApiUserUseCase } from "./application/resolve-api-user.use-case";
+import { DEMO_PARTIES, PublicIds } from "./application/demo-parties";
+import { DEMO_IDENTITY, ResolveApiUserUseCase } from "./application/resolve-api-user.use-case";
 import { ApiAuthGuard } from "./controllers/api-auth.guard";
 import { AuthController } from "./controllers/auth.controller";
 import { AuthGuard } from "./controllers/auth.guard";
@@ -25,6 +26,7 @@ import { UserRoleWriter } from "./ports/user-role-writer";
     GetCurrentUserUseCase,
     AssignRoleUseCase,
     ResolveApiUserUseCase,
+    PublicIds,
     AuthGuard,
     ApiAuthGuard,
     RolesGuard,
@@ -33,7 +35,7 @@ import { UserRoleWriter } from "./ports/user-role-writer";
       provide: DEMO_IDENTITY,
       useFactory: () => {
         const on = loadEnv().demoIdentity;
-        if (on) new Logger("DemoIdentity").warn(`DEMO_IDENTITY is on: /api requests without a session act as ${DEMO_PRODUCER_EMAIL}. Demo only, never in production.`);
+        if (on) new Logger("DemoIdentity").warn(`DEMO_IDENTITY is on: /api requests without a session act as ${DEMO_PARTIES.producer.email} or ${DEMO_PARTIES.buyer.email} by route side. Demo only, never in production.`);
         return on;
       },
     },
@@ -42,6 +44,6 @@ import { UserRoleWriter } from "./ports/user-role-writer";
     { provide: AuthRequestHandler, useClass: BetterAuthRequestAdapter },
     { provide: UserRoleWriter, useClass: BetterAuthUserRoleAdapter },
   ],
-  exports: [AuthGuard, ApiAuthGuard, RolesGuard, GetCurrentUserUseCase, ResolveApiUserUseCase],
+  exports: [AuthGuard, ApiAuthGuard, RolesGuard, GetCurrentUserUseCase, ResolveApiUserUseCase, PublicIds, UserDirectory],
 })
 export class AuthModule {}

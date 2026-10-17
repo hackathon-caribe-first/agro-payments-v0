@@ -373,6 +373,374 @@ paths:
         is met; 409 otherwise
       tags:
         - projects
+  /api/catalog/projects:
+    get:
+      operationId: NegotiationsController_listCatalog
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: Every project that is not cancelled, with its producer and derived
+        negotiation locks
+      tags:
+        - negotiations
+  /api/catalog/projects/{projectId}:
+    get:
+      operationId: NegotiationsController_getCatalogProject
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - negotiations
+  /api/projects/{projectId}/negotiations:
+    post:
+      operationId: NegotiationsController_startNegotiation
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      summary: The buyer opens a negotiation on the project (scope PROJECT) or on one
+        milestone (scope MILESTONE)
+      tags:
+        - negotiations
+  /api/quote-requests/{id}:
+    get:
+      operationId: NegotiationsController_getQuoteRequest
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      tags:
+        - negotiations
+  /api/buyers/{buyerId}/quote-requests:
+    get:
+      operationId: NegotiationsController_listBuyerQuoteRequests
+      parameters:
+        - name: buyerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+      tags:
+        - negotiations
+  /api/producer/quote-requests:
+    get:
+      operationId: NegotiationsController_listProducerQuoteRequests
+      parameters:
+        - name: project_id
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: producer_id
+          required: false
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/quotes:
+    post:
+      operationId: NegotiationsController_counter
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      summary: An offer or counter-offer; `author` (default PRODUCER) must be the
+        caller's side of the negotiation
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/quotes/{revision}/accept:
+    post:
+      operationId: NegotiationsController_accept
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: revision
+          required: true
+          in: path
+          schema:
+            type: number
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      summary: Accepts the latest offer; a BUYER accept of a PROJECT offer also
+        deposits (or returns deposit_redirect_url in open-payments mode)
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/quotes/{revision}/reject:
+    post:
+      operationId: NegotiationsController_reject
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: revision
+          required: true
+          in: path
+          schema:
+            type: number
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/cancel:
+    post:
+      operationId: NegotiationsController_cancel
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/decline:
+    post:
+      operationId: NegotiationsController_decline
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      tags:
+        - negotiations
+  /api/quote-requests/{id}/withdraw:
+    post:
+      operationId: NegotiationsController_withdraw
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      tags:
+        - negotiations
+  /api/negotiations/{id}/deposit:
+    post:
+      operationId: NegotiationsController_deposit
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      summary: Executes the pending deposit of an agreed PROJECT negotiation; in
+        open-payments mode answers PENDING + deposit_redirect_url
+      tags:
+        - negotiations
+  /api/projects/{projectId}/escrow-ledger:
+    get:
+      operationId: NegotiationsController_ledger
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The project's custody ledger (buyer deposits)
+      tags:
+        - negotiations
+  /api/open-requests:
+    get:
+      operationId: NegotiationsController_listOpenRequests
+      parameters:
+        - name: status
+          required: false
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - negotiations
+    post:
+      operationId: NegotiationsController_createOpenRequest
+      parameters: []
+      responses:
+        "201":
+          description: ""
+      tags:
+        - negotiations
+  /api/buyers/{buyerId}/open-requests:
+    get:
+      operationId: NegotiationsController_listBuyerOpenRequests
+      parameters:
+        - name: buyerId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - negotiations
+  /api/open-requests/{id}:
+    get:
+      operationId: NegotiationsController_getOpenRequest
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - negotiations
+  /api/open-requests/{id}/close:
+    post:
+      operationId: NegotiationsController_closeOpenRequest
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - negotiations
+  /api/open-requests/{id}/negotiations:
+    get:
+      operationId: NegotiationsController_listOpenRequestNegotiations
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+      tags:
+        - negotiations
+    post:
+      operationId: NegotiationsController_startOpenRequestNegotiation
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+      summary: A producer's first offer on an open request, backed by one of their own
+        projects
+      tags:
+        - negotiations
 info:
   title: Agro Payments API
   description: ""

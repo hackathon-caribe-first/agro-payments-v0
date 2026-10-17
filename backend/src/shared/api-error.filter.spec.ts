@@ -1,6 +1,6 @@
 import type { ArgumentsHost } from "@nestjs/common";
 import { ApiErrorFilter } from "./api-error.filter";
-import { DomainError, NotFoundError, ValidationError } from "./domain-errors";
+import { DomainError, NotFoundError, RejectedError, ValidationError } from "./domain-errors";
 
 const respond = (error: Error) => {
   const sent: { status?: number; body?: unknown } = {};
@@ -24,5 +24,12 @@ describe("ApiErrorFilter", () => {
       body: { error: "Evidence is not accepted in status LOCKED", errors: {} },
     });
     expect(respond(new NotFoundError("Project p not found"))).toEqual({ status: 404, body: { error: "Project p not found", errors: {} } });
+  });
+
+  it("maps a RejectedError to the web app's 409 body: the message under _form", () => {
+    expect(respond(new RejectedError("Es el turno de la otra parte."))).toEqual({
+      status: 409,
+      body: { error: "Request rejected", errors: { _form: ["Es el turno de la otra parte."] } },
+    });
   });
 });

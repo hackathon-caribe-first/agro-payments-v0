@@ -14,6 +14,9 @@ import { demoMilestones } from "../demo-milestones";
 import { MILESTONE_ENTITIES } from "./entities";
 import { TypeOrmGrantStore } from "./typeorm-grant-store.adapter";
 import { TypeOrmMilestoneAdapter } from "./typeorm-milestone.adapter";
+import { NegotiationsService } from "../../../negotiations/application/negotiations.service";
+import { BUYER, FakeDirectory, InstantCustody, PRODUCER } from "../../../negotiations/application/testing";
+import { TypeOrmNegotiationStore } from "../../../negotiations/infrastructure/persistence/typeorm-negotiation-store.adapter";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test database.
@@ -265,5 +268,137 @@ describe("TypeOrmProjectAdapter", () => {
     await repo.seedIfEmpty(demoMilestones());
     const [first] = await repo.findAll();
     expect(first).toMatchObject({ projectId: null, sequenceOrder: null, description: "", estimatedCompletionDate: null, requirements: [], evidenceLogs: [], reviews: [] });
+  });
+});
+
+// Block 3: negotiations, their offers and history, the custody ledger and open requests, through the real service.
+describe("TypeOrmNegotiationStore", () => {
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences, open_requests CASCADE");
+  });
+
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const clock = { now: () => new Date("2026-10-17T15:00:00.000Z") };
+  async function seeded(ds: DataSource) {
+    const { project, milestones } = buildProject({
+      id: "p-n",
+      ownerUserId: PRODUCER.id,
+      now,
+      wallets,
+      input: {
+        title: "Café Castillo",
+        description: "Establecimiento de plantas",
+        productionType: "CAFE_ESPECIAL",
+        startDate: "2026-11-01",
+        estimatedEndDate: "2027-03-30",
+        milestones: [
+          { title: "Preparación", description: "Limpieza", estimatedCompletionDate: "2026-12-01", suppliesBudget: 3_000_000, laborBudget: 1_000_000, requirements: [] },
+          { title: "Siembra", description: "Siembra", estimatedCompletionDate: "2027-01-15", suppliesBudget: 0, laborBudget: 500_000, requirements: [] },
+        ],
+      },
+    });
+    await new TypeOrmProjectAdapter(ds).create(project, milestones);
+    const store = new TypeOrmNegotiationStore(ds);
+    const service = new NegotiationsService(store, new TypeOrmMilestoneAdapter(ds), new FakeDirectory([PRODUCER, BUYER]), new InstantCustody(), clock);
+    return { store, service, milestones };
+  }
+  const offer = {
+    scope: "PROJECT",
+    buyer_id: "x",
+    buyer_name: "x",
+    quantity: 10,
+    unit: "TON",
+    unit_price: 400_000,
+    delivery_date: "2027-02-01",
+    valid_until: "2026-10-30",
+  };
+
+  it("round-trips a negotiation through counter, accept, auto-close and deposit, and commits the custody effects", async (ctx) => {
+    const { store, service, milestones } = await seeded(db(ctx));
+    const rival = await service.start("p-n", BUYER, { scope: "MILESTONE", milestone_id: milestones[1].id, buyer_id: "x", buyer_name: "x", price: 600_000, delivery_date: "2026-12-15" });
+    expect(await store.findNegotiation(rival.id)).toEqual(rival);
+    await service.end(rival.id, "withdraw", BUYER, null);
+
+    const started = await service.start("p-n", BUYER, offer);
+    expect(await store.findNegotiation(started.id)).toEqual(started);
+    await service.counter(started.id, PRODUCER, { ...offer, author: "PRODUCER", unit_price: 450_000, notes: "Contraoferta" });
+    const done = await service.decide(started.id, 2, "accept", BUYER, { actor: "BUYER", expected_total: 4_500_000 });
+
+    expect(await store.findNegotiation(started.id)).toEqual(done);
+    expect(done).toMatchObject({ status: "ACCEPTED", agreed_total: 4_500_000, deposit_status: "DEPOSITED" });
+    expect(done.history.map((h) => h.type)).toEqual(["OFFER", "COUNTER_OFFER", "ACCEPT", "DEPOSIT"]);
+    expect(await store.listLedger("p-n")).toEqual([expect.objectContaining({ id: done.ledger_entry_id, amount: 4_500_000, buyer_id: BUYER.id, negotiation_id: started.id })]);
+    expect(await store.findProject("p-n")).toMatchObject({ custodyBalance: 450_000_000, currentStatus: "FUNDED_IN_CUSTODY" });
+    expect((await store.listNegotiations({ buyerId: BUYER.id })).map((n) => n.id)).toEqual([rival.id, started.id]);
+    expect((await store.listNegotiations({ producerId: PRODUCER.id, projectId: "p-n" })).length).toBe(2);
+  });
+
+  it("rolls the whole deposit back when one write fails, and never books two credits for one negotiation", async (ctx) => {
+    const { store, service } = await seeded(db(ctx));
+    const started = await service.start("p-n", BUYER, offer);
+    const before = await store.findNegotiation(started.id);
+    const entry = { id: "led-1", project_id: "p-n", type: "CREDIT", category: "BUYER_DEPOSIT", amount: 1, currency: "COP", negotiation_id: started.id, buyer_id: BUYER.id, created_at: now.toISOString(), payment_reference: null };
+    await expect(
+      store.transaction("p-n", async (tx) => {
+        await tx.saveNegotiation({ ...before!, deposit_status: "DEPOSITED" });
+        await tx.creditCustody("p-n", 100);
+        await tx.addLedgerEntry({ ...entry, amount: 0 });
+      }),
+    ).rejects.toThrow();
+    expect(await store.findNegotiation(started.id)).toEqual(before);
+    expect(await store.findProject("p-n")).toMatchObject({ custodyBalance: 0, currentStatus: "DRAFT" });
+
+    await store.addLedgerEntry(entry);
+    await expect(store.addLedgerEntry({ ...entry, id: "led-2" })).rejects.toThrow();
+  });
+
+  it("round-trips open requests and their negotiations; awarded quantity is derived", async (ctx) => {
+    const { store, service } = await seeded(db(ctx));
+    const created = await service.createOpenRequest(BUYER, {
+      buyer_id: "x",
+      buyer_name: "x",
+      title: "Café pergamino",
+      production_type: "CAFE_ESPECIAL",
+      quantity: 20,
+      unit: "TON",
+      target_unit_price: 8_000_000,
+      delivery_date: "2027-01-30",
+      delivery_location: "Medellín",
+      notes: "",
+    });
+    const { awarded_quantity: _, ...record } = created;
+    expect(await store.findOpenRequest(created.id)).toEqual(record);
+    const n = await service.startOnOpenRequest(created.id, PRODUCER, { project_id: "p-n", producer_id: "x", producer_name: "x", unit_price: 9_000_000, quantity: 15, valid_until: "2026-10-30", delivery_terms: "Entrega en bodega" });
+    expect(await store.findNegotiation(n.id)).toEqual(n);
+    await service.decide(n.id, 1, "accept", BUYER, null);
+    expect((await service.getOpenRequest(created.id)).awarded_quantity).toBe(15);
+    await service.closeOpenRequest(created.id, BUYER);
+    expect((await store.listOpenRequests({ status: "CLOSED", buyerId: BUYER.id })).map((o) => o.id)).toEqual([created.id]);
+  });
+
+  it("stores buyer_deposit grants by negotiation, apart from milestone grants", async (ctx) => {
+    const ds = db(ctx);
+    const { service } = await seeded(ds);
+    const started = await service.start("p-n", BUYER, offer);
+    const grants = new TypeOrmGrantStore(ds, SecretCipher.fromBase64Key(randomBytes(32).toString("base64")));
+    const grant: Grant = {
+      id: "8f8d3f5e-6d0e-4b8f-9d61-1f0a6c1b2a09",
+      purpose: GRANT_PURPOSE.BUYER_DEPOSIT,
+      projectId: "p-n",
+      milestoneId: null,
+      negotiationId: started.id,
+      payerWalletAddress: "https://ilp.test/buyer",
+      assetCode: "COP",
+      assetScale: 2,
+      debitLimit: 454_500_000,
+      status: GRANT_STATUS.PENDING,
+      pending: { clientNonce: "n", finishNonce: "f", continueUri: "https://auth.test/continue", continueToken: "t", authServer: "https://auth.test" },
+      access: null,
+      createdAt: now,
+      revokedAt: null,
+    };
+    await grants.save(grant);
+    expect(await grants.findLatestForNegotiation(started.id)).toEqual(grant);
+    expect(await grants.findLatestForNegotiation("other")).toBeNull();
   });
 });

@@ -19,4 +19,12 @@ export class BetterAuthUserDirectoryAdapter extends UserDirectory {
     const { id, name, role } = found.user as { id: string; name: string; role?: unknown };
     return isRole(role) ? { id, email: found.user.email, name, role } : null;
   }
+
+  async findById(id: string): Promise<AuthenticatedUser | null> {
+    const { internalAdapter } = await this.auth.$context;
+    const user = await internalAdapter.findUserById(id);
+    if (!user) return null;
+    const { name, role } = user as { name: string; role?: unknown };
+    return isRole(role) ? { id: user.id, email: user.email, name, role } : null;
+  }
 }

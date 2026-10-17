@@ -1,5 +1,5 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter } from "@nestjs/common";
-import { DomainError, NotFoundError, ValidationError } from "./domain-errors";
+import { DomainError, FORM_LEVEL_KEY, NotFoundError, RejectedError, ValidationError } from "./domain-errors";
 
 type HttpResponse = { status(code: number): { json(body: unknown): void } };
 
@@ -9,6 +9,10 @@ type HttpResponse = { status(code: number): { json(body: unknown): void } };
 export class ApiErrorFilter implements ExceptionFilter {
   catch(error: DomainError | ValidationError, host: ArgumentsHost) {
     const status = error instanceof ValidationError ? 400 : error instanceof NotFoundError ? 404 : 409;
+    if (error instanceof RejectedError) {
+      host.switchToHttp().getResponse<HttpResponse>().status(status).json({ error: "Request rejected", errors: { [FORM_LEVEL_KEY]: [error.message] } });
+      return;
+    }
     const errors = error instanceof ValidationError ? error.fieldErrors : {};
     host.switchToHttp().getResponse<HttpResponse>().status(status).json({ error: error.message, errors });
   }

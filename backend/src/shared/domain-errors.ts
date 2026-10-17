@@ -21,3 +21,6 @@ export class ValidationError extends Error {
 export function addFieldError(errors: FieldErrors, path: string, message: string) {
   (errors[path] ??= []).push(message);
 }
+
+/** A refusal the web app shows as a form-level message: 409 with { error: "Request rejected", errors: { _form: [message] } }. */
+export class RejectedError extends DomainError {}

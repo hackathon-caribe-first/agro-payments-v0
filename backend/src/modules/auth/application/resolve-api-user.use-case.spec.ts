@@ -3,6 +3,7 @@ import type { ExecutionContext } from "@nestjs/common";
 import { ApiAuthGuard } from "../controllers/api-auth.guard";
 import { type AuthenticatedUser, type RequestHeaders, SessionResolver } from "../ports/session-resolver";
 import { UserDirectory } from "../ports/user-directory";
+import { DEMO_PARTIES, PublicIds } from "./demo-parties";
 import { DEMO_PRODUCER_EMAIL, ResolveApiUserUseCase } from "./resolve-api-user.use-case";
 
 const sessionUser: AuthenticatedUser = { id: "s1", email: "real@agro.dev", name: "Real", role: "fidu" };
@@ -25,6 +26,9 @@ class FakeDirectory extends UserDirectory {
   async findByEmail(email: string) {
     this.lookups.push(email);
     return this.users.find((u) => u.email === email) ?? null;
+  }
+  async findById(id: string) {
+    return this.users.find((u) => u.id === id) ?? null;
   }
 }
 
@@ -80,5 +84,53 @@ describe("ApiAuthGuard", () => {
 
   it("rejects without a session when DEMO_IDENTITY is off", async () => {
     await expect(new ApiAuthGuard(resolver(null, false).useCase).canActivate(contextFor({ headers: {} }))).rejects.toThrow(UnauthorizedException);
+  });
+});
+
+// Block 3: the web app has no login and hardcodes "producer-main" / "buyer-andina"; DEMO_IDENTITY maps them to two seeded users.
+const demoBuyer: AuthenticatedUser = { id: "b1", email: "comprador@agro.dev", name: "Comercializadora Andina S.A.S.", role: "buyer" };
+
+describe("ResolveApiUserUseCase by side", () => {
+  it("names the two demo parties, their roles and the public ids the web app hardcodes", () => {
+    expect(DEMO_PARTIES).toEqual({
+      producer: { email: "productor@agro.dev", role: "seller", publicId: "producer-main" },
+      buyer: { email: "comprador@agro.dev", role: "buyer", publicId: "buyer-andina" },
+    });
+  });
+
+  it("DEMO_IDENTITY on: the buyer side acts as the demo buyer, the producer side (the default) as the demo producer", async () => {
+    const { useCase } = resolver(null, true, [demoProducer, demoBuyer]);
+    expect(await useCase.execute({}, "buyer")).toEqual(demoBuyer);
+    expect(await useCase.execute({}, "producer")).toEqual(demoProducer);
+    expect(await useCase.execute({})).toEqual(demoProducer);
+  });
+
+  it("a real session always wins over the side, and the flag off is still a 401", async () => {
+    expect(await resolver(sessionUser, true).useCase.execute({}, "buyer")).toEqual(sessionUser);
+    await expect(resolver(null, false, [demoBuyer]).useCase.execute({}, "buyer")).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("a demo buyer that is missing or not a buyer is a 401 that names it", async () => {
+    await expect(resolver(null, true, [demoProducer]).useCase.execute({}, "buyer")).rejects.toThrow(/comprador@agro\.dev/);
+    await expect(resolver(null, true, [{ ...demoBuyer, role: "seller" }]).useCase.execute({}, "buyer")).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("candidates: the session alone, or both demo parties for reads either side may make", async () => {
+    expect(await resolver(sessionUser, true).useCase.candidates({})).toEqual([sessionUser]);
+    expect(await resolver(null, true, [demoProducer, demoBuyer]).useCase.candidates({})).toEqual([demoBuyer, demoProducer]);
+    await expect(resolver(null, false).useCase.candidates({})).rejects.toThrow(UnauthorizedException);
+  });
+});
+
+describe("PublicIds", () => {
+  it("DEMO_IDENTITY off: a public id is the user id", async () => {
+    const ids = await new PublicIds(new FakeDirectory([demoProducer, demoBuyer]), false).table();
+    expect([ids.toPublic("d1"), ids.toUser("buyer-andina")]).toEqual(["d1", "buyer-andina"]);
+  });
+
+  it("DEMO_IDENTITY on: the demo users round-trip as producer-main / buyer-andina; everyone else keeps their id", async () => {
+    const ids = await new PublicIds(new FakeDirectory([demoProducer, demoBuyer]), true).table();
+    expect([ids.toPublic("d1"), ids.toPublic("b1"), ids.toPublic("x")]).toEqual(["producer-main", "buyer-andina", "x"]);
+    expect([ids.toUser("producer-main"), ids.toUser("buyer-andina"), ids.toUser("x")]).toEqual(["d1", "b1", "x"]);
   });
 });
