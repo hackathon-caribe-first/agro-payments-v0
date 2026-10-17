@@ -32,7 +32,7 @@ export async function decide(page: Page, verdict: "Aprobado" | "Observado") {
     ? "Evidencia validada y criterios técnicos conformes."
     : "Es necesario corregir la evidencia técnica del lote.");
   if (verdict === "Observado") {
-    await page.getByLabel("Subsanación 1").fill("Adjuntar evidencia adicional del lote y validar las mediciones.");
+    await page.locator("#subsanacion-0").fill("Adjuntar evidencia adicional del lote y validar las mediciones.");
   } else {
     const criteria = page.locator('input[id^="criterion-"][id$="-passed"]');
     for (let i = 0; i < await criteria.count(); i++) {
