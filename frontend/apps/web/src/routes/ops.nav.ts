@@ -4,5 +4,4 @@ export const opsNav = [
   { label: "Notificaciones", to: "/notifications?role=INVESTOR", icon: "Bell", group: "Inversor" },
   { label: "Notificaciones", to: "/notifications?role=PRODUCER", icon: "Bell", group: "Productor" },
   { label: "Conciliación", to: "/ops/reconciliation", icon: "Scale", group: "Operador" },
-  { label: "Traza de pagos", to: "/ops/trace", icon: "Terminal", group: "Operador" },
 ] as const;

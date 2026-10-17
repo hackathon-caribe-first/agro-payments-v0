@@ -36,7 +36,7 @@ export function PaymentStepsFilters({ view, filter }: { view: Pick<PaymentStepsV
           Filtrar
         </Button>
         <Button asChild variant="ghost" size="compact">
-          <Link to="/ops/trace">Limpiar</Link>
+          <Link to="/custodian/traces">Limpiar</Link>
         </Button>
       </div>
     </Form>

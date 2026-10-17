@@ -109,7 +109,7 @@ const ITEM_ORDER = [
   "/verifier/reviews", "/verifier/harvests", "/verifier/notifications", "/verifier",
   "/investor", "/investor/panel", "/investor/catalog", "/investor/proposals", "/investor/grants", "/investor/settlements", "/notifications?role=INVESTOR",
   "/supplier",
-  "/custodian", "/custodian/traces", "/ops/reconciliation", "/ops/trace",
+  "/custodian", "/custodian/traces", "/ops/reconciliation",
 ];
 const NAV_ITEMS: NavEntry[] = [...EXISTING, ...FRAGMENTS].sort((a, b) => ITEM_ORDER.indexOf(a.to) - ITEM_ORDER.indexOf(b.to));
 
