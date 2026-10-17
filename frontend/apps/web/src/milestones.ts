@@ -38,11 +38,17 @@ function failure(status: number): ActionResult {
 // The milestone grant leaves the app: the fiduciaria approves it in the custody wallet, which redirects back to /custodian.
 async function startFunding(id: string): Promise<ActionResult | Response> {
   try {
-    const { data, response } = await api.POST("/milestones/{id}/funding", { params: { path: { id } } });
+    const { data, error, response } = await api.POST("/milestones/{id}/funding", { params: { path: { id } } });
     // redirectDocument + absolute URL: a full page load, never a client-side navigation.
     if (data) return redirectDocument(data.redirectUrl);
-    // RF-13: one live grant per project, and the next one only after the previous milestone closed.
-    if (response.status === 409) return { error: "Otro hito del proyecto tiene un grant vivo, o el hito anterior aún no está aprobado y cerrado." };
+    if (response.status === 409) {
+      // The custody refusals (not funded yet, balance below the milestone) are written for the user; the RF-13 grant-order ones
+      // carry internal ids, so they keep the summary below.
+      const message = (error as { message?: unknown } | undefined)?.message;
+      if (typeof message === "string" && /custodia/i.test(message)) return { error: message };
+      // RF-13: one live grant per project, and the next one only after the previous milestone closed.
+      return { error: "Otro hito del proyecto tiene un grant vivo, o el hito anterior aún no está aprobado y cerrado." };
+    }
     return failure(response.status);
   } catch {
     return OFFLINE;
