@@ -17,7 +17,7 @@ export default function Verifier({ loaderData }: Route.ComponentProps) {
       <header>
         <h1 className="text-3xl text-primary">Por revisar</h1>
         <p className="mt-2 text-muted-foreground">
-          Aprobar un hito libera el pago de la línea del productor; las demás líneas las paga el operador.
+          Aprobar un hito paga los jornales del productor y el fee del hito; a los proveedores les paga el operador desde la custodia.
         </p>
       </header>
       {pending.length === 0 && (

@@ -21,12 +21,15 @@ function failure(status: number): ActionResult {
   return { error: `El servidor respondió ${status}. Intenta de nuevo.` };
 }
 
-// Funding leaves the app: the investor approves the grant in their wallet, which redirects back to /custodian.
+// The milestone grant leaves the app: the fiduciaria approves it in the custody wallet, which redirects back to /custodian.
 async function startFunding(id: string): Promise<ActionResult | Response> {
   try {
     const { data, response } = await api.POST("/milestones/{id}/funding", { params: { path: { id } } });
     // redirectDocument + absolute URL: a full page load, never a client-side navigation.
-    return data ? redirectDocument(data.redirectUrl) : failure(response.status);
+    if (data) return redirectDocument(data.redirectUrl);
+    // RF-13: one live grant per project, and the next one only after the previous milestone closed.
+    if (response.status === 409) return { error: "Otro hito del proyecto tiene un grant vivo, o el hito anterior aún no está aprobado y cerrado." };
+    return failure(response.status);
   } catch {
     return OFFLINE;
   }

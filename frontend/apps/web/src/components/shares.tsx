@@ -70,7 +70,10 @@ function LineReceipt({ line, milestone }: { line: Line & { receipt: Receipt }; m
   );
 }
 
-// `payable` shows the operator's pay button (only on a funded milestone); the producer line waits for approval.
+// Jornales and the milestone fee are paid only after the verifier approves (PRD v3 RF-20).
+const PAID_ON_APPROVAL: ReadonlySet<string> = new Set(["productor", "plataforma"]);
+
+// `payable` shows the operator's pay button (only on a funded milestone); the producer and fee lines wait for approval.
 // `receipts` adds each line's payment receipt under it (operator screen).
 export function Lines({ milestone, payable = false, receipts = false }: { milestone: Milestone; payable?: boolean; receipts?: boolean }) {
   return (
@@ -96,7 +99,7 @@ export function Lines({ milestone, payable = false, receipts = false }: { milest
               <td className="whitespace-nowrap py-2 pl-6">{STATUS_LABEL[l.status]}</td>
               {payable && (
                 <td className="py-2 pl-4">
-                  {l.status === "pendiente" && !milestone.closedAt && (l.kind !== "productor" || milestone.status === "approved") ? (
+                  {l.status === "pendiente" && !milestone.closedAt && (!PAID_ON_APPROVAL.has(l.kind) || milestone.status === "approved") ? (
                     <ActionForm id={milestone.id} intent="pay-line" label="Pagar">
                       <input type="hidden" name="lineId" value={l.id} />
                     </ActionForm>
