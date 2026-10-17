@@ -12,8 +12,9 @@ export class ReviewMilestoneUseCase {
 
   async execute(id: string, decision: Decision, reason: string | null) {
     const reviewed = await this.store.update(id, (m) => review(m, decision, reason, new Date()));
-    if (decision !== "approved") return reviewed;
     // Approval releases the producer line; the other lines are paid separately.
+    // Unfunded: nothing to pay from yet, the operator pays that line after funding.
+    if (decision !== "approved" || !reviewed.fundedAt) return reviewed;
     const producer = reviewed.lines.find((l) => l.kind === LINE_KIND.PRODUCTOR)!;
     return this.payLine.execute(id, producer.id);
   }

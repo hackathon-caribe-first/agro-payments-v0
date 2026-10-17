@@ -14,7 +14,8 @@ coverage
 .impeccable/live/
 **/.impeccable/hook.cache.json
 
-# Open Payments spike keys
+# Open Payments private keys
+backend/keys/
+backend/scripts/op-spike/keys/
 *.pem
 *.key
-backend/scripts/op-spike/keys/

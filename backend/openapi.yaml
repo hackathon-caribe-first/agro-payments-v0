@@ -125,6 +125,26 @@ paths:
         line.
       tags:
         - milestones
+  /milestones/{id}/funding:
+    post:
+      operationId: MilestonesController_startFunding
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundingStartDto"
+      summary: "Starts funding: send the browser to redirectUrl so the investor
+        approves one grant capped at the milestone amount"
+      tags:
+        - milestones
   /milestones/{id}/lines/{lineId}/payment:
     post:
       operationId: MilestonesController_payLine
@@ -146,8 +166,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MilestoneDto"
-      summary: Operator pays one line. Supplier lines can be paid before approval, the
-        producer line cannot.
+      summary: Operator pays one line of a funded milestone. Supplier lines can be
+        paid before approval, the producer line cannot.
       tags:
         - milestones
   /milestones/{id}/lines/sync:
@@ -298,7 +318,8 @@ components:
         reference:
           type: string
           nullable: true
-          description: Gateway payment reference; simulated ones start with SIM-
+          description: Gateway payment reference; simulated ones start with SIM-, Open
+            Payments ones hold the incoming and outgoing payment URLs
         settledAt:
           format: date-time
           type: string
@@ -341,6 +362,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LineDto"
+        fundedAt:
+          format: date-time
+          type: string
+          nullable: true
+          description: Set when the investor approved the grant that funds the lines; no
+            line is paid before
         closedAt:
           format: date-time
           type: string
@@ -364,6 +391,7 @@ components:
         - evidence
         - review
         - lines
+        - fundedAt
         - closedAt
         - id
         - title
@@ -389,3 +417,12 @@ components:
           description: "Required when observing: what the producer must correct"
       required:
         - decision
+    FundingStartDto:
+      type: object
+      properties:
+        redirectUrl:
+          type: string
+          description: Wallet consent page; the browser leaves the app and comes back
+            through the funding callback
+      required:
+        - redirectUrl

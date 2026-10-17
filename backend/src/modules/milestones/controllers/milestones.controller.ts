@@ -6,14 +6,16 @@ import { RolesGuard } from "../../auth/controllers/roles.guard";
 import { MilestoneStore } from "../application/milestone-store";
 import { PayLineUseCase } from "../application/pay-line.use-case";
 import { ReviewMilestoneUseCase } from "../application/review-milestone.use-case";
+import { StartFundingUseCase } from "../application/start-funding.use-case";
 import { SubmitEvidenceUseCase } from "../application/submit-evidence.use-case";
 import { SyncLinesUseCase } from "../application/sync-lines.use-case";
+import { FundingStartDto } from "./dtos/funding-start.response.dto";
 import { MilestoneDto } from "./dtos/milestone.response.dto";
 import { ReviewMilestoneDto } from "./dtos/review-milestone.dto";
 import { SubmitEvidenceDto } from "./dtos/submit-evidence.dto";
 import { MILESTONE_ROLES } from "./milestone-roles";
 
-const { verifier, producer, operator } = MILESTONE_ROLES;
+const { verifier, producer, operator, investor } = MILESTONE_ROLES;
 
 @ApiTags("milestones")
 @Controller("milestones")
@@ -26,6 +28,7 @@ export class MilestonesController {
     private readonly reviewMilestone: ReviewMilestoneUseCase,
     private readonly payLineUseCase: PayLineUseCase,
     private readonly syncLines: SyncLinesUseCase,
+    private readonly startFundingUseCase: StartFundingUseCase,
   ) {}
 
   /** List milestones */
@@ -56,7 +59,15 @@ export class MilestonesController {
     return this.reviewMilestone.execute(id, dto.decision, dto.reason ?? null);
   }
 
-  /** Operator pays one line. Supplier lines can be paid before approval, the producer line cannot. */
+  /** Starts funding: send the browser to redirectUrl so the investor approves one grant capped at the milestone amount */
+  @Post(":id/funding")
+  @Roles(operator, investor)
+  @HttpCode(200)
+  startFunding(@Param("id") id: string): Promise<FundingStartDto> {
+    return this.startFundingUseCase.execute(id);
+  }
+
+  /** Operator pays one line of a funded milestone. Supplier lines can be paid before approval, the producer line cannot. */
   @Post(":id/lines/:lineId/payment")
   @Roles(operator)
   @HttpCode(200)

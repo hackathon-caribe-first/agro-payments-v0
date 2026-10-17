@@ -12,7 +12,7 @@ export class LineDto {
   amount: number;
   @ApiProperty({ enum: Object.values(LINE_STATUS), enumName: "LineStatus" })
   status: LineStatus;
-  /** Gateway payment reference; simulated ones start with SIM- */
+  /** Gateway payment reference; simulated ones start with SIM-, Open Payments ones hold the incoming and outgoing payment URLs */
   @ApiProperty({ type: String, nullable: true })
   reference: string | null;
   @ApiProperty({ type: Date, nullable: true })
@@ -49,6 +49,9 @@ export class MilestoneDto {
   review: ReviewDto | null;
   @ApiProperty({ type: [LineDto] })
   lines: LineDto[];
+  /** Set when the investor approved the grant that funds the lines; no line is paid before */
+  @ApiProperty({ type: Date, nullable: true })
+  fundedAt: Date | null;
   /** Set once every line is completado or fallido */
   @ApiProperty({ type: Date, nullable: true })
   closedAt: Date | null;
