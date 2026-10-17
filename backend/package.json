@@ -7,6 +7,7 @@
     "test": "vitest run",
     "openapi": "nest start --entryFile generate-openapi",
     "auth:seed-admin": "nest start --entryFile modules/auth/infrastructure/seed-admin",
+    "auth:seed-demo": "nest start --entryFile modules/auth/infrastructure/seed-demo",
     "auth:migrate": "pnpm dlx auth@latest migrate --yes --config src/modules/auth/infrastructure/better-auth.cli.ts",
     "auth:generate": "pnpm dlx auth@latest generate --config src/modules/auth/infrastructure/better-auth.cli.ts"
   },
