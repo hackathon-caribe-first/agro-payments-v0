@@ -1,0 +1,56 @@
+name: Playwright demo QA
+
+on:
+  push:
+    branches:
+      - feat/playwright-live-demo
+    paths:
+      - 'e2e/**'
+      - '.github/workflows/playwright-demo.yml'
+  pull_request:
+    paths:
+      - 'e2e/**'
+      - '.github/workflows/playwright-demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: Demo Playwright (mock + Render smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npx --yes pnpm@10.34.7 install --frozen-lockfile
+      - name: Install Playwright dependencies
+        working-directory: e2e
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium with OS libraries
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+      - name: Run local mocked flows
+        working-directory: e2e
+        run: npm run demo
+      - name: Render login smoke (read-only)
+        if: success()
+        working-directory: e2e
+        run: npm run demo:smoke
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-demo-results
+          path: |
+            e2e/artifacts/report
+            e2e/artifacts/results
+          if-no-files-found: ignore
+          retention-days: 7

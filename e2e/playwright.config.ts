@@ -1,9 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 
 const demo = process.env.DEMO_MODE === "1";
 const live = process.env.DEMO_BASE_URL ?? "https://surco-caribe-first-web.onrender.com";
 const mock = process.env.DEMO_MOCK_URL ?? "http://127.0.0.1:5175";
 const delay = Number(process.env.DEMO_SLOWMO ?? (demo ? 650 : 0));
+
 export default defineConfig({
   testDir: "./scenarios",
   timeout: 90_000,
@@ -13,6 +15,14 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"], ["html", { outputFolder: "artifacts/report", open: "never" }]],
   outputDir: "artifacts/results",
+  webServer: {
+    command: "npx --yes pnpm@10.34.7 --filter @agro/web dev --strictPort",
+    cwd: fileURLToPath(new URL("../frontend/", import.meta.url)),
+    env: { VITE_MILESTONES_SOURCE: "mock", VITE_MILESTONES_BASE_URL: "/api" },
+    url: "http://127.0.0.1:5175/login",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
   use: {
     ...devices["Desktop Chrome"],
     headless: !demo,

@@ -1,72 +1,42 @@
-# SURCO — Demo orquestada con Playwright
+# Surco — Suite Playwright para demostraciones
 
-Pruebas **UI** independientes, secuenciables y grabadas en video. Código aislado en `e2e/`, sin modificar producción ni `main`.
+La suite corre escenarios **simulados** (sin transferir dinero ni modificar la base de Render) y un smoke **solo lectura** de Render. `npm run demo` inicia automáticamente la web local en `http://127.0.0.1:5175` a través de Playwright `webServer`.
 
-## Importante: dos entornos diferentes
-
-- **Render (smoke, solo lectura)**: `https://surco-caribe-first-web.onrender.com`. Comprueba el login desplegado; no crea registros ni ejecuta pagos.
-- **Mock local (demo completa)**: `http://127.0.0.1:5175`. El proyecto inicia por defecto con `VITE_MILESTONES_SOURCE=mock`; sus grants, revisiones y comprobantes son simulaciones y se reinician al recargar el navegador. No requieren billeteras ni transferencia de fondos.
-- **Backend real / Interledger testnet**: NO está automatizado por esta suite; antes se requiere un ambiente E2E exclusivo, seeding reproducible, perfiles y controles contra pagos reales. Varias pantallas siguen con `prototypeTransport` en modo HTTP.
-
-## Preparación
-
-En la raíz del repositorio:
+## Comandos
 
 ```bash
-cd frontend
-npx --yes pnpm@10.34.7 install --frozen-lockfile
-VITE_MILESTONES_SOURCE=mock npx --yes pnpm@10.34.7 --filter @agro/web dev --strictPort
-```
+# Ejecuta una sola vez:
+cd frontend && npx --yes pnpm@10.34.7 install --frozen-lockfile
+cd ../e2e && npm install && npx playwright install chromium
 
-En otra terminal:
+# Ejecutar todas las pruebas simuladas
+npm run demo
 
-```bash
-cd e2e
-npm install
-npx playwright install chromium
+# Demostración narrativa con vídeo y navegador visible
+DEMO_MODE=1 DEMO_SLOWMO=700 DEMO_PAUSE_MS=1500 npm run demo:full
+
+# Pruebas separadas
+npm run demo:approve
+npm run demo:observe
+npm run demo:grants
+npm run demo:payments
+
+# El único test que apunta a la web de Render (sin mutaciones)
 npm run demo:smoke
-npm run demo:full
+npm run report
 ```
 
-### Presentación en pantalla, con pausas
+Para PowerShell, antes del comando usa `$env:DEMO_MODE="1"; $env:DEMO_SLOWMO="700"; $env:DEMO_PAUSE_MS="1500"`.
 
-En Linux/macOS:
+## Automatización de GitHub
 
-```bash
-cd e2e
-DEMO_MODE=1 DEMO_SLOWMO=700 DEMO_PAUSE_MS=1800 npm run demo:full
-```
+`.github/workflows/playwright-demo.yml` se ejecuta en pushes a la rama de la demo y en cambios al PR. Instala Node, pnpm, Chromium; realiza los tests del modo mock, ejecuta el smoke sobre Render y adjunta reportes, capturas en fallo, trazas y videos como artefactos.
 
-En PowerShell:
+## Alcance y restricciones
 
-```powershell
-$env:DEMO_MODE="1"; $env:DEMO_SLOWMO="700"; $env:DEMO_PAUSE_MS="1800"
-npm run demo:full
-```
-
-`DEMO_MODE=1` muestra Chromium, ralentiza interacciones, enseña títulos de escenas y produce grabaciones. Sin esta variable corre headless. El reporte HTML se abre con `npm run report`.
-
-### Escenarios
-
-| Script | Qué demuestra | Entorno |
-|---|---|---|
-| `demo:smoke` | Login servido por Render | Render, no destructivo |
-| `demo:approve` | Evaluación favorable, firma, pago, comprobante | Mock |
-| `demo:observe` | Dictamen observado, correcciones y bloqueo de pago | Mock |
-| `demo:grants` | Consentimiento aprobado, denegado y revocación (3 tests) | Mock |
-| `demo:payments` | Guardar evidencia y reenvío, panel de custodia | Mock |
-| `demo:full` | Productor → verificador → pago → operador | Mock |
-
-Ejecutar todo el catálogo: `npm run demo`. Tests aislados por contexto de Playwright, trabajadores = 1. Cada test parte de fixtures nuevos. El recorrido completo mantiene una sola página/contexto durante el cambio de perfiles.
-
-Archivos: `artifacts/results` (videos, trazas de fallos) y `artifacts/report`. No se suben a GitHub.
-
-## Limitaciones y siguientes pasos
-
-1. En el frontend algunos flujos de grant y conciliación son prototipos locales, aun con `VITE_MILESTONES_SOURCE=http`.
-2. El servidor desplegado en Render usa la rama `main`, pero este PR **no la toca** y no dispara un despliegue.
-3. Los smoke tests no sustituyen la verificación visual sobre el despliegue: comprueba que la web apunte a la API correcta y no al mock antes de afirmar integración end-to-end.
-4. Para E2E real crear fixtures con ids únicos, DB separada, simulador de wallet y límites de gasto, un endpoint de reset habilitado SOLO en E2E y pruebas API de estados. No reutilizar datos reales ni claves productivas.
-5. Añadir smoke checks de backend/CORS tras disponer de credenciales y conocer el contrato de salud del servicio.
-
-Nota: no se ejecutaron estas pruebas contra Render desde este entorno; los servicios figuran `live` en Render, pero la red de ejecución no alcanzó el dominio.
+- El **backend REST** en Render puede servir datos persistentes, pero la implementación actual del frontend usa `prototypeTransport` para ciertos módulos incluso en HTTP: no se debe afirmar que los grants de la suite salen por Interledger real.
+- El panel clásico de custodia `/custodian` depende de la API real `VITE_API_URL` y no está cubierto por el test de pagos simulados; el test de operador utiliza `/ops/reconciliation`.
+- El mock en memoria se reinicia al recargar el navegador. En la demo de varios roles se navega dentro de la SPA; cada test independiente tiene un contexto limpio.
+- No se automatizan pagos de testnet ni producción. Para ello hace falta backend sandbox, wallets de prueba, seeding, límites e idempotencia.
+- La web remota por defecto es `https://surco-caribe-first-web.onrender.com` y puede modificarse con `DEMO_BASE_URL`.
+- Reporte: `e2e/artifacts/report`; video/trazas: `e2e/artifacts/results`.

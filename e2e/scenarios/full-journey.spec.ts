@@ -15,7 +15,6 @@ test("Demo orquestada: corrección, aprobación, pago y conciliación (SIMULADOS
   await page.getByRole("button", { name: "Enviar a revisión" }).click();
   await expect(page.getByText("En revisión técnica", { exact: true })).toBeVisible();
 
-  // Changing profile only: mock stores are held in memory by the same browser page.
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
   await asRole(page, "Verificador");
   await openReview(page, "Siembra de plántulas");
@@ -29,7 +28,7 @@ test("Demo orquestada: corrección, aprobación, pago y conciliación (SIMULADOS
 
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
   await asRole(page, "Operador");
-  await page.goto("/ops/reconciliation");
+  await page.getByRole("link", { name: "Conciliación", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Conciliación" })).toBeVisible();
-  await scene(page, "OPERADOR · Conciliación de pagos y comprobantes");
+  await scene(page, "OPERADOR · Conciliación de comprobantes simulados");
 });

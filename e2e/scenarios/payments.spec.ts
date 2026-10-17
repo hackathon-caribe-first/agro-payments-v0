@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { asRole } from "../fixtures/actors";
 import { scene } from "../fixtures/steps";
+
 test("Productor: registrar evidencia y solicitar nueva revisión", async ({ page }) => {
   await asRole(page, "Productor");
   await page.goto("/producer/milestones/ms-02");
@@ -21,9 +22,10 @@ test("Productor: registrar evidencia y solicitar nueva revisión", async ({ page
   await scene(page, "3 · Hito reenviado al verificador");
 });
 
-test("Operador: consultar reparto de pagos y estado de la custodia (solo lectura)", async ({ page }) => {
+test("Operador: ver panel de conciliación y recibos simulados", async ({ page }) => {
   await asRole(page, "Operador");
-  await page.goto("/custodian");
-  await scene(page, "Operador · Custodia, permisos y pagos por hito");
-  await expect(page.getByRole("heading", { name: "Pagos desde la custodia" })).toBeVisible();
+  await page.goto("/ops/reconciliation");
+  await scene(page, "Operador · Conciliación de pagos por beneficiario");
+  await expect(page.getByRole("heading", { name: "Conciliación" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pagos por beneficiario" })).toBeVisible();
 });
