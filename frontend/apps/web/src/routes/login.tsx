@@ -2,7 +2,7 @@ import { redirect } from "react-router";
 import { safeNextPath } from "@agro/shared/modules/auth/domain/access";
 import { FORM_LEVEL_KEY } from "@agro/shared/modules/milestones/domain/errors";
 import { currentSession } from "~/auth/guard";
-import { auth } from "~/auth/module";
+import { ASKS_PASSWORD, DEMO_PASSWORD, auth } from "~/auth/module";
 import { AuthPage } from "~/components/auth/auth-page";
 import { SignInForm, type SignInActionData } from "~/components/auth/sign-in-form";
 import type { Route } from "./+types/login";
@@ -20,7 +20,12 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
 export async function clientAction({ request }: Route.ClientActionArgs): Promise<SignInActionData | Response> {
   const form = await request.formData();
-  const result = await auth.signIn({ email: String(form.get("email") ?? ""), profileId: String(form.get("profileId") ?? "") });
+  const password = form.get("password");
+  const result = await auth.signIn({
+    email: String(form.get("email") ?? ""),
+    profileId: String(form.get("profileId") ?? ""),
+    ...(typeof password === "string" && { password }),
+  });
   if (result.ok) return redirect(safeNextPath(nextOf(request), result.value.role));
   const { error } = result;
   if (error.kind === "validation") return { fieldErrors: error.fieldErrors };
@@ -32,7 +37,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
     <AuthPage>
       <h1 className="text-2xl text-primary">Iniciar sesión</h1>
       <p className="mb-5 mt-1 text-pretty text-muted-foreground">Cada perfil ve solo lo que le corresponde.</p>
-      <SignInForm profiles={loaderData.profiles} actionData={actionData} />
+      <SignInForm profiles={loaderData.profiles} actionData={actionData} password={ASKS_PASSWORD ? { defaultValue: DEMO_PASSWORD } : null} />
     </AuthPage>
   );
 }

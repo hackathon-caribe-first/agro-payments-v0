@@ -14,8 +14,17 @@ import { FieldError, invalidProps } from "~/components/producer/project-form/fie
 
 export type SignInActionData = { fieldErrors: FieldErrors };
 
-// Profile picker (radio cards) + email. The first invalid control gets the focus after a failed attempt.
-export function SignInForm({ profiles, actionData }: { profiles: ProfileOption[]; actionData?: SignInActionData }) {
+// Profile picker (radio cards) + email (+ password against the backend). The first invalid control gets the focus after a failed attempt.
+export function SignInForm({
+  profiles,
+  actionData,
+  password = null,
+}: {
+  profiles: ProfileOption[];
+  actionData?: SignInActionData;
+  // Shown only when the backend checks it (http mode).
+  password?: { defaultValue: string } | null;
+}) {
   const { formRef, errors, clear } = useFieldErrors(actionData);
   const pending = useNavigation().state !== "idle";
   const [profileId, setProfileId] = useState("");
@@ -77,6 +86,22 @@ export function SignInForm({ profiles, actionData }: { profiles: ProfileOption[]
           />
         )}
       </Field>
+
+      {password && (
+        <Field id="sign-in-password" label="Contraseña" errors={errors.password}>
+          {(aria) => (
+            <Input
+              id="sign-in-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              defaultValue={password.defaultValue}
+              onChange={() => clear("password")}
+              {...aria}
+            />
+          )}
+        </Field>
+      )}
 
       {errors[FORM_LEVEL_KEY]?.length ? (
         <Alert variant="destructive">
