@@ -340,4 +340,11 @@ describe("OpenPaymentsGateway idempotency by metadata (RF-18)", () => {
     await new OpenPaymentsGateway(mock.op).pay({ ...request, milestoneId: "s-1", lineId: "p-1", grantScope: "liquidation" });
     expect(mock.client.outgoingPayment.create.mock.calls[0][1]).toMatchObject({ metadata: { line: "liquidation:s-1:p-1" } });
   });
+
+  it("keys the premium (RF-14) apart from milestone lines", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(activeGrant({ id: "g-prem", purpose: "premium", milestoneId: null, projectId: "p-1" }));
+    await new OpenPaymentsGateway(mock.op).pay({ ...request, milestoneId: "p-1", lineId: "pay-1", grantScope: "premium" });
+    expect(mock.client.outgoingPayment.create.mock.calls[0][1]).toMatchObject({ metadata: { line: "premium:p-1:pay-1" } });
+  });
 });

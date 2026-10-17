@@ -21,13 +21,19 @@ function fromReference(reference: string) {
 type OpAmount = { value: string; assetCode: string; assetScale: number };
 
 /** RF-18 `hito:línea`: the metadata key every incoming and outgoing payment of a line carries. */
+// Prefixed like the reference key, so a settlement payout or the premium never matches a milestone line of the same id.
 export const lineMetadataKey = (milestoneId: string, lineId: string, scope: GrantScope) =>
-  `${scope === "liquidation" ? "liquidation:" : ""}${milestoneId}:${lineId}`;
+  `${scope === "milestone" ? "" : `${scope}:`}${milestoneId}:${lineId}`;
 const LIST_PAGE = 100;
 // ponytail: at most 10 pages (1.000 payments) of the custody wallet are searched; past that the line is created again.
 const LIST_MAX_PAGES = 10;
+// The grant key is a settlement id for payouts and a project id for the premium (RF-14).
 const traceContext = (request: { milestoneId: string; grantScope?: GrantScope }) =>
-  request.grantScope === "liquidation" ? { settlementId: request.milestoneId } : { milestoneId: request.milestoneId };
+  request.grantScope === "liquidation"
+    ? { settlementId: request.milestoneId }
+    : request.grantScope === "premium"
+      ? { projectId: request.milestoneId }
+      : { milestoneId: request.milestoneId };
 
 // Open Payments amounts are decimal strings in minor units; anything that does not fit a safe integer is left out of the receipt.
 function minorUnits(amount: { value: string } | null | undefined): number | null {
