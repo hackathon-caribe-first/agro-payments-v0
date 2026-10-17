@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the authenticated user */
+        get: operations["CurrentUserController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Assign any role to a user (admin only) */
+        patch: operations["UserRolesController_assign"];
+        trace?: never;
+    };
     "/milestones": {
         parameters: {
             query?: never;
@@ -64,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verifier approves or rejects the evidence. Approving does not order a payment. */
+        /** Verifier approves or observes the evidence. Approving pays the producer line. */
         post: operations["MilestonesController_review"];
         delete?: never;
         options?: never;
@@ -72,7 +106,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/milestones/{id}/payment": {
+    "/milestones/{id}/lines/{lineId}/payment": {
         parameters: {
             query?: never;
             header?: never;
@@ -81,15 +115,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Custodian orders the simulated 50/30/20 payment of an approved milestone */
-        post: operations["MilestonesController_pay"];
+        /** Operator pays one line. Supplier lines can be paid before approval, the producer line cannot. */
+        post: operations["MilestonesController_payLine"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/milestones/{id}/payment/confirmation": {
+    "/milestones/{id}/lines/sync": {
         parameters: {
             query?: never;
             header?: never;
@@ -98,8 +132,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Custodian confirms the simulated payment was received */
-        post: operations["MilestonesController_confirm"];
+        /** Operator resolves the lines the gateway left en_cola */
+        post: operations["MilestonesController_sync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -110,15 +144,34 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CurrentUserResponseDto: {
+            /** @enum {string} */
+            role: "admin" | "buyer" | "seller" | "investor" | "fidu" | "intermediator";
+            id: string;
+            email: string;
+            name: string;
+        };
+        AssignRoleDto: {
+            /**
+             * @description New role for the user
+             * @enum {string}
+             */
+            role: "admin" | "buyer" | "seller" | "investor" | "fidu" | "intermediator";
+        };
+        AssignedRoleResponseDto: {
+            /** @enum {string} */
+            role: "admin" | "buyer" | "seller" | "investor" | "fidu" | "intermediator";
+            id: string;
+        };
         /** @enum {string} */
-        MilestoneStatus: "draft" | "evidence_submitted" | "approved" | "rejected";
+        MilestoneStatus: "draft" | "evidence_submitted" | "approved" | "observado";
         EvidenceDto: {
             description: string;
             /** Format: date-time */
             submittedAt: string;
         };
         /** @enum {string} */
-        Decision: "approved" | "rejected";
+        Decision: "approved" | "observado";
         ReviewDto: {
             decision: components["schemas"]["Decision"];
             reason: string | null;
@@ -126,36 +179,40 @@ export interface components {
             reviewedAt: string;
         };
         /** @enum {string} */
-        PaymentStatus: "processing" | "confirmed";
+        LineKind: "productor" | "proveedor" | "trabajadores" | "plataforma";
         /** @enum {string} */
-        Recipient: "productor" | "proveedor" | "trabajadores";
-        ShareDto: {
-            recipient: components["schemas"]["Recipient"];
-            percent: number;
-            /** @description Whole currency units */
+        LineStatus: "pendiente" | "en_cola" | "completado" | "fallido";
+        LineDto: {
+            kind: components["schemas"]["LineKind"];
+            status: components["schemas"]["LineStatus"];
+            /** @description Gateway payment reference; simulated ones start with SIM- */
+            reference: string | null;
+            /** Format: date-time */
+            settledAt: string | null;
+            id: string;
+            beneficiary: string;
+            walletAddress: string;
+            /** @description Integer minor units (see assetScale) */
             amount: number;
-        };
-        PaymentDto: {
-            status: components["schemas"]["PaymentStatus"];
-            shares: components["schemas"]["ShareDto"][];
-            /** Format: date-time */
-            confirmedAt: string | null;
-            /** @description Simulated transfer reference, never a real bank reference */
-            reference: string;
-            /** Format: date-time */
-            orderedAt: string;
         };
         MilestoneDto: {
             status: components["schemas"]["MilestoneStatus"];
             evidence: components["schemas"]["EvidenceDto"] | null;
             review: components["schemas"]["ReviewDto"] | null;
-            payment: components["schemas"]["PaymentDto"] | null;
+            lines: components["schemas"]["LineDto"][];
+            /**
+             * Format: date-time
+             * @description Set once every line is completado or fallido
+             */
+            closedAt: string | null;
             id: string;
             title: string;
-            /** @description Whole currency units */
+            /** @description Integer minor units: amount / 10^assetScale is the human value */
             amount: number;
             /** @description ISO 4217 code */
             currency: string;
+            /** @description Decimal places of the minor unit (COP demo data uses 2) */
+            assetScale: number;
         };
         SubmitEvidenceDto: {
             /** @description What the producer did and what the evidence shows */
@@ -163,7 +220,7 @@ export interface components {
         };
         ReviewMilestoneDto: {
             decision: components["schemas"]["Decision"];
-            /** @description Required when rejecting: what the producer must correct */
+            /** @description Required when observing: what the producer must correct */
             reason?: string;
         };
     };
@@ -175,6 +232,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    CurrentUserController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUserResponseDto"];
+                };
+            };
+        };
+    };
+    UserRolesController_assign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignRoleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedRoleResponseDto"];
+                };
+            };
+        };
+    };
     MilestonesController_list: {
         parameters: {
             query?: never;
@@ -265,12 +366,13 @@ export interface operations {
             };
         };
     };
-    MilestonesController_pay: {
+    MilestonesController_payLine: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 id: string;
+                lineId: string;
             };
             cookie?: never;
         };
@@ -286,7 +388,7 @@ export interface operations {
             };
         };
     };
-    MilestonesController_confirm: {
+    MilestonesController_sync: {
         parameters: {
             query?: never;
             header?: never;
