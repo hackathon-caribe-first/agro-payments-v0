@@ -1,0 +1,18 @@
+import { ok } from "../../milestones/domain/errors";
+import { attemptOps } from "../../panel/domain/errors";
+import { buildTrace } from "../domain/build-trace";
+import { filterTrace, type TraceFilter, type TraceView } from "../domain/trace";
+import type { TraceRepository } from "./trace-repository";
+
+export interface TraceResult extends TraceView {
+  // Entries after applying the filter (`entries` of the base view stay available through `total`).
+  total: number;
+}
+
+// RF-20: the curl trace for support, filtered by project, milestone and step.
+export const loadTrace = (repo: TraceRepository, filter: TraceFilter) =>
+  attemptOps<TraceResult>(async () => {
+    const sources = await repo.loadSources();
+    const view = buildTrace(sources.grants, sources.settlements);
+    return ok({ ...view, entries: filterTrace(view.entries, filter), total: view.entries.length });
+  });

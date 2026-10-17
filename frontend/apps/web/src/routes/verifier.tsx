@@ -1,16 +1,22 @@
 import { ActionForm, TextField } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
-import { loadMilestones, milestoneAction } from "~/milestones";
+import { ServerUnreachable } from "~/components/server-unreachable";
+import { loadMilestonesOrError, milestoneAction } from "~/milestones";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/verifier";
 
 export const meta = () => [{ title: "Por revisar · Surco" }];
-export const clientLoader = () => loadMilestones();
-export const clientAction = ({ request }: Route.ClientActionArgs) => milestoneAction(request);
+export const clientLoader = () => loadMilestonesOrError();
+export const clientAction = async ({ request }: Route.ClientActionArgs) => {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
+  return milestoneAction(request);
+};
 
 export default function Verifier({ loaderData }: Route.ComponentProps) {
-  const pending = loaderData.filter((m) => m.status === "evidence_submitted");
-  const rest = loaderData.filter((m) => m.status !== "evidence_submitted");
+  if (loaderData.error !== null) return <ServerUnreachable title="Hitos del servidor" message={loaderData.error} />;
+  const pending = loaderData.milestones.filter((m) => m.status === "evidence_submitted");
+  const rest = loaderData.milestones.filter((m) => m.status !== "evidence_submitted");
 
   return (
     <div className="flex flex-col gap-6">

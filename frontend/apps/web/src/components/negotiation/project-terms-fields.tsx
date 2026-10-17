@@ -15,6 +15,7 @@ export interface ProjectTermsInitial {
   unit?: Unit;
   unitPrice?: number;
   deliveryDate?: string;
+  validUntil?: string;
   notes?: string;
 }
 
@@ -29,7 +30,7 @@ interface Props {
 export function ProjectTermsFields({ idPrefix, errors, clear, initial }: Props) {
   const [quantity, setQuantity] = useState(initial?.quantity ? String(initial.quantity) : "");
   const [unitPrice, setUnitPrice] = useState(initial?.unitPrice ? String(initial.unitPrice) : "");
-  // Same pure function as the domain and the mock; this value is only registered, it never changes the deposit.
+  // Same pure function as the domain and the mock; this value is only registered, it never changes the authorized total.
   const offerValue = saleQuoteTotal(parseAmount(quantity) ?? 0, parseAmount(unitPrice) ?? 0);
 
   return (
@@ -96,7 +97,7 @@ export function ProjectTermsFields({ idPrefix, errors, clear, initial }: Props) 
           )}
         </Field>
         <Field id={`${idPrefix}-valid`} label="Vigente hasta" errors={errors.validUntil}>
-          {(aria) => <Input id={`${idPrefix}-valid`} name="validUntil" type="date" onChange={() => clear("validUntil")} {...aria} />}
+          {(aria) => <Input id={`${idPrefix}-valid`} name="validUntil" type="date" defaultValue={initial?.validUntil} onChange={() => clear("validUntil")} {...aria} />}
         </Field>
       </div>
 
@@ -108,7 +109,7 @@ export function ProjectTermsFields({ idPrefix, errors, clear, initial }: Props) 
 
       <p aria-live="polite" className="text-sm">
         Valor de la oferta: <span className="font-semibold tabular-nums">{formatMoney(offerValue, "COP")}</span>
-        <span className="block text-muted-foreground">Solo se registra: el depósito es el total de la cotización del proyecto.</span>
+        <span className="block text-muted-foreground">Solo se registra: el pago autorizado es el total de la cotización del proyecto.</span>
       </p>
     </>
   );

@@ -1,4 +1,4 @@
-import { Megaphone } from "lucide-react";
+import { FolderOpen, Megaphone } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@agro/shared/ui/button";
 import { RequestListItem } from "~/components/buyer/request-list-item";
@@ -22,12 +22,20 @@ export default function BuyerNegotiations({ loaderData }: Route.ComponentProps) 
           <h1 className="text-3xl text-primary">Mis negociaciones</h1>
           <p className="mt-2 text-muted-foreground">Sigue cada negociación, responde con una contraoferta o acepta la oferta vigente.</p>
         </div>
-        <Button asChild variant="outline" size="compact">
-          <Link to="/buyer/open-requests">
-            <Megaphone aria-hidden="true" />
-            Solicitudes abiertas
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="compact">
+            <Link to="/buyer">
+              <FolderOpen aria-hidden="true" />
+              Ver proyectos
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="compact">
+            <Link to="/buyer/open-requests">
+              <Megaphone aria-hidden="true" />
+              Solicitudes abiertas
+            </Link>
+          </Button>
+        </div>
       </header>
       {loaderData.length === 0 ? (
         <p className="rounded-lg border bg-card p-5 text-muted-foreground">

@@ -16,8 +16,9 @@ import {
 import { Alert, AlertDescription } from "@agro/shared/ui/alert";
 import { Button } from "@agro/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
-import { DepositConfirm } from "~/components/escrow/deposit-confirm";
-import { DepositStatus } from "~/components/escrow/deposit-status";
+import { AuthorizationConfirm } from "~/components/payment-authorization/authorization-confirm";
+import { AuthorizationList } from "~/components/payment-authorization/authorization-list";
+import { AuthorizationStatus } from "~/components/payment-authorization/authorization-status";
 import { AllocationMeter } from "~/components/open-request/allocation-meter";
 import type { PresaleActionData } from "~/components/presale/error-copy";
 import { formatDay, formatQuantity } from "~/components/presale/format";
@@ -43,7 +44,7 @@ interface Props {
 
 // One detail screen for both parties and every kind of negotiation: terms, timeline and only the actions the viewer's turn allows.
 export function NegotiationDetail({ viewer, detail, actionData, back, openRequestTo }: Props) {
-  const { request, unit, openRequest, turn, project, milestone, quotationTotal } = detail;
+  const { request, unit, openRequest, turn, project, milestone, quotationTotal, authorizations } = detail;
   const pending = useNavigation().state !== "idle";
   const today = isoToday();
   const latest = latestQuote(request);
@@ -64,7 +65,7 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
 
   const barShown = live || (request.status === "REQUESTED" && mayWithdraw);
   const showOwnError = (actionData?.fieldErrors[FORM_LEVEL_KEY]?.join(" ") ?? "") && !barShown;
-  const depositPending = scope === "PROJECT" && request.deposit?.status === "PENDING";
+  const authorizationPending = scope === "PROJECT" && request.authorization?.status === "PENDING";
 
   // The header names what is being negotiated.
   const kicker = isProjectScope
@@ -80,7 +81,7 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
         <ScopedOfferForm
           scope="PROJECT"
           intent="counter"
-          initial={{ quantity: t.quantity, unit: t.unit === "UNKNOWN" ? undefined : t.unit, unitPrice: t.unitPrice, deliveryDate: t.deliveryDate, notes: t.notes }}
+          initial={{ quantity: t.quantity, unit: t.unit === "UNKNOWN" ? undefined : t.unit, unitPrice: t.unitPrice, deliveryDate: t.deliveryDate, validUntil: t.validUntil && t.validUntil >= today ? t.validUntil : undefined, notes: t.notes }}
           submitLabel="Enviar contraoferta"
           actionData={actionData}
         />
@@ -162,7 +163,8 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
               </CardContent>
             </Card>
           ) : null}
-          {scope === "PROJECT" && request.deposit && <DepositStatus deposit={request.deposit} currency={project?.currency} />}
+          {scope === "PROJECT" && request.authorization && <AuthorizationStatus authorization={request.authorization} currency={project?.currency} />}
+          {scope === "PROJECT" && authorizations.length > 0 && <AuthorizationList authorizations={authorizations} />}
           <Timeline history={request.history} unit={unit} scope={scope} />
         </aside>
 
@@ -191,25 +193,30 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
           )}
 
           {request.quotes.map((quote) => (
-            <TermsSummary key={quote.revision} quote={quote} unit={unit} />
+            <TermsSummary
+              key={quote.revision}
+              quote={quote}
+              unit={unit}
+              authorizedTotal={scope === "PROJECT" ? (request.authorization?.agreedTotal ?? null) : null}
+            />
           ))}
 
-          {depositPending && viewer === "BUYER" && request.deposit && (
+          {authorizationPending && viewer === "BUYER" && request.authorization && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-primary">Depósito pendiente</CardTitle>
+                <CardTitle className="text-lg text-primary">Autorización pendiente</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 <p className="text-pretty text-sm text-muted-foreground">
-                  El acuerdo está cerrado. Deposita el total de la cotización del proyecto en la fiducia.
+                  El acuerdo está cerrado. Autoriza el pago del total de la cotización del proyecto.
                 </p>
-                <DepositConfirm total={request.deposit.agreedTotal} currency={project?.currency} actionData={actionData} />
+                <AuthorizationConfirm total={request.authorization.agreedTotal} currency={project?.currency} actionData={actionData} />
               </CardContent>
             </Card>
           )}
-          {depositPending && viewer === "PRODUCER" && (
+          {authorizationPending && viewer === "PRODUCER" && (
             <p role="status" className="rounded-lg border bg-card p-4 text-muted-foreground">
-              Acuerdo cerrado. Esperando que el comprador deposite en la fiducia.
+              Acuerdo cerrado. Esperando que el comprador autorice el pago.
             </p>
           )}
 
@@ -227,7 +234,7 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
                   actionData={actionData}
                   acceptConfirm={
                     scope === "PROJECT" && quotationTotal !== null
-                      ? { total: quotationTotal, deposit: viewer === "BUYER", currency: project?.currency }
+                      ? { total: quotationTotal, authorizesPayment: viewer === "BUYER", currency: project?.currency }
                       : undefined
                   }
                   counterForm={counterForm}
@@ -239,7 +246,7 @@ export function NegotiationDetail({ viewer, detail, actionData, back, openReques
             </Card>
           )}
 
-          {showOwnError && !depositPending && (
+          {showOwnError && !authorizationPending && (
             <Alert variant="destructive">
               <AlertDescription>{actionData?.fieldErrors[FORM_LEVEL_KEY]?.join(" ")}</AlertDescription>
             </Alert>

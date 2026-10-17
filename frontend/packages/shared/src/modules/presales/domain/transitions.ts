@@ -13,9 +13,9 @@ export const QUOTE_TRANSITIONS: TransitionTable = {
   SENT: { accept: "ACCEPTED", reject: "REJECTED", supersede: "SUPERSEDED", withdraw: "WITHDRAWN", auto_close: "WITHDRAWN" },
 };
 
-// A project agreement is PENDING its deposit until the buyer executes it.
-export const DEPOSIT_TRANSITIONS: TransitionTable = {
-  PENDING: { deposit: "DEPOSITED" },
+// A project agreement is PENDING its payment authorization until the buyer executes it.
+export const AUTHORIZATION_TRANSITIONS: TransitionTable = {
+  PENDING: { authorize: "AUTHORIZED" },
 };
 
 export const OPEN_REQUEST_TRANSITIONS: TransitionTable = {
@@ -35,7 +35,7 @@ export const ACTION_ACTOR: Readonly<Record<string, ActionActor>> = {
   withdraw: "ANY",
   // Only the system closes rivals when an agreement is reached.
   auto_close: "SYSTEM",
-  deposit: "BUYER",
+  authorize: "BUYER",
 };
 
 export const nextStatus = (table: TransitionTable, from: string, action: string): string | null =>

@@ -1,6 +1,6 @@
 import { Send } from "lucide-react";
 import { useState } from "react";
-import { Form, useNavigation } from "react-router";
+import { Form, Link, useNavigation } from "react-router";
 import { FORM_LEVEL_KEY } from "@agro/shared/modules/milestones/domain/errors";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import type { BackingOption } from "@agro/shared/modules/presales/application/use-cases";
@@ -23,7 +23,7 @@ interface Props {
   actionData?: PresaleActionData;
 }
 
-// The producer's first offer on an open request, backed by one of their projects with an OPEN presale in the same unit.
+// The producer's first offer on an open request, backed by one of their own projects.
 export function StartNegotiationForm({ options, unit, remaining, actionData }: Props) {
   const { formRef, errors, clear } = useFieldErrors(actionData);
   const pending = useNavigation().state !== "idle";
@@ -36,7 +36,10 @@ export function StartNegotiationForm({ options, unit, remaining, actionData }: P
   if (options.length === 0) {
     return (
       <p role="status" className="text-muted-foreground">
-        Para ofertar necesitas un proyecto propio que respalde la oferta. Crea un proyecto y vuelve a esta solicitud.
+        Para ofertar necesitas un proyecto propio que respalde la oferta. Crea un proyecto y vuelve a esta solicitud.{" "}
+        <Link to="/producer/projects/new" className="font-bold text-primary underline underline-offset-4">
+          Crear un proyecto
+        </Link>
       </p>
     );
   }

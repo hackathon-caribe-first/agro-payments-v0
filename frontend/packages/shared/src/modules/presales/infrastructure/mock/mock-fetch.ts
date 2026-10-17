@@ -7,7 +7,7 @@ import {
   agreedMilestonePrices,
   autoCloseOthers,
   canAgree,
-  canDeposit,
+  canAuthorizePayment,
   canStart,
   catalogLocks,
   hasLiveNegotiation,
@@ -42,7 +42,7 @@ import { buildProjectCounterSchema, buildStartProjectNegotiationSchema } from ".
 import {
   actorBodyDtoSchema,
   createOpenRequestDtoSchema,
-  depositBodyDtoSchema,
+  authorizePaymentBodyDtoSchema,
   respondRequestDtoSchema,
   startNegotiationDtoSchema,
   startOpenRequestNegotiationDtoSchema,
@@ -52,7 +52,7 @@ import {
 } from "../dto";
 import { toOpenRequest, toQuoteRequest } from "../mapper";
 import type { ProjectDto } from "../../../projects/infrastructure/dto";
-import { applyProjectDeposit } from "./deposit";
+import { applyProjectPaymentAuthorization } from "./authorize-payment";
 import { LOCAL_PRODUCER, projectOwner } from "./fixtures";
 import type { PresalesMockStore } from "./store";
 
@@ -90,14 +90,14 @@ const AGREE_MESSAGES: Record<AgreeBlock, string> = {
   milestone_status: "Este hito ya no admite acuerdos.",
   milestone_agreed: "Este hito ya tiene un acuerdo.",
 };
-const TOTAL_CHANGED_MESSAGE = "El total de la cotización del proyecto cambió. Revisa el nuevo monto antes de depositar.";
-const NO_TOTAL_MESSAGE = "El proyecto no tiene hitos: no hay un total para depositar.";
-const NO_DEPOSIT_MESSAGES = {
-  not_project: "Solo los acuerdos del proyecto tienen depósito.",
-  not_agreed: "Esta negociación no tiene un depósito pendiente.",
-  already_deposited: "El depósito ya se realizó.",
-  not_owner: "Solo el comprador de este acuerdo puede depositar.",
-  project_status: "Este proyecto ya no admite depósitos.",
+const TOTAL_CHANGED_MESSAGE = "El total del proyecto cambió: vuelve a revisarlo antes de autorizar.";
+const NO_TOTAL_MESSAGE = "No hay un total para autorizar.";
+const NO_AUTHORIZATION_MESSAGES = {
+  not_project: "Solo los acuerdos del proyecto tienen autorización de pago.",
+  not_agreed: "Esta negociación no tiene una autorización de pago pendiente.",
+  already_authorized: "Ya existe una autorización de pago para este acuerdo.",
+  not_owner: "Solo el comprador de este acuerdo puede autorizar el pago.",
+  project_status: "Este proyecto ya no admite autorizaciones de pago.",
   no_total: NO_TOTAL_MESSAGE,
 } as const;
 
@@ -125,7 +125,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
   const findOpenRequest = (id: string) => store.openRequests.find((o) => o.id === id);
   const domainOpenRequest = (o: OpenRequestDto) => toOpenRequest(serializeOpenRequest(o));
 
-  let nextLedger = store.ledgerEntries.length + 1;
+  let nextAuthorization = store.paymentAuthorizations.length + 1;
   const allProjects = (): ProjectDto[] => [...store.projects, ...store.externalProjects];
   const findProject = (id: string) => allProjects().find((p) => p.id === id);
   const milestonesOf = (projectId: string) =>
@@ -321,23 +321,23 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
       return json(request, 201);
     }
 
-    // --- executing the pending deposit of an agreed PROJECT negotiation ---
-    const depositMatch = path.match(/^\/negotiations\/([^/]+)\/deposit$/);
-    if (method === "POST" && depositMatch) {
-      const request = findRequest(depositMatch[1]);
+    // --- executing the pending payment authorization of an agreed PROJECT negotiation ---
+    const authorizeMatch = path.match(/^\/negotiations\/([^/]+)\/payment-authorization$/);
+    if (method === "POST" && authorizeMatch) {
+      const request = findRequest(authorizeMatch[1]);
       if (!request) return json({ error: "Negotiation not found" }, 404);
-      const dto = depositBodyDtoSchema.safeParse(readBody(init));
+      const dto = authorizePaymentBodyDtoSchema.safeParse(readBody(init));
       if (!dto.success) return malformed();
       const project = findProject(request.project_id);
       if (!project) return json({ error: "Project not found" }, 404);
 
       const asDomain = toQuoteRequest(request);
-      const block = canDeposit(asDomain, "BUYER", dto.data.buyer_id, { currentStatus: project.current_status });
-      if (block) return conflict(NO_DEPOSIT_MESSAGES[block]);
-      if (dto.data.expected_total === undefined) return invalid({ expectedTotal: ["Confirma el total del depósito."] });
+      const block = canAuthorizePayment(asDomain, "BUYER", dto.data.buyer_id, { currentStatus: project.current_status });
+      if (block) return conflict(NO_AUTHORIZATION_MESSAGES[block]);
+      if (dto.data.expected_total === undefined) return invalid({ expectedTotal: ["Confirma el total a autorizar."] });
       if (dto.data.expected_total !== request.agreed_total) return conflict(TOTAL_CHANGED_MESSAGE);
 
-      applyProjectDeposit(store, request, { ledgerId: `led-${nextLedger++}`, historyId: `h-${nextHistory++}`, at: new Date().toISOString() });
+      applyProjectPaymentAuthorization(store, request, { authorizationId: `pay-auth-${nextAuthorization++}`, historyId: `h-${nextHistory++}`, at: new Date().toISOString() });
       return json(request);
     }
 
@@ -527,7 +527,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
       }
       if (!canAct(asDomain, actor, action, now)) return conflict(TURN_MESSAGE);
 
-      // Project negotiations: agreement (and, for the buyer on a PROJECT offer, the deposit) happen in this one step.
+      // Project negotiations: agreement (and, for the buyer on a PROJECT offer, the payment authorization) happen in this one step.
       if (action === "accept" && (asDomain.scope === "PROJECT" || asDomain.scope === "MILESTONE")) {
         const project = findProject(request.project_id);
         if (!project) return json({ error: "Project not found" }, 404);
@@ -549,7 +549,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
           if (total <= 0) return conflict(NO_TOTAL_MESSAGE);
           const body = actorBodyDtoSchema.safeParse(readBody(init));
           const expected = body.success ? body.data.expected_total : undefined;
-          if (actor === "BUYER" && expected === undefined) return invalid({ expectedTotal: ["Confirma el total del depósito."] });
+          if (actor === "BUYER" && expected === undefined) return invalid({ expectedTotal: ["Confirma el total a autorizar."] });
           if (expected !== undefined && expected !== total) return conflict(TOTAL_CHANGED_MESSAGE);
         }
 
@@ -557,7 +557,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
         move(request, "accept", actor, "ACCEPT", { ...offerPayload(quote, asDomain.scope), ...(total > 0 ? { agreed_total: total } : {}) });
         if (asDomain.scope === "PROJECT") {
           request.agreed_total = total;
-          request.deposit_status = "PENDING";
+          request.authorization_status = "PENDING";
         }
 
         // The agreement closes every rival negotiation; open-request negotiations are never touched.
@@ -570,7 +570,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
         }
 
         if (asDomain.scope === "PROJECT" && actor === "BUYER") {
-          applyProjectDeposit(store, request, { ledgerId: `led-${nextLedger++}`, historyId: `h-${nextHistory++}`, at: new Date().toISOString() });
+          applyProjectPaymentAuthorization(store, request, { authorizationId: `pay-auth-${nextAuthorization++}`, historyId: `h-${nextHistory++}`, at: new Date().toISOString() });
         }
         return json(request);
       }

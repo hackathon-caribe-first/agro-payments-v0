@@ -6,7 +6,16 @@ import { OfferStatusBadge } from "./status-badge";
 const AUTHOR_LABELS: Record<Actor, string> = { BUYER: "Comprador", PRODUCER: "Productor", SYSTEM: "Sistema", UNKNOWN: "Desconocido" };
 
 // One round's terms. Revision 1 is the initial offer; later revisions are counter-offers.
-export function TermsSummary({ quote, unit }: { quote: SaleQuote; unit: UnitRef | null }) {
+export function TermsSummary({
+  quote,
+  unit,
+  authorizedTotal = null,
+}: {
+  quote: SaleQuote;
+  unit: UnitRef | null;
+  // Total of the project quotation covered by the payment authorization (PROJECT scope only).
+  authorizedTotal?: number | null;
+}) {
   const heading = quote.revision === 1 ? "Oferta" : "Contraoferta";
   const terms = quote.terms;
   if (terms.kind === "PROJECT" || terms.kind === "MILESTONE") {
@@ -27,6 +36,13 @@ export function TermsSummary({ quote, unit }: { quote: SaleQuote; unit: UnitRef 
               <dd className="text-right tabular-nums">{formatMoney(terms.unitPrice, quote.currency)}</dd>
               <dt className="text-muted-foreground">Valor de la oferta</dt>
               <dd className="text-right tabular-nums">{formatMoney(quote.total, quote.currency)}</dd>
+              {authorizedTotal !== null && authorizedTotal !== quote.total && (
+                <div className="col-span-2">
+                  <dd className="text-pretty text-xs text-muted-foreground">
+                    Valor registrado de la oferta; el pago autorizado corresponde al total de la cotización del proyecto.
+                  </dd>
+                </div>
+              )}
             </>
           ) : (
             <>

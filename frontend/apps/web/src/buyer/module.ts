@@ -15,14 +15,14 @@ export const buyer = {
   rejectSaleQuote: (requestId: string, revision: unknown) => presales.rejectSaleQuote(requestId, revision, "BUYER"),
   withdrawNegotiation: (requestId: string) => presales.withdrawNegotiation(requestId, "BUYER"),
 
-  // Project negotiation: browse projects, negotiate the project or a milestone, deposit an agreed project.
+  // Project negotiation: browse projects, negotiate the project or a milestone, authorize payment for an agreed project.
   listCatalog: () => presales.listBuyerCatalog(BUYER_PROFILE.id),
   getProjectDetail: (projectId: string) => presales.getBuyerProjectDetail(projectId, BUYER_PROFILE.id),
   getStartNegotiationForm: (projectId: string, milestoneId: string | null) =>
     presales.getStartNegotiationForm(projectId, milestoneId, BUYER_PROFILE.id),
   startNegotiation: (target: { projectId: string; milestoneId: string | null }, raw: unknown) =>
     presales.startNegotiation(target, BUYER_PROFILE, raw),
-  depositProjectAgreement: (negotiationId: string, raw: unknown) => presales.depositProjectAgreement(negotiationId, BUYER_PROFILE, raw),
+  authorizeProjectPayment: (negotiationId: string, raw: unknown) => presales.authorizeProjectPayment(negotiationId, BUYER_PROFILE, raw),
 
   createOpenRequest: (raw: unknown) => presales.createOpenRequest(BUYER_PROFILE, raw),
   closeOpenRequest: presales.closeOpenRequest,

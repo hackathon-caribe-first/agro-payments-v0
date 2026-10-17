@@ -18,7 +18,7 @@ import {
   type QuoteRequest,
   type SaleQuote,
 } from "../domain/presale";
-import { DEPOSIT_STATUSES } from "../../escrow/domain/ledger";
+import { AUTHORIZATION_STATES } from "../../payment-authorization/domain/authorization";
 import { toProject } from "../../projects/infrastructure/mapper";
 import { saleQuoteTotal } from "../domain/presale-rules";
 import type { PartyIdentity, StartTarget } from "../application/presale-repository";
@@ -140,12 +140,12 @@ const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => {
   createdAt: dto.created_at,
   quotes: dto.quotes.map((q) => quoteFromDto(q, scope)),
   history: [...dto.history].map(historyFromDto).sort((a, b) => a.at.localeCompare(b.at)),
-  deposit: dto.deposit_status
+  authorization: dto.authorization_status
     ? {
-        status: toKnown(dto.deposit_status, DEPOSIT_STATUSES),
+        status: toKnown(dto.authorization_status, AUTHORIZATION_STATES),
         agreedTotal: dto.agreed_total ?? 0,
-        depositedAt: dto.deposited_at ?? null,
-        ledgerEntryId: dto.ledger_entry_id ?? null,
+        authorizedAt: dto.authorized_at ?? null,
+        authorizationId: dto.payment_authorization_id ?? null,
       }
     : null,
   };

@@ -17,13 +17,13 @@ const NOT_NEGOTIABLE_MESSAGES = {
   duplicate: "Ya tienes una negociación activa para este proyecto o hito.",
 } as const;
 
-const DEPOSIT_MESSAGES = {
-  not_project: "Solo los acuerdos del proyecto tienen depósito.",
-  not_agreed: "Esta negociación no tiene un depósito pendiente.",
-  already_deposited: "El depósito ya se realizó.",
-  not_owner: "Solo el comprador de este acuerdo puede depositar.",
-  project_status: "Este proyecto ya no admite depósitos.",
-  no_total: "El proyecto no tiene hitos: no hay un total para depositar.",
+const AUTHORIZATION_MESSAGES = {
+  not_project: "Solo los acuerdos del proyecto tienen autorización de pago.",
+  not_agreed: "Esta negociación no tiene una autorización de pago pendiente.",
+  already_authorized: "Ya existe una autorización de pago para este acuerdo.",
+  not_owner: "Solo el comprador de este acuerdo puede autorizar el pago.",
+  project_status: "Este proyecto ya no admite autorizaciones de pago.",
+  no_total: "No hay un total para autorizar.",
 } as const;
 
 function transitionMessage(from: string, action: string): string {
@@ -69,10 +69,10 @@ export function presaleErrorMessage(error: PresaleError): string {
       return BACKING_MESSAGES[error.reason];
     case "not_negotiable":
       return NOT_NEGOTIABLE_MESSAGES[error.reason];
-    case "deposit_unavailable":
-      return DEPOSIT_MESSAGES[error.reason];
+    case "authorization_unavailable":
+      return AUTHORIZATION_MESSAGES[error.reason];
     case "total_changed":
-      return "El total de la cotización del proyecto cambió. Revisa el nuevo monto antes de depositar.";
+      return "El total del proyecto cambió: vuelve a revisarlo antes de autorizar.";
   }
 }
 

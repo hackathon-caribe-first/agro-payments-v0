@@ -76,7 +76,7 @@ export function dashboardSummary(entries: readonly ProjectEntry[]): DashboardSum
 
 // ---- negotiation support ----
 
-// A project can be negotiated while it is being set up or funded; once the custody account is funded it is closed to it.
+// A project can be negotiated while it is being set up or funded; once its payment is authorized it is closed to it.
 const NEGOTIABLE_PROJECT_STATUSES: readonly Project["currentStatus"][] = ["DRAFT", "CONTRACT_SIGNED", "FUNDING_IN_PROGRESS"];
 
 export const isProjectNegotiable = (status: Project["currentStatus"]): boolean => NEGOTIABLE_PROJECT_STATUSES.includes(status);

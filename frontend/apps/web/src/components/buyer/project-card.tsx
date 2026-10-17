@@ -16,7 +16,7 @@ export function startBlockText(block: StartBlock, project: Pick<Project, "curren
     case "own_project":
       return "Es un proyecto propio.";
     case "project_status":
-      return project.currentStatus === "FUNDED_IN_CUSTODY" ? "Depositado en la fiducia" : "Este proyecto ya no admite nuevas negociaciones.";
+      return project.currentStatus === "FUNDED_IN_CUSTODY" ? "Este proyecto ya tiene un pago autorizado." : "Este proyecto ya no admite nuevas negociaciones.";
     case "project_agreed":
       return "Este proyecto ya tiene un acuerdo: no admite nuevas negociaciones.";
     case "milestone_status":
@@ -44,7 +44,7 @@ export function ProjectCard({ entry }: { entry: CatalogEntry }) {
               </p>
               <CardTitle className="break-words text-lg text-primary">{project.title}</CardTitle>
             </div>
-            <ProjectStatusBadge status={project.currentStatus} />
+            <ProjectStatusBadge status={project.currentStatus} audience="buyer" />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

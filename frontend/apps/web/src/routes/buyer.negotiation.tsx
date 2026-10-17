@@ -3,6 +3,7 @@ import { runNegotiationAction } from "~/components/negotiation/actions";
 import { NegotiationDetail } from "~/components/negotiation/detail";
 import { presaleErrorMessage, type PresaleActionData } from "~/components/presale/error-copy";
 import { buyer } from "~/buyer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/buyer.negotiation";
 
 export const meta = () => [{ title: "Negociación · Surco" }];
@@ -17,6 +18,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 }
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const id = params.negotiationId;
   return runNegotiationAction(
     {
@@ -24,7 +26,7 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
       reject: (revision) => buyer.rejectSaleQuote(id, revision),
       counter: (raw) => buyer.counterOffer(id, raw),
       withdraw: () => buyer.withdrawNegotiation(id),
-      deposit: (raw) => buyer.depositProjectAgreement(id, raw),
+      authorizePayment: (raw) => buyer.authorizeProjectPayment(id, raw),
     },
     await request.formData(),
   );

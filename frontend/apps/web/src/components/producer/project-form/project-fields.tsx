@@ -4,6 +4,7 @@ import { Label } from "@agro/shared/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@agro/shared/ui/select";
 import { Textarea } from "@agro/shared/ui/textarea";
 import { FieldError, invalidProps } from "./field-error";
+import { WalletField } from "./wallet-field";
 
 export interface ProjectDetails {
   title: string;
@@ -11,6 +12,10 @@ export interface ProjectDetails {
   productionType: ProductionType | "";
   startDate: string;
   estimatedEndDate: string;
+  // RF-01: wallet address of the producer.
+  producerWallet: string;
+  // RF-21: contingency fund as typed (a whole percentage, 0 to 20).
+  contingencyPct: string;
 }
 
 type Props = {
@@ -88,6 +93,25 @@ export function ProjectFields({ value, errors, onChange }: Props) {
           />
           <FieldError id="project-end" messages={errors.estimatedEndDate} />
         </div>
+      </div>
+
+      <WalletField value={value.producerWallet} errors={errors.producerWallet} onChange={(producerWallet) => onChange({ producerWallet })} />
+
+      <div className="flex flex-col gap-1.5 sm:max-w-xs">
+        <Label htmlFor="project-contingency">Fondo de imprevistos (%)</Label>
+        <Input
+          id="project-contingency"
+          inputMode="numeric"
+          autoComplete="off"
+          value={value.contingencyPct}
+          onChange={(e) => onChange({ contingencyPct: e.target.value.replace(/[^\d.,]/g, "") })}
+          {...invalidProps("project-contingency", errors.contingencyBps)}
+          aria-describedby={["project-contingency-hint", errors.contingencyBps?.length ? "project-contingency-error" : null].filter(Boolean).join(" ")}
+        />
+        <p id="project-contingency-hint" className="text-sm text-muted-foreground">
+          Entero entre 0 y 20. Se aparta dentro del presupuesto de cada hito para gastos que no se pueden prever.
+        </p>
+        <FieldError id="project-contingency" messages={errors.contingencyBps} />
       </div>
     </div>
   );

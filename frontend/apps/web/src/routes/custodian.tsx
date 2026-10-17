@@ -4,12 +4,17 @@ import { StatusBadge } from "@agro/shared/ui/status-badge";
 import { ActionForm } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
-import { loadMilestones, milestoneAction } from "~/milestones";
+import { ServerUnreachable } from "~/components/server-unreachable";
+import { loadMilestonesOrError, milestoneAction } from "~/milestones";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/custodian";
 
 export const meta = () => [{ title: "Pagos · Surco" }];
-export const clientLoader = () => loadMilestones();
-export const clientAction = ({ request }: Route.ClientActionArgs) => milestoneAction(request);
+export const clientLoader = () => loadMilestonesOrError();
+export const clientAction = async ({ request }: Route.ClientActionArgs) => {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
+  return milestoneAction(request);
+};
 
 // The wallet sends the browser back here with ?funded=<id> or ?funding_error=<id>.
 function FundingResult({ milestones }: { milestones: Milestone[] }) {
@@ -34,6 +39,8 @@ function FundingResult({ milestones }: { milestones: Milestone[] }) {
 }
 
 export default function Custodian({ loaderData }: Route.ComponentProps) {
+  if (loaderData.error !== null) return <ServerUnreachable title="Pagos" message={loaderData.error} />;
+  const milestones = loaderData.milestones;
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -43,9 +50,9 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
           proveedores y trabajadores durante la ejecución. La línea del productor se libera sola cuando el verificador aprueba.
         </p>
       </header>
-      <FundingResult milestones={loaderData} />
+      <FundingResult milestones={milestones} />
       <MilestoneList>
-        {loaderData.map((m) => (
+        {milestones.map((m) => (
           <MilestoneCard key={m.id} milestone={m}>
             <div className="flex flex-col gap-4">
               {m.fundedAt ? (

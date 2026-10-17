@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { PRODUCTION_TYPES, isDateWithin, milestoneQuotation } from "../domain/project-draft";
+import { MAX_CONTINGENCY_PCT, PRODUCTION_TYPES, isDateWithin, milestoneQuotation } from "../domain/project-draft";
+
+const CONTINGENCY_MESSAGE = `Ingresa un porcentaje entero entre 0 y ${MAX_CONTINGENCY_PCT}.`;
 
 const budget = (label: string) =>
   z
@@ -26,6 +28,21 @@ export const createProjectInputSchema = z
     startDate: isoDate("Ingresa una fecha de inicio válida."),
     estimatedEndDate: isoDate("Ingresa una fecha de finalización válida."),
     milestones: z.array(milestoneSchema, { error: "Agrega al menos un hito." }).min(1, { error: "Agrega al menos un hito." }),
+    // RF-01: optional here (projects from the transport may lack it); the creation use case requires it for the form and validates it.
+    producerWallet: z
+      .string({ error: "Ingresa la billetera del productor." })
+      .trim()
+      .max(300, { error: "Máximo 300 caracteres." })
+      .transform((value) => (value === "" ? undefined : value))
+      .optional(),
+    // RF-21: basis points, a whole percentage between 0 and 20 %.
+    contingencyBps: z
+      .number({ error: CONTINGENCY_MESSAGE })
+      .int({ error: CONTINGENCY_MESSAGE })
+      .min(0, { error: CONTINGENCY_MESSAGE })
+      .max(MAX_CONTINGENCY_PCT * 100, { error: CONTINGENCY_MESSAGE })
+      .refine((bps) => bps % 100 === 0, { error: CONTINGENCY_MESSAGE })
+      .optional(),
   })
   .superRefine((input, ctx) => {
     if (input.estimatedEndDate < input.startDate) {

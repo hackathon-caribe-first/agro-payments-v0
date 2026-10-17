@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
 import { OpenRequestForm } from "~/components/open-request/form";
 import { toActionData, type PresaleActionData } from "~/components/presale/error-copy";
 import { buyer } from "~/buyer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/buyer.open-requests.new";
 
 export const meta = () => [{ title: "Nueva solicitud abierta · Surco" }];
@@ -11,6 +12,7 @@ export const meta = () => [{ title: "Nueva solicitud abierta · Surco" }];
 const text = (form: FormData, name: string) => String(form.get(name) ?? "");
 
 export async function clientAction({ request }: Route.ClientActionArgs): Promise<PresaleActionData | Response> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.formData();
   const result = await buyer.createOpenRequest({
     title: text(form, "title"),

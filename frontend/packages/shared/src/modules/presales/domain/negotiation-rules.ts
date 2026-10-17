@@ -1,5 +1,5 @@
-import { DEPOSIT_TRANSITIONS, nextStatus } from "./transitions";
-import type { Actor, CatalogProject, DepositState, OfferTerms, QuoteRequest, RequestStatus } from "./presale";
+import { AUTHORIZATION_TRANSITIONS, nextStatus } from "./transitions";
+import type { Actor, CatalogProject, AuthorizationState, OfferTerms, QuoteRequest, RequestStatus } from "./presale";
 import { isNegotiationActive } from "./presale-rules";
 import { isMilestoneNegotiable, isProjectNegotiable } from "../../projects/domain/project-rules";
 import type { Project } from "../../projects/domain/project";
@@ -108,27 +108,27 @@ export function canAgree(c: {
   return null;
 }
 
-// ---- deposit ----
+// ---- payment authorization ----
 
-export type DepositBlock = "not_project" | "not_agreed" | "already_deposited" | "not_owner" | "project_status" | "no_total";
+export type AuthorizationBlock = "not_project" | "not_agreed" | "already_authorized" | "not_owner" | "project_status" | "no_total";
 
-export function canDeposit(
-  n: Pick<QuoteRequest, "scope" | "status" | "buyerId" | "deposit" | "origin">,
+export function canAuthorizePayment(
+  n: Pick<QuoteRequest, "scope" | "status" | "buyerId" | "authorization" | "origin">,
   actor: Actor,
   buyerId: string,
   project: Pick<Project, "currentStatus">,
-): DepositBlock | null {
+): AuthorizationBlock | null {
   if (n.origin !== "PROJECT_INTEREST" || n.scope !== "PROJECT") return "not_project";
-  if (!isAgreed(n) || !n.deposit) return "not_agreed";
+  if (!isAgreed(n) || !n.authorization) return "not_agreed";
   if (actor !== "BUYER" || n.buyerId !== buyerId) return "not_owner";
-  if (n.deposit.status === "DEPOSITED") return "already_deposited";
-  if (!nextStatus(DEPOSIT_TRANSITIONS, n.deposit.status, "deposit")) return "not_agreed";
-  if (n.deposit.agreedTotal <= 0) return "no_total";
+  if (n.authorization.status === "AUTHORIZED") return "already_authorized";
+  if (!nextStatus(AUTHORIZATION_TRANSITIONS, n.authorization.status, "authorize")) return "not_agreed";
+  if (n.authorization.agreedTotal <= 0) return "no_total";
   if (project.currentStatus === "CANCELLED_OR_DISPUTED") return "project_status";
   return null;
 }
 
-export const isDepositPending = (d: DepositState | null): boolean => d?.status === "PENDING";
+export const isAuthorizationPending = (d: AuthorizationState | null): boolean => d?.status === "PENDING";
 
 // ---- auto-close ----
 

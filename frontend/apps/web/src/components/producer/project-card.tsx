@@ -21,7 +21,7 @@ export function ProjectCard({ overview }: { overview: ProjectOverview }) {
               <p className="text-sm text-muted-foreground">
                 {project.projectCode} · {productionTypeLabel(project.productionType)}
               </p>
-              <CardTitle className="text-lg text-primary">{project.title}</CardTitle>
+              <CardTitle className="min-w-0 break-words text-lg text-primary">{project.title}</CardTitle>
             </div>
             <ProjectStatusBadge status={project.currentStatus} />
           </div>
