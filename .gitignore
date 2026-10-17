@@ -16,6 +16,5 @@ coverage
 
 # Open Payments private keys
 backend/keys/
-backend/scripts/op-spike/keys/
 *.pem
 *.key

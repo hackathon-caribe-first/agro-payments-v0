@@ -1,8 +1,0 @@
-{
-  "name": "op-spike",
-  "private": true,
-  "type": "module",
-  "scripts": { "spike": "tsx spike.ts" },
-  "dependencies": { "@interledger/open-payments": "^7.0.0" },
-  "devDependencies": { "tsx": "^4.19.0", "typescript": "^5.6.0", "@types/node": "^22.0.0" }
-}
