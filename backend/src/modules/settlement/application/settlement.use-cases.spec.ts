@@ -1,4 +1,4 @@
-import { DomainError, NotFoundError } from "../../../shared/domain-errors";
+import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
 import { FakeGateway, FakeRepository, ThrowingGateway } from "../../milestones/application/testing";
 import type { PaymentGateway } from "../../milestones/ports/payment-gateway";
 import { CreateProjectUseCase } from "../../projects/application/create-project.use-case";
@@ -6,6 +6,8 @@ import { PROJECT_STATUS, type Viewer } from "../../projects/application/project"
 import { FakeProjectRepository } from "../../projects/application/testing";
 import { PAYOUT_STATUS, SETTLEMENT_STATUS } from "./settlement";
 import { SettlementUseCases } from "./settlement.use-cases";
+import { CapturedInvestors } from "../ports/captured-investors";
+import type { InvestorPosition } from "./settlement";
 import { FakeSettlementRepository, sampleTerms } from "./testing";
 
 const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
@@ -144,5 +146,39 @@ describe("SettlementUseCases.get", () => {
     for (const viewer of [owner, investor, admin, fidu]) expect((await useCases.get(draft.id, viewer)).id).toBe(draft.id);
     await expect(useCases.get(draft.id, otherProducer)).rejects.toThrow(NotFoundError);
     await expect(useCases.get("nope", admin)).rejects.toThrow(NotFoundError);
+  });
+});
+
+// Block 4: without investors in the body, the cascade pays the project's captured investments.
+describe("SettlementUseCases with captured investors", () => {
+  class FakeCaptured extends CapturedInvestors {
+    constructor(private readonly positions: InvestorPosition[]) {
+      super();
+    }
+    async forProject() {
+      return this.positions;
+    }
+  }
+
+  it("builds the capital tier from the captured investments when the request has no investors", async () => {
+    const { projects, settlements, gateway, project } = await setup();
+    const captured = sampleTerms().investors;
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured(captured));
+    const preview = await useCases.preview(project.id, admin, { ...sampleTerms(), investors: null, days: 365 });
+    expect(preview.terms.investors).toEqual(captured);
+    const draft = await useCases.create(project.id, admin, { ...sampleTerms(), investors: null, days: 365 });
+    expect(draft.terms.investors).toEqual(captured);
+  });
+
+  it("the explicit investors of the body win", async () => {
+    const { projects, settlements, gateway, project } = await setup();
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured([]));
+    expect((await useCases.preview(project.id, admin, { ...sampleTerms(), days: 365 })).terms.investors).toEqual(sampleTerms().investors);
+  });
+
+  it("refuses on the investors field when nothing was captured", async () => {
+    const { projects, settlements, gateway, project } = await setup();
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured([]));
+    await expect(useCases.preview(project.id, admin, { ...sampleTerms(), investors: null, days: 365 })).rejects.toThrow(ValidationError);
   });
 });

@@ -13,7 +13,10 @@ export const toNegotiationResponse = (n: DepositOutcome, ids: IdAliases): Deposi
 
 export const toOpenRequestResponse = (o: OpenRequestDto, ids: IdAliases): OpenRequestDto => ({ ...o, buyer_id: ids.toPublic(o.buyer_id) });
 
-export const toLedgerResponse = ({ payment_reference: _, ...e }: LedgerRecord, ids: IdAliases): LedgerEntryDto => ({ ...e, buyer_id: ids.toPublic(e.buyer_id) });
+export const toLedgerResponse = ({ payment_reference: _, ...e }: LedgerRecord, ids: IdAliases): LedgerEntryDto => ({
+  ...e,
+  ...(e.buyer_id !== undefined && { buyer_id: ids.toPublic(e.buyer_id) }),
+});
 
 export const toCatalogResponse = (e: CatalogEntry, ids: IdAliases) => ({
   ...toProjectResponse(e.project),

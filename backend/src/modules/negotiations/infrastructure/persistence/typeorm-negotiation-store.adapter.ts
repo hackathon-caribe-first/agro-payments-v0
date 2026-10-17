@@ -94,8 +94,9 @@ const toLedger = (r: Row): LedgerRecord => ({
   category: r.category as string,
   amount: num(r.amount),
   currency: r.currency as string,
-  negotiation_id: r.negotiation_id as string,
-  buyer_id: r.buyer_user_id as string,
+  ...opt("negotiation_id", r.negotiation_id as string | null),
+  ...opt("buyer_id", r.buyer_user_id as string | null),
+  ...opt("investment_id", r.investment_id as string | null),
   created_at: iso(r.created_at),
   payment_reference: r.payment_reference as string | null,
 });
@@ -236,7 +237,7 @@ export class TypeOrmNegotiationStore extends NegotiationStore {
     await this.query(
       `INSERT INTO ledger_entries (id, project_id, type, category, amount, currency, negotiation_id, buyer_user_id, payment_reference, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [e.id, e.project_id, e.type, e.category, e.amount, e.currency, e.negotiation_id, e.buyer_id, e.payment_reference, e.created_at],
+      [e.id, e.project_id, e.type, e.category, e.amount, e.currency, e.negotiation_id ?? null, e.buyer_id ?? null, e.payment_reference, e.created_at],
     );
   }
 

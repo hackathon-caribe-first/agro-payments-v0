@@ -1,7 +1,7 @@
-// Domain types for the escrow ledger (the custody account of a project). Only deposits exist for now.
+// Domain types for the escrow ledger (the custody account of a project): buyer deposits and investor capital (block 4).
 
 export const LEDGER_TYPES = ["CREDIT"] as const;
-export const LEDGER_CATEGORIES = ["BUYER_DEPOSIT"] as const;
+export const LEDGER_CATEGORIES = ["BUYER_DEPOSIT", "INVESTOR_CAPITAL"] as const;
 // A project agreement is first PENDING (agreed, not yet deposited) and then DEPOSITED.
 export const DEPOSIT_STATUSES = ["PENDING", "DEPOSITED"] as const;
 

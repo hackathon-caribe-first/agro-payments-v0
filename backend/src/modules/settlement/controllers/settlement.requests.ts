@@ -28,8 +28,10 @@ function pesos(errors: FieldErrors, path: string, value: unknown, { optional = f
   return pesosToMinor(value, PROJECT_ASSET_SCALE);
 }
 
-// ponytail: investor positions come in the body until the capture ledger (RF-10) records them; capital is in COP as it reached custody.
-function investors(errors: FieldErrors, value: unknown): InvestorPosition[] {
+// Investor positions may still come in the body (capital in COP as it reached custody); omitted (or null), the use case takes
+// the project's captured investments (RF-10).
+function investors(errors: FieldErrors, value: unknown): InvestorPosition[] | null {
+  if (value === undefined || value === null) return null;
   if (!Array.isArray(value) || value.length === 0) {
     addFieldError(errors, "investors", "Agrega al menos un inversionista.");
     return [];

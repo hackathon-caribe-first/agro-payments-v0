@@ -35,7 +35,7 @@ import { UserRoleWriter } from "./ports/user-role-writer";
       provide: DEMO_IDENTITY,
       useFactory: () => {
         const on = loadEnv().demoIdentity;
-        if (on) new Logger("DemoIdentity").warn(`DEMO_IDENTITY is on: /api requests without a session act as ${DEMO_PARTIES.producer.email} or ${DEMO_PARTIES.buyer.email} by route side. Demo only, never in production.`);
+        if (on) new Logger("DemoIdentity").warn(`DEMO_IDENTITY is on: /api requests without a session act as ${DEMO_PARTIES.producer.email}, ${DEMO_PARTIES.buyer.email} or ${DEMO_PARTIES.investor.email} by route side. Demo only, never in production.`);
         return on;
       },
     },

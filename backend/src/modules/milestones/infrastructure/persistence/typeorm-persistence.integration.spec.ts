@@ -20,6 +20,9 @@ import { TypeOrmMilestoneAdapter } from "./typeorm-milestone.adapter";
 import { NegotiationsService } from "../../../negotiations/application/negotiations.service";
 import { BUYER, FakeDirectory, InstantCustody, PRODUCER } from "../../../negotiations/application/testing";
 import { TypeOrmNegotiationStore } from "../../../negotiations/infrastructure/persistence/typeorm-negotiation-store.adapter";
+import { InvestmentUseCases } from "../../../investments/application/investments.use-cases";
+import { FakeCapture, INVESTOR, OTHER_INVESTOR, EUR_WALLET, eurQuote } from "../../../investments/application/testing";
+import { TypeOrmInvestmentStore } from "../../../investments/infrastructure/persistence/typeorm-investment-store.adapter";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -452,5 +455,88 @@ describe("TypeOrmSettlementAdapter", () => {
     await expect(repo.save(other)).rejects.toThrow();
     await repo.save({ ...sampleSettlement(), id: "s3" });
     expect((await repo.findByProject("p1")).map((x) => x.id)).toEqual(["s1", "s3"]);
+  });
+});
+
+// Block 4: investor capture through the real use cases, store and migrations (the capture itself is scripted).
+describe("TypeOrmInvestmentStore", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  // Target 300.000 pesos: the 10 % cap is 30.000 pesos (3.000.000 minor) per investor.
+  const input: NewProjectInput = {
+    title: "Cacao fino",
+    description: "Ciclo de cacao",
+    productionType: "CACAO",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100_000, laborBudget: 200_000, requirements: [] }],
+  };
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+    if (!dataSource) return;
+    const { project, milestones } = buildProject({ id: "p-i", ownerUserId: "u-prod", input, wallets, now });
+    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+  });
+
+  const wire = (ds: DataSource) => {
+    const store = new TypeOrmInvestmentStore(ds);
+    const capture = new FakeCapture();
+    return { store, capture, useCases: new InvestmentUseCases(store, capture, { now: () => now }) };
+  };
+
+  it("round-trips a captured investment with its quote and rate, and commits the ledger credit, custody balance and status", async (ctx) => {
+    const { store, useCases } = wire(db(ctx));
+    const done = await useCases.invest("p-i", INVESTOR, { amount: 3_000_000, walletAddress: EUR_WALLET.id });
+    const stored = await store.findById(done.id);
+    expect(stored).toEqual({ ...done, consentRedirectUrl: undefined, quote: eurQuote({ receiveAmount: 3_000_000 }) });
+    expect(stored?.impliedRate).toBe("4000/3");
+    const ledger = await new TypeOrmNegotiationStore(db(ctx)).listLedger("p-i");
+    expect(ledger).toEqual([
+      { id: expect.any(String), project_id: "p-i", type: "CREDIT", category: "INVESTOR_CAPITAL", amount: 30_000, currency: "COP", investment_id: done.id, payment_reference: `SIM-${done.id}`, created_at: now.toISOString() },
+    ]);
+    expect(await store.findProject("p-i")).toMatchObject({ custodyBalance: 3_000_000, currentStatus: "FUNDING_IN_PROGRESS" });
+  });
+
+  it("never books two credits for one investment", async (ctx) => {
+    const { store, useCases } = wire(db(ctx));
+    const done = await useCases.invest("p-i", INVESTOR, { amount: 1_000_000, walletAddress: EUR_WALLET.id });
+    const credit = { id: "led-dup", projectId: "p-i", investmentId: done.id, amount: 10_000, currency: "COP", paymentReference: null, createdAt: now.toISOString() };
+    await expect(store.transaction("p-i", (tx) => tx.creditCapital(credit, 1_000_000, "FUNDING_IN_PROGRESS"))).rejects.toThrow();
+    expect((await store.findProject("p-i"))?.custodyBalance).toBe(1_000_000);
+  });
+
+  it("serializes subscriptions on the project row: two consents at once by one investor, one is refused", async (ctx) => {
+    const { store, capture, useCases } = wire(db(ctx));
+    capture.mode = "consent";
+    const results = await Promise.allSettled([1, 2].map(() => useCases.invest("p-i", INVESTOR, { amount: 1_000_000, walletAddress: EUR_WALLET.id })));
+    expect(results.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"]);
+    await useCases.invest("p-i", OTHER_INVESTOR, { amount: 1_000_000, walletAddress: EUR_WALLET.id });
+    expect((await store.listByProject("p-i")).map((i) => i.status)).toEqual(["PENDING_CONSENT", "PENDING_CONSENT"]);
+  });
+
+  it("stores investor_capture grants by investment", async (ctx) => {
+    const { useCases, capture } = wire(db(ctx));
+    capture.mode = "consent";
+    const pending = await useCases.invest("p-i", INVESTOR, { amount: 1_000_000, walletAddress: EUR_WALLET.id });
+    const grants = new TypeOrmGrantStore(db(ctx), SecretCipher.fromBase64Key(randomBytes(32).toString("base64")));
+    const grant: Grant = {
+      id: "00000000-0000-4000-8000-0000000000c1",
+      purpose: GRANT_PURPOSE.INVESTOR_CAPTURE,
+      projectId: "p-i",
+      milestoneId: null,
+      investmentId: pending.id,
+      payerWalletAddress: EUR_WALLET.id,
+      assetCode: "EUR",
+      assetScale: 2,
+      debitLimit: 2_250,
+      status: GRANT_STATUS.PENDING,
+      pending: { clientNonce: "n", finishNonce: "f", continueUri: "https://auth.test/continue", continueToken: "t", authServer: "https://auth.test" },
+      access: null,
+      createdAt: now,
+      revokedAt: null,
+    };
+    await grants.save(grant);
+    expect(await grants.findLatestForInvestment(pending.id)).toEqual(grant);
+    expect(await grants.findLatestForMilestone("p-i")).toBeNull();
   });
 });

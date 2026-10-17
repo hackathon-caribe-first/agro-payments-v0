@@ -14,6 +14,8 @@ export class GrantEntity {
   milestoneId: string | null;
   @Column({ type: "text", name: "negotiation_id", nullable: true })
   negotiationId: string | null;
+  @Column({ type: "text", name: "investment_id", nullable: true })
+  investmentId: string | null;
   @Column({ type: "text", name: "payer_wallet_address" })
   payerWalletAddress: string;
   @Column({ type: "text", name: "asset_code" })

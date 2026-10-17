@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
-import { DomainError, NotFoundError } from "../../../shared/domain-errors";
+import { Inject, Injectable, Optional } from "@nestjs/common";
+import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
 import type { LineResult } from "../../milestones/application/milestone";
 import { PaymentGateway } from "../../milestones/ports/payment-gateway";
 import { canView, PROJECT_STATUS, type Project, type ProjectWallets, type Viewer } from "../../projects/application/project";
 import { PROJECT_WALLETS } from "../../projects/application/project-wallets";
 import { ProjectRepository } from "../../projects/ports/project.repository";
+import { CapturedInvestors } from "../ports/captured-investors";
 import { SettlementRepository } from "../ports/settlement.repository";
 import { PREFERRED_RATE_BPS } from "./liquidation";
 import {
@@ -13,6 +14,7 @@ import {
   applyPayoutResult,
   approveSettlement,
   createSettlement,
+  type InvestorPosition,
   PAYOUT_STATUS,
   planPayouts,
   type Settlement,
@@ -21,14 +23,15 @@ import {
   startExecution,
 } from "./settlement";
 
-/** Terms as the API sends them; null days means the project's cycle (start to estimated end). */
-export type SettlementRequest = Omit<SettlementTerms, "days"> & { days: number | null };
+/** Terms as the API sends them; null days means the project's cycle (start to estimated end), null investors its captured investments. */
+export type SettlementRequest = Omit<SettlementTerms, "days" | "investors"> & { days: number | null; investors: InvestorPosition[] | null };
 
 const DAY_MS = 86_400_000;
 const cycleDays = (p: Project) => Math.max(0, Math.round((Date.parse(`${p.estimatedEndDate}T00:00:00Z`) - Date.parse(`${p.startDate}T00:00:00Z`)) / DAY_MS));
 
-// ponytail: proceeds and investor positions come in the request. L will come from the custody balance once the harvest
-// payment (RF-24) and the capture ledger (RF-10) exist, and no project status gates the settlement until something moves projects past DRAFT.
+// ponytail: proceeds come in the request; L will come from the custody balance once the harvest payment (RF-24) exists, and no
+// project status gates the settlement yet. Investor positions come from the captured investments (RF-10) unless the request
+// sends them explicitly.
 @Injectable()
 export class SettlementUseCases {
   constructor(
@@ -36,6 +39,7 @@ export class SettlementUseCases {
     private readonly settlements: SettlementRepository,
     private readonly gateway: PaymentGateway,
     @Inject(PROJECT_WALLETS) private readonly wallets: ProjectWallets,
+    @Optional() private readonly captured?: CapturedInvestors,
   ) {}
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
@@ -55,14 +59,16 @@ export class SettlementUseCases {
     if (active) throw new DomainError(`Project ${projectId} already has settlement ${active.id} (${active.status})`);
   }
 
-  private terms(project: Project, request: SettlementRequest): SettlementTerms {
-    return { ...request, days: request.days ?? cycleDays(project) };
+  private async terms(project: Project, request: SettlementRequest): Promise<SettlementTerms> {
+    const investors = request.investors ?? (await this.captured?.forProject(project.id)) ?? [];
+    if (investors.length === 0) throw new ValidationError({ investors: ["El proyecto no tiene inversiones captadas: agrega los inversionistas."] }, "No investors");
+    return { ...request, investors, days: request.days ?? cycleDays(project) };
   }
 
   /** The cascade and its payouts for these terms; nothing is stored. */
   async preview(projectId: string, viewer: Viewer, request: SettlementRequest) {
     const project = await this.project(projectId, viewer);
-    const terms = this.terms(project, request);
+    const terms = await this.terms(project, request);
     return { project, terms, preferredRateBps: PREFERRED_RATE_BPS, ...planPayouts(terms, this.wallets, project.currency) };
   }
 
@@ -72,7 +78,7 @@ export class SettlementUseCases {
     const settlement = createSettlement({
       id: randomUUID(),
       projectId: project.id,
-      terms: this.terms(project, request),
+      terms: await this.terms(project, request),
       wallets: this.wallets,
       currency: project.currency,
       assetScale: project.assetScale,

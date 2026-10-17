@@ -43,6 +43,11 @@ describe("parseSettlementRequest", () => {
     expect(parseSettlementRequest({ proceeds, investors })).toMatchObject({ integratorDebt: 0, integratorWalletAddress: null, producerContribution: 0, days: null });
   });
 
+  it("leaves investors null when the body omits them: the captured investments fill the capital tier (RF-10)", () => {
+    const { proceeds } = body();
+    expect(parseSettlementRequest({ proceeds }).investors).toBeNull();
+  });
+
   it("rejects a body that is not an object", () => {
     expect(errorsOf([])).toEqual({ _form: ["La solicitud no tiene el formato esperado."] });
   });

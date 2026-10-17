@@ -2,6 +2,7 @@ import { CreateMilestones1792108800000 } from "./1792108800000-create-milestones
 import { CreateGrants1792108800001 } from "./1792108800001-create-grants";
 import { CreateProjects1792108800002 } from "./1792108800002-create-projects";
 import { CreateNegotiations1792108800003 } from "./1792108800003-create-negotiations";
+import { CreateInvestments1792281600000 } from "./investments-1792281600000-create-investments";
 import { CreateSettlements1792195200000 } from "./settlement-1792195200000-create-settlements";
 import { AssistantCreateTables1792281600000 } from "./1792281600000-assistant-create-tables";
 
@@ -13,5 +14,6 @@ export const MIGRATIONS = [
   CreateProjects1792108800002,
   CreateNegotiations1792108800003,
   CreateSettlements1792195200000,
+  CreateInvestments1792281600000,
   AssistantCreateTables1792281600000,
 ];

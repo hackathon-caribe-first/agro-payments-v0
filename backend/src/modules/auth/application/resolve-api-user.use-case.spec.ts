@@ -91,11 +91,19 @@ describe("ApiAuthGuard", () => {
 const demoBuyer: AuthenticatedUser = { id: "b1", email: "comprador@agro.dev", name: "Comercializadora Andina S.A.S.", role: "buyer" };
 
 describe("ResolveApiUserUseCase by side", () => {
-  it("names the two demo parties, their roles and the public ids the web app hardcodes", () => {
+  it("names the demo parties, their roles and the public ids the web app hardcodes", () => {
     expect(DEMO_PARTIES).toEqual({
       producer: { email: "productor@agro.dev", role: "seller", publicId: "producer-main" },
       buyer: { email: "comprador@agro.dev", role: "buyer", publicId: "buyer-andina" },
+      investor: { email: "inversionista@agro.dev", role: "investor", publicId: "investor-demo" },
     });
+  });
+
+  it("DEMO_IDENTITY on: the investor side acts as the demo investor; a session still wins", async () => {
+    const demoInvestor: AuthenticatedUser = { id: "i1", email: "inversionista@agro.dev", name: "Inversionista", role: "investor" };
+    expect(await resolver(null, true, [demoProducer, demoInvestor]).useCase.execute({}, "investor")).toEqual(demoInvestor);
+    expect(await resolver(sessionUser, true, [demoInvestor]).useCase.execute({}, "investor")).toEqual(sessionUser);
+    await expect(resolver(null, true, [{ ...demoInvestor, role: "buyer" }]).useCase.execute({}, "investor")).rejects.toThrow(/inversionista@agro\.dev/);
   });
 
   it("DEMO_IDENTITY on: the buyer side acts as the demo buyer, the producer side (the default) as the demo producer", async () => {

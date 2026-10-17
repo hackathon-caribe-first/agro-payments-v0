@@ -166,8 +166,10 @@ export const ledgerEntryDtoSchema = z.object({
   category: z.string(),
   amount: z.number(),
   currency: z.string(),
-  negotiation_id: z.string(),
-  buyer_id: z.string(),
+  // BUYER_DEPOSIT credits carry the negotiation and buyer; INVESTOR_CAPITAL credits carry the investment instead.
+  negotiation_id: z.string().optional(),
+  buyer_id: z.string().optional(),
+  investment_id: z.string().optional(),
   created_at: z.string(),
 });
 

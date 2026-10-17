@@ -5,7 +5,9 @@ export const GRANT_PURPOSE = {
   MILESTONE: "milestone",
   /** The buyer's one-off grant that moves an agreed project total into custody (negotiationId set). */
   BUYER_DEPOSIT: "buyer_deposit",
-  // Planned in v3, not issued yet: "capture" | "liquidation".
+  /** An investor's one-off grant on their own wallet that moves one investment into custody (investmentId set). */
+  INVESTOR_CAPTURE: "investor_capture",
+  // Planned in v3, not issued yet: "liquidation".
 } as const;
 export type GrantPurpose = (typeof GRANT_PURPOSE)[keyof typeof GRANT_PURPOSE];
 
@@ -38,6 +40,8 @@ export interface Grant {
   milestoneId: string | null;
   /** buyer_deposit grants only; absent on the others. */
   negotiationId?: string;
+  /** investor_capture grants only; absent on the others. */
+  investmentId?: string;
   payerWalletAddress: string;
   assetCode: string;
   assetScale: number;
@@ -61,4 +65,6 @@ export abstract class GrantStore {
   abstract findLatestForMilestone(milestoneId: string): Promise<Grant | null>;
   /** The newest buyer_deposit grant of that negotiation, whatever its status. */
   abstract findLatestForNegotiation(negotiationId: string): Promise<Grant | null>;
+  /** The newest investor_capture grant of that investment, whatever its status. */
+  abstract findLatestForInvestment(investmentId: string): Promise<Grant | null>;
 }
