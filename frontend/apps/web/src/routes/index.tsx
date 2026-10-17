@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 
 export function clientLoader() {
-  return redirect("/productor");
+  return redirect("/producer");
 }
 
 export default function Index() {

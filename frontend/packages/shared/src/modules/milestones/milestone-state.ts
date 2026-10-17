@@ -24,12 +24,14 @@ export function milestoneState(m: Milestone): MilestoneState {
 }
 
 // Amounts are integer minor units: split them as digits so large values never go through floating point.
-export function formatMoney(amount: number, currency: string, scale: number) {
-  const digits = String(amount).padStart(scale + 1, "0");
+// `scale` defaults to 0 (whole units, e.g. presale/negotiation pesos); non-integers are rounded like the former formatter did.
+export function formatMoney(amount: number, currency: string, scale = 0) {
+  const negative = amount < 0;
+  const digits = String(Math.abs(Math.round(amount))).padStart(scale + 1, "0");
   const whole = digits.slice(0, digits.length - scale);
   const fraction = digits.slice(digits.length - scale);
   const hasFraction = /[1-9]/.test(fraction);
   // ponytail: es-CO decimal comma hardcoded, use formatToParts if other locales appear
   const grouped = new Intl.NumberFormat("es-CO").format(BigInt(whole));
-  return `${currency} ${hasFraction ? `${grouped},${fraction}` : grouped}`;
+  return `${currency} ${negative ? "-" : ""}${hasFraction ? `${grouped},${fraction}` : grouped}`;
 }

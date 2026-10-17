@@ -5,7 +5,7 @@ import { StatusBadge } from "@agro/shared/ui/status-badge";
 
 export function MilestoneCard({ milestone, children }: { milestone: Milestone; children?: React.ReactNode }) {
   return (
-    <li className="rounded-lg border bg-card p-5">
+    <li className="min-w-0 rounded-lg border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg text-primary">{milestone.title}</h2>
@@ -20,5 +20,5 @@ export function MilestoneCard({ milestone, children }: { milestone: Milestone; c
 }
 
 export function MilestoneList({ children }: { children: React.ReactNode }) {
-  return <ul className="mt-6 flex flex-col gap-4">{children}</ul>;
+  return <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-4">{children}</ul>;
 }

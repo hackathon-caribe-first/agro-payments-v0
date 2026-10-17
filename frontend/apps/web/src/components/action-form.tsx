@@ -21,7 +21,7 @@ export function ActionForm({ id, intent, label, variant, children }: Props) {
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="intent" value={intent} />
       {children}
-      <Button type="submit" variant={variant} disabled={pending} className="self-start">
+      <Button type="submit" size="compact" variant={variant} disabled={pending} className="self-start">
         {pending ? "Enviando…" : label}
       </Button>
       {error && (

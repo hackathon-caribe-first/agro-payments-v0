@@ -11,7 +11,7 @@ export async function loadMilestones() {
 
 export type ActionResult = { error: string } | { ok: true };
 
-const OFFLINE: ActionResult = { error: "No pudimos conectar con el servidor de la demo. Revisa tu conexión e intenta de nuevo." };
+const OFFLINE: ActionResult = { error: "No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo." };
 
 function failure(status: number): ActionResult {
   if (status === 401) return { error: "Inicia sesión para continuar." };
@@ -21,7 +21,7 @@ function failure(status: number): ActionResult {
   return { error: `El servidor respondió ${status}. Intenta de nuevo.` };
 }
 
-// Funding leaves the app: the investor approves the grant in their wallet, which redirects back to /custodio.
+// Funding leaves the app: the investor approves the grant in their wallet, which redirects back to /custodian.
 async function startFunding(id: string): Promise<ActionResult | Response> {
   try {
     const { data, response } = await api.POST("/milestones/{id}/funding", { params: { path: { id } } });

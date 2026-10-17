@@ -5,7 +5,7 @@ import { ActionForm } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
 import { loadMilestones, milestoneAction } from "~/milestones";
-import type { Route } from "./+types/custodio";
+import type { Route } from "./+types/custodian";
 
 export const meta = () => [{ title: "Pagos · Surco" }];
 export const clientLoader = () => loadMilestones();
@@ -33,14 +33,16 @@ function FundingResult({ milestones }: { milestones: Milestone[] }) {
   return null;
 }
 
-export default function Custodio({ loaderData }: Route.ComponentProps) {
+export default function Custodian({ loaderData }: Route.ComponentProps) {
   return (
-    <>
-      <h1 className="text-3xl text-primary">Pagos</h1>
-      <p className="mt-2 text-muted-foreground">
-        Fondea cada hito: el inversionista aprueba en su billetera un solo permiso de pago por el monto del hito. Después paga a
-        proveedores y trabajadores durante la ejecución. La línea del productor se libera sola cuando el verificador aprueba.
-      </p>
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-3xl text-primary">Pagos</h1>
+        <p className="mt-2 text-muted-foreground">
+          Fondea cada hito: el inversionista aprueba en su billetera un solo permiso de pago por el monto del hito. Después paga a
+          proveedores y trabajadores durante la ejecución. La línea del productor se libera sola cuando el verificador aprueba.
+        </p>
+      </header>
       <FundingResult milestones={loaderData} />
       <MilestoneList>
         {loaderData.map((m) => (
@@ -62,6 +64,6 @@ export default function Custodio({ loaderData }: Route.ComponentProps) {
           </MilestoneCard>
         ))}
       </MilestoneList>
-    </>
+    </div>
   );
 }
