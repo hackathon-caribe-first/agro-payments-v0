@@ -2,8 +2,8 @@ import type { MigrationInterface, QueryRunner } from "typeorm";
 
 // Conversational assistant (PRD v3 RF-41): conversations, their messages and the intents they created, plus the per-user
 // PIN hash (RNF-12). Messages and intents are append-only audit except an intent's status/decision columns.
-export class AssistantCreateTables1792281600000 implements MigrationInterface {
-  name = "AssistantCreateTables1792281600000";
+export class AssistantCreateTables1792290000000 implements MigrationInterface {
+  name = "AssistantCreateTables1792290000000";
 
   async up(queryRunner: QueryRunner): Promise<void> {
     // ponytail: user ids have no FK: Better Auth owns the "user" table and creates it outside these migrations.

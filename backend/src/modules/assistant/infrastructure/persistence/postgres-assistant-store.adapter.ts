@@ -2,7 +2,7 @@ import type { DataSource } from "typeorm";
 import type { Conversation, Intent, IntentPayload, Message } from "../../application/assistant";
 import { AssistantStore, type PinRecord, PinStore } from "../../ports/assistant-store";
 
-// Plain SQL over the TypeORM connection: four small tables (migration AssistantCreateTables1792281600000), no entities to register.
+// Plain SQL over the TypeORM connection: four small tables (migration AssistantCreateTables1792290000000), no entities to register.
 type Row = Record<string, unknown>;
 
 const toConversation = (r: Row): Conversation => ({
