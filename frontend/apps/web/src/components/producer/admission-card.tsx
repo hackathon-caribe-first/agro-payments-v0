@@ -1,12 +1,5 @@
 import { StatusBadge } from "@agro/shared/ui/status-badge";
-import type { Admission } from "~/producer/admission";
-
-const LEVEL_LABEL: Record<Admission["level"], string> = { A: "Nivel A", B: "Nivel B", C: "Nivel C", primer_ciclo: "Primer ciclo" };
-
-const financeable = (pct: Admission["financeable_pct"]) => {
-  if (!pct) return "Monto pequeño, en grupo";
-  return pct.min === null ? `Hasta ${pct.max} %` : `${pct.min}–${pct.max} %`;
-};
+import { LEVEL_LABEL, financeableLabel, type Admission } from "~/producer/admission";
 
 // RF-02/RF-03: the nine elimination filters (binary) and the A15 score → level → milestones, financeable % and jornales line.
 export function AdmissionCard({ admission }: { admission: Admission | null }) {
@@ -23,7 +16,7 @@ export function AdmissionCard({ admission }: { admission: Admission | null }) {
   const rows: [string, string][] = [
     ["Puntaje", `${admission.score} / 100`],
     ["Hitos", admission.milestones === null ? "En especie" : String(admission.milestones)],
-    ["Financiable", financeable(admission.financeable_pct)],
+    ["Financiable", financeableLabel(admission.financeable_pct)],
     ["Línea de jornales", admission.labor_line ? "Sí" : "No: pago en especie"],
   ];
   return (

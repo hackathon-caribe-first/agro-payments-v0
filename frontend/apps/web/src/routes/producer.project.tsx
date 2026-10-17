@@ -8,12 +8,13 @@ import { HarvestCard, HarvestStepForm } from "~/components/harvest/harvest-card"
 import { AgreementBanner } from "~/components/negotiation/agreement-banner";
 import { presaleErrorMessage } from "~/components/presale/error-copy";
 import { AdmissionCard } from "~/components/producer/admission-card";
+import { AdmissionSection } from "~/components/producer/admission-form";
 import { MilestoneListItem } from "~/components/producer/milestone-list-item";
 import { RequestInboxItem } from "~/components/producer/presale/request-inbox-item";
 import { ProjectStatusBadge } from "~/components/producer/project-status";
 import { escrow } from "~/escrow/module";
 import { harvest, harvestAction } from "~/harvest/module";
-import { loadAdmission } from "~/producer/admission";
+import { ADMISSION_INTENT, admissionAction, loadAdmission } from "~/producer/admission";
 import { errorMessage } from "~/producer/error-copy";
 import { producer } from "~/producer/module";
 import { producerPresales } from "~/producer/presales";
@@ -47,7 +48,12 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   };
 }
 
-export const clientAction = async ({ request }: Route.ClientActionArgs) => harvestAction(await request.formData());
+// RF-02/RF-03 admission and the RF-24 harvest steps post to this route; the form's intent picks the action.
+export async function clientAction({ request, params }: Route.ClientActionArgs) {
+  const form = await request.formData();
+  if (form.get("intent") === ADMISSION_INTENT) return admissionAction(params.projectId, form);
+  return harvestAction(form);
+}
 
 // RF-24: the producer declares the harvest once custody is funded and the milestones are running.
 const DECLARABLE = ["FUNDED_IN_CUSTODY", "IN_EXECUTION"];
@@ -115,6 +121,8 @@ export default function ProducerProject({ loaderData }: Route.ComponentProps) {
               </ul>
             )}
           </section>
+
+          <AdmissionSection projectId={project.id} admission={admission} />
 
           {(projectHarvest || canDeclare) && (
             <HarvestCard harvest={projectHarvest}>

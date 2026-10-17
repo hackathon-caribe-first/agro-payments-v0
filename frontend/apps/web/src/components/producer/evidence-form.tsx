@@ -1,12 +1,14 @@
 import { ClipboardPlus } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import {
   LOG_TYPES,
+  type EvidenceLocation,
   type EvidencePayload,
   type LogType,
   type RequirementSpec,
 } from "@agro/shared/modules/milestones/domain/milestone";
+import { errorsUnder } from "@agro/shared/modules/milestones/schemas/evidence-log";
 import { Button } from "@agro/shared/ui/button";
 import { Checkbox } from "@agro/shared/ui/checkbox";
 import { Input } from "@agro/shared/ui/input";
@@ -14,6 +16,7 @@ import { Label } from "@agro/shared/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@agro/shared/ui/select";
 import { Textarea } from "@agro/shared/ui/textarea";
 import type { ProducerActionResult } from "~/producer/error-copy";
+import { LocationField, PhotoHashPicker, type PhotoHashes } from "./evidence-attestation";
 
 const LOG_TYPE_LABELS: Record<LogType, string> = {
   PHOTO_EVIDENCE: "Evidencia fotográfica",
@@ -40,17 +43,24 @@ function FieldError({ id, messages }: { id: string; messages?: string[] }) {
   );
 }
 
+type HashProps = {
+  hashes: PhotoHashes;
+  onHash: (url: string, sha256: string | null) => void;
+  hashErrors?: string[];
+};
+
 function RequirementField({
   requirement,
   currentData,
   photoOptions,
   errors,
+  ...hashProps
 }: {
   requirement: RequirementSpec;
   currentData: EvidencePayload;
   photoOptions: readonly string[];
   errors?: string[];
-}) {
+} & HashProps) {
   const { fieldKey, label } = requirement;
   const id = `field-${fieldKey}`;
   const current = currentData[fieldKey];
@@ -92,32 +102,86 @@ function RequirementField({
           <FieldError id={id} messages={errors} />
         </div>
       );
-    case "photo_array": {
-      const selected = Array.isArray(current) ? current : [];
+    case "photo_array":
       return (
-        <fieldset
-          className="flex flex-col gap-2"
-          aria-invalid={errors ? true : undefined}
-          aria-describedby={errors ? errorId(id) : undefined}
-        >
-          <legend className="text-sm font-medium">
-            {label} <span className="text-muted-foreground">(mínimo {requirement.minItems})</span>
-          </legend>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {photoOptions.map((url) => (
-              <div key={url} className="flex items-center gap-2">
-                <Checkbox id={`${id}-${url}`} name={fieldKey} value={url} defaultChecked={selected.includes(url)} />
+        <PhotoArrayField
+          id={id}
+          fieldKey={fieldKey}
+          label={label}
+          minItems={requirement.minItems}
+          initial={Array.isArray(current) ? current : []}
+          photoOptions={photoOptions}
+          errors={errors}
+          {...hashProps}
+        />
+      );
+  }
+}
+
+// RF-19/RF-35: each selected photo can carry its sha256. ponytail: there is no upload service yet, so the photo URL still
+// comes from the fixed options; the producer picks the local file only so the browser can fingerprint it.
+function PhotoArrayField({
+  id,
+  fieldKey,
+  label,
+  minItems,
+  initial,
+  photoOptions,
+  errors,
+  hashes,
+  onHash,
+  hashErrors,
+}: {
+  id: string;
+  fieldKey: string;
+  label: string;
+  minItems: number;
+  initial: readonly string[];
+  photoOptions: readonly string[];
+  errors?: string[];
+} & HashProps) {
+  const [selected, setSelected] = useState<readonly string[]>(initial);
+  const toggle = (url: string, checked: boolean) => {
+    setSelected((prev) => (checked ? [...prev, url] : prev.filter((u) => u !== url)));
+    if (!checked) onHash(url, null);
+  };
+  const hashErrorId = `${id}-hashes`;
+  const describedBy = [errors && errorId(id), hashErrors && errorId(hashErrorId)].filter(Boolean).join(" ");
+  return (
+    <fieldset className="flex flex-col gap-2" aria-invalid={describedBy ? true : undefined} aria-describedby={describedBy || undefined}>
+      <legend className="text-sm font-medium">
+        {label} <span className="text-muted-foreground">(mínimo {minItems})</span>
+      </legend>
+      <p className="text-sm text-muted-foreground">
+        Opcional: por cada foto marcada, elige el archivo en tu dispositivo para calcular su huella. La foto no se sube; la huella
+        sirve para probar que no cambió.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {photoOptions.map((url) => {
+          const checked = selected.includes(url);
+          return (
+            <li key={url} className="flex flex-col gap-2 rounded-md border p-2">
+              <div className="flex min-h-11 items-center gap-2">
+                <Checkbox
+                  id={`${id}-${url}`}
+                  name={fieldKey}
+                  value={url}
+                  defaultChecked={initial.includes(url)}
+                  onCheckedChange={(state) => toggle(url, state === true)}
+                />
                 <Label htmlFor={`${id}-${url}`} className="break-all text-sm">
                   {url.split("/").pop()}
                 </Label>
               </div>
-            ))}
-          </div>
-          <FieldError id={id} messages={errors} />
-        </fieldset>
-      );
-    }
-  }
+              {checked && <PhotoHashPicker url={url} sha256={hashes[url]} onHash={onHash} />}
+            </li>
+          );
+        })}
+      </ul>
+      <FieldError id={id} messages={errors} />
+      <FieldError id={hashErrorId} messages={hashErrors} />
+    </fieldset>
+  );
 }
 
 // Each log carries every required field, prefilled with the latest recorded values.
@@ -128,10 +192,22 @@ export function EvidenceForm({ requirements, currentData, photoOptions }: Props)
   const fieldErrors = result?.fieldErrors ?? {};
   const saved = fetcher.data?.ok === true;
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [location, setLocation] = useState<EvidenceLocation | null>(null);
+  const [hashes, setHashes] = useState<PhotoHashes>({});
+  const setHash = (url: string, sha256: string | null) =>
+    setHashes((prev) => {
+      const { [url]: _previous, ...rest } = prev;
+      return sha256 === null ? rest : { ...rest, [url]: sha256 };
+    });
 
-  // Notes belong to a single log: clear them once it is saved.
+  // Notes, location and photo hashes belong to a single log: clear them once it is saved.
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.ok && notesRef.current) notesRef.current.value = "";
+    if (fetcher.state !== "idle" || !fetcher.data?.ok) {
+      return;
+    }
+    if (notesRef.current) notesRef.current.value = "";
+    setLocation(null);
+    setHashes({});
   }, [fetcher.state, fetcher.data]);
 
   return (
@@ -167,8 +243,19 @@ export function EvidenceForm({ requirements, currentData, photoOptions }: Props)
           currentData={currentData}
           photoOptions={photoOptions}
           errors={fieldErrors[`evidencePayload.${r.fieldKey}`]}
+          hashes={hashes}
+          onHash={setHash}
+          hashErrors={errorsUnder(fieldErrors, "photoHashes")}
         />
       ))}
+      {Object.entries(hashes).map(([url, sha256]) => (
+        <div key={url} hidden>
+          <input type="hidden" name="photoHashUrl" value={url} />
+          <input type="hidden" name="photoHashSha256" value={sha256} />
+        </div>
+      ))}
+
+      <LocationField location={location} onChange={setLocation} errors={errorsUnder(fieldErrors, "location")} />
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="log-notes">Notas</Label>

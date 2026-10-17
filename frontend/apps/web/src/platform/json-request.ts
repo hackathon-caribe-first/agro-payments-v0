@@ -4,7 +4,7 @@ import { API_BASE_URL, transport } from "~/platform/transport";
 // ponytail: same shape as producer/assistant.ts; fold both into one client when the OpenAPI types cover these routes.
 const BASE = ((API_BASE_URL as string | undefined) ?? "/api").replace(/\/$/, "");
 
-export type Result<T> = { ok: true; value: T } | { ok: false; status: number; message: string };
+export type Result<T> = { ok: true; value: T } | { ok: false; status: number; message: string; fieldErrors?: Record<string, string[]> };
 
 const FALLBACK: Record<number, string> = {
   401: "Inicia sesión para ver esta información.",
@@ -22,7 +22,8 @@ export async function jsonRequest<T>(path: string, init?: { method: string; body
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { errors?: Record<string, string[]> } | null;
       const field = body?.errors ? Object.values(body.errors).flat()[0] : undefined;
-      return { ok: false, status: response.status, message: field ?? FALLBACK[response.status] ?? "No pudimos completar la solicitud. Intenta de nuevo." };
+      const message = field ?? FALLBACK[response.status] ?? "No pudimos completar la solicitud. Intenta de nuevo.";
+      return { ok: false, status: response.status, message, ...(body?.errors && { fieldErrors: body.errors }) };
     }
     return { ok: true, value: (await response.json()) as T };
   } catch {

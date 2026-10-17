@@ -6,7 +6,7 @@ import {
   currentFieldData,
   missingRequirements,
 } from "../domain/milestone-rules";
-import { buildEvidenceLogSchema, parseEvidenceForm, toFieldErrors } from "../schemas/evidence-log";
+import { buildEvidenceLogSchema, parseAttestationForm, parseEvidenceForm, toFieldErrors } from "../schemas/evidence-log";
 import type { MilestoneRepository } from "./milestone-repository";
 
 export function toMilestoneError(cause: unknown): MilestoneError {
@@ -65,6 +65,7 @@ export const recordEvidenceFromForm = (repo: MilestoneRepository, milestoneId: s
       logType: form.get("logType"),
       notes: String(form.get("notes") ?? ""),
       evidencePayload: parseEvidenceForm(form, detail.requirements),
+      ...parseAttestationForm(form),
     });
   });
 

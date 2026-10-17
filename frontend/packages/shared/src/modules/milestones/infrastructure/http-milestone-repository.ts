@@ -1,8 +1,8 @@
 import type { MilestoneRepository } from "../application/milestone-repository";
-import { NetworkError } from "../domain/errors";
+import { FORM_LEVEL_KEY, NetworkError, ValidationFailure, type FieldErrors } from "../domain/errors";
 import type { EvidenceLogRequestDto } from "./dto";
 import { toEvidenceLog, toMilestoneDetail, toMilestoneSummaries } from "./mapper";
-import type { EvidenceLogInput } from "../schemas/evidence-log";
+import { toEvidenceFieldErrors, type EvidenceLogInput } from "../schemas/evidence-log";
 
 interface Options {
   baseUrl: string;
@@ -31,6 +31,13 @@ export class HttpMilestoneRepository implements MilestoneRepository {
     return response.json();
   }
 
+  // 400 body: { error, errors: { [fieldPath]: string[] } }; an empty map still says the log was refused.
+  private async readFieldErrors(response: Response): Promise<FieldErrors> {
+    const body = (await response.json().catch(() => null)) as { errors?: unknown } | null;
+    const errors = body && typeof body.errors === "object" && body.errors !== null ? (body.errors as FieldErrors) : {};
+    return Object.keys(errors).length > 0 ? toEvidenceFieldErrors(errors) : { [FORM_LEVEL_KEY]: ["El servidor rechazó el registro."] };
+  }
+
   async listByProject(projectId: string) {
     const response = await this.request(`/projects/${encodeURIComponent(projectId)}/milestones`);
     return toMilestoneSummaries(await this.readJson(response));
@@ -55,6 +62,7 @@ export class HttpMilestoneRepository implements MilestoneRepository {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (response.status === 400) throw new ValidationFailure(await this.readFieldErrors(response));
     return toEvidenceLog(await this.readJson(response));
   }
 
