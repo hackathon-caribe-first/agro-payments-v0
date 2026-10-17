@@ -121,13 +121,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MilestoneDto"
-      summary: Verifier approves or rejects the evidence. Approving does not order a
-        payment.
+      summary: Verifier approves or observes the evidence. Approving pays the producer
+        line.
       tags:
         - milestones
-  /milestones/{id}/payment:
+  /milestones/{id}/funding:
     post:
-      operationId: MilestonesController_pay
+      operationId: MilestonesController_startFunding
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundingStartDto"
+      summary: "Starts funding: send the browser to redirectUrl so the investor
+        approves one grant capped at the milestone amount"
+      tags:
+        - milestones
+  /milestones/{id}/lines/{lineId}/payment:
+    post:
+      operationId: MilestonesController_payLine
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: lineId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDto"
+      summary: Operator pays one line of a funded milestone. Supplier lines can be
+        paid before approval, the producer line cannot.
+      tags:
+        - milestones
+  /milestones/{id}/lines/sync:
+    post:
+      operationId: MilestonesController_sync
       parameters:
         - name: id
           required: true
@@ -141,26 +186,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MilestoneDto"
-      summary: Custodian orders the simulated 50/30/20 payment of an approved milestone
-      tags:
-        - milestones
-  /milestones/{id}/payment/confirmation:
-    post:
-      operationId: MilestonesController_confirm
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-      responses:
-        "200":
-          description: ""
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MilestoneDto"
-      summary: Custodian confirms the simulated payment was received
+      summary: Operator resolves the lines the gateway left en_cola
       tags:
         - milestones
 info:
@@ -227,7 +253,14 @@ components:
       required:
         - role
         - id
-    CreatePaymentDto:
+    MilestoneStatus:
+      type: string
+      enum:
+        - draft
+        - evidence_submitted
+        - approved
+        - observado
+    EvidenceDto:
       type: object
       properties:
         description:
@@ -242,7 +275,7 @@ components:
       type: string
       enum:
         - approved
-        - rejected
+        - observado
     ReviewDto:
       type: object
       properties:
@@ -259,58 +292,56 @@ components:
         - decision
         - reason
         - reviewedAt
-    PaymentStatus:
-      type: string
-      enum:
-        - processing
-        - confirmed
-    Recipient:
+    LineKind:
       type: string
       enum:
         - productor
         - proveedor
         - trabajadores
-    ShareDto:
+        - plataforma
+    LineStatus:
+      type: string
+      enum:
+        - pendiente
+        - en_cola
+        - completado
+        - fallido
+    LineDto:
       type: object
       properties:
-        recipient:
+        kind:
           allOf:
-            - $ref: "#/components/schemas/Recipient"
-        percent:
-          type: number
-        amount:
-          type: number
-          description: Whole currency units
-      required:
-        - recipient
-        - percent
-        - amount
-    PaymentDto:
-      type: object
-      properties:
+            - $ref: "#/components/schemas/LineKind"
         status:
           allOf:
-            - $ref: "#/components/schemas/PaymentStatus"
-        shares:
-          type: array
-          items:
-            $ref: "#/components/schemas/ShareDto"
-        confirmedAt:
+            - $ref: "#/components/schemas/LineStatus"
+        reference:
+          type: string
+          nullable: true
+          description: Gateway payment reference; simulated ones start with SIM-, Open
+            Payments ones hold the incoming and outgoing payment URLs
+        settledAt:
           format: date-time
           type: string
           nullable: true
-        reference:
+        id:
           type: string
-          description: Simulated transfer reference, never a real bank reference
-        orderedAt:
-          format: date-time
+        beneficiary:
           type: string
+        walletAddress:
+          type: string
+        amount:
+          type: number
+          description: Integer minor units (see assetScale)
       required:
+        - kind
         - status
-        - shares
-        - confirmedAt
         - reference
-        - orderedAt
+        - settledAt
+        - id
+        - beneficiary
+        - walletAddress
+        - amount
     MilestoneDto:
       type: object
       properties:
@@ -327,30 +358,46 @@ components:
           type: object
           allOf:
             - $ref: "#/components/schemas/ReviewDto"
-        payment:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineDto"
+        fundedAt:
+          format: date-time
+          type: string
           nullable: true
-          type: object
-          allOf:
-            - $ref: "#/components/schemas/PaymentDto"
+          description: Set when the investor approved the grant that funds the lines; no
+            line is paid before
+        closedAt:
+          format: date-time
+          type: string
+          nullable: true
+          description: Set once every line is completado or fallido
         id:
           type: string
         title:
           type: string
         amount:
           type: number
-          description: Whole currency units
+          description: "Integer minor units: amount / 10^assetScale is the human value"
         currency:
           type: string
           description: ISO 4217 code
+        assetScale:
+          type: number
+          description: Decimal places of the minor unit (COP demo data uses 2)
       required:
         - status
         - evidence
         - review
-        - payment
+        - lines
+        - fundedAt
+        - closedAt
         - id
         - title
         - amount
         - currency
+        - assetScale
     SubmitEvidenceDto:
       type: object
       properties:
@@ -367,6 +414,15 @@ components:
             - $ref: "#/components/schemas/Decision"
         reason:
           type: string
-          description: "Required when rejecting: what the producer must correct"
+          description: "Required when observing: what the producer must correct"
       required:
         - decision
+    FundingStartDto:
+      type: object
+      properties:
+        redirectUrl:
+          type: string
+          description: Wallet consent page; the browser leaves the app and comes back
+            through the funding callback
+      required:
+        - redirectUrl

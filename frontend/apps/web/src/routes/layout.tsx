@@ -21,7 +21,7 @@ const MODULES: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/producer", label: "Productor", icon: Sprout },
   { to: "/buyer", label: "Comprador", icon: ShoppingBasket },
   { to: "/verifier", label: "Verificador", icon: ClipboardCheck },
-  { to: "/custodian", label: "Custodio", icon: Landmark },
+  { to: "/custodian", label: "Operador", icon: Landmark },
 ];
 
 function AppSidebar() {

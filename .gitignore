@@ -13,3 +13,8 @@ coverage
 # Impeccable runtime state
 .impeccable/live/
 **/.impeccable/hook.cache.json
+
+# Open Payments private keys
+backend/keys/
+*.pem
+*.key
