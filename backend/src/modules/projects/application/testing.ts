@@ -30,6 +30,10 @@ export class FakeProjectRepository extends ProjectRepository {
     return this.projects.filter((p) => p.ownerUserId === ownerUserId);
   }
 
+  async findAll() {
+    return [...this.projects];
+  }
+
   async updateStatus(id: string, status: ProjectStatus) {
     const project = this.projects.find((p) => p.id === id);
     if (project) project.currentStatus = status;

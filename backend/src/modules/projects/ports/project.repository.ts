@@ -8,6 +8,8 @@ export abstract class ProjectRepository {
   abstract findById(id: string): Promise<Project | null>;
   /** Oldest first. */
   abstract findByOwner(ownerUserId: string): Promise<Project[]>;
+  /** Every project, oldest first (operator screens). */
+  abstract findAll(): Promise<Project[]>;
   /** Moves the project to a lifecycle status (settlement: SETTLEMENT_PROCESSING, SETTLED_AND_CLOSED). */
   abstract updateStatus(id: string, status: ProjectStatus): Promise<void>;
 }

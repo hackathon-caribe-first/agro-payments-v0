@@ -39,6 +39,13 @@ export class ProjectsController {
     return (await this.queries.listOwned(user)).map(toProjectResponse);
   }
 
+  /** Every project for the operator screens (admin, fidu), oldest first */
+  @Get("projects")
+  @Roles(operator, fiduciaria)
+  async listProjects(): Promise<ProjectResponseDto[]> {
+    return (await this.queries.listAll()).map(toProjectResponse);
+  }
+
   /** Get a project; another producer's project is a 404 */
   @Get("projects/:projectId")
   @ApiNotFoundResponse({ type: ApiErrorDto })
