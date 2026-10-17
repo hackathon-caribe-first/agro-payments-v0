@@ -7,6 +7,7 @@ import { formatDateTime } from "~/components/presale/format";
 const CATEGORY_LABELS: Record<LedgerCategory, string> = {
   BUYER_DEPOSIT: "Depósito del comprador",
   INVESTOR_CAPITAL: "Aporte de inversionista",
+  HARVEST_PAYMENT: "Pago de la cosecha",
   UNKNOWN: "Movimiento",
 };
 

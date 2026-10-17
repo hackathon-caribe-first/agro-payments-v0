@@ -1,5 +1,5 @@
 import { ArrowLeft, Handshake } from "lucide-react";
-import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
+import { Link, data, isRouteErrorResponse, useRouteError, useSearchParams } from "react-router";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { milestoneProgress } from "@agro/shared/modules/projects/domain/project-rules";
 import { productionTypeLabel } from "@agro/shared/modules/projects/domain/project-draft";
@@ -8,26 +8,68 @@ import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
 import { Progress } from "@agro/shared/ui/progress";
 import { MilestoneNegotiationRow } from "~/components/buyer/milestone-negotiation-row";
 import { startBlockText } from "~/components/buyer/project-card";
+import { HarvestCard, HarvestStepForm } from "~/components/harvest/harvest-card";
 import { AgreementBanner } from "~/components/negotiation/agreement-banner";
 import { presaleErrorMessage } from "~/components/presale/error-copy";
 import { formatDay } from "~/components/presale/format";
 import { ProjectStatusBadge } from "~/components/producer/project-status";
 import { buyer } from "~/buyer/module";
+import { harvest, harvestAction } from "~/harvest/module";
 import type { Route } from "./+types/buyer.project";
 
 export const meta = () => [{ title: "Proyecto · Surco" }];
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const result = await buyer.getProjectDetail(params.projectId);
+  const [result, harvestRead] = await Promise.all([buyer.getProjectDetail(params.projectId), harvest.get(params.projectId)]);
   if (!result.ok) {
     if (result.error.kind === "not_found") throw data(null, { status: 404 });
     throw new Response(presaleErrorMessage(result.error), { status: 502 });
   }
-  return result.value;
+  // RF-24: optional; the page renders without the harvest.
+  return { ...result.value, harvest: harvestRead.ok ? harvestRead.value.harvest : null };
+}
+
+export const clientAction = async ({ request }: Route.ClientActionArgs) => harvestAction(await request.formData());
+
+// The buyer's wallet sends them back here with ?harvest_payment=ok|error (Open Payments mode).
+function HarvestPaymentResult() {
+  const [params] = useSearchParams();
+  const result = params.get("harvest_payment");
+  if (result === "ok") {
+    return (
+      <p role="status" className="rounded-md bg-secondary px-4 py-3 font-semibold text-primary">
+        Tu pago de la cosecha quedó en la custodia del proyecto. Confirma la recepción cuando recibas el producto.
+      </p>
+    );
+  }
+  if (result === "error") {
+    return (
+      <p role="alert" className="rounded-md border border-destructive bg-card px-4 py-3 font-semibold text-destructive">
+        ✕ No se completó el pago de la cosecha: no aprobaste el permiso en tu billetera o el pago falló. Puedes intentarlo de nuevo.
+      </p>
+    );
+  }
+  return null;
+}
+
+// Pay into custody (held), then confirm reception: two separate steps, never one green check.
+function BuyerHarvest({ projectId, harvest: h }: { projectId: string; harvest: NonNullable<Route.ComponentProps["loaderData"]["harvest"]> }) {
+  return (
+    <HarvestCard title="Cosecha del proyecto" harvest={h}>
+      {h.status === "DECLARED" && <p className="text-sm text-muted-foreground">El verificador aún debe certificar la cantidad y la calidad.</p>}
+      {h.status === "CERTIFIED" && (
+        <>
+          <p className="text-sm text-muted-foreground">El pago va a la custodia del proyecto y queda retenido hasta que confirmes la recepción.</p>
+          <HarvestStepForm projectId={projectId} intent="pay-harvest" label="Pagar la cosecha a la custodia" />
+        </>
+      )}
+      {h.status === "PAID" && <HarvestStepForm projectId={projectId} intent="receive-harvest" label="Confirmar recepción" />}
+    </HarvestCard>
+  );
 }
 
 export default function BuyerProject({ loaderData }: Route.ComponentProps) {
-  const { catalog, milestones, total, projectStartBlock, myLiveProjectId, agreement } = loaderData;
+  const { catalog, milestones, total, projectStartBlock, myLiveProjectId, agreement, harvest: projectHarvest } = loaderData;
   const { project } = catalog;
   const progress = milestoneProgress(milestones.map((m) => m.summary));
   return (
@@ -56,8 +98,10 @@ export default function BuyerProject({ loaderData }: Route.ComponentProps) {
         <ProjectStatusBadge status={project.currentStatus} />
       </header>
 
+      <HarvestPaymentResult />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1">
+          {projectHarvest && <BuyerHarvest projectId={project.id} harvest={projectHarvest} />}
           <Card className="gap-3 py-4">
             <CardHeader className="px-4">
               <p className="text-sm text-muted-foreground">{project.projectCode}</p>

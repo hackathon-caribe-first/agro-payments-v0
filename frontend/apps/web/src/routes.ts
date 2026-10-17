@@ -33,6 +33,7 @@ export default [
     route("buyer/projects/:projectId", "routes/buyer.project.tsx"),
     route("investor", "routes/investor.tsx"),
     route("investor/projects/:projectId", "routes/investor.project.tsx"),
+    route("investor/projects/:projectId/panel", "routes/investor.project.panel.tsx"),
     route("verifier", "routes/verifier.tsx"),
     route("custodian", "routes/custodian.tsx"),
     // LEGACY Spanish URLs: all redirect to the English ones (see routes/legacy-redirect.tsx).

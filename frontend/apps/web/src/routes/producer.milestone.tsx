@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
 import { canRecordEvidence, canSubmitFromStatus, currentFieldData, missingRequirements, requirementChecklist } from "@agro/shared/modules/milestones/domain/milestone-rules";
 import { Separator } from "@agro/shared/ui/separator";
+import { CustodyCard } from "~/components/harvest/custody-card";
 import { BudgetSummary } from "~/components/producer/budget-summary";
 import { EvidenceForm } from "~/components/producer/evidence-form";
 import { RequirementsChecklist } from "~/components/producer/requirements-checklist";
@@ -9,6 +10,7 @@ import { ReviewsHistory } from "~/components/producer/reviews-history";
 import { MilestoneStatusBadge } from "~/components/producer/status-label";
 import { SubmitReviewForm } from "~/components/producer/submit-review-form";
 import { errorMessage, toActionResult, type ProducerActionResult } from "~/producer/error-copy";
+import { harvest } from "~/harvest/module";
 import { PHOTO_OPTIONS, milestones } from "~/producer/module";
 import type { Route } from "./+types/producer.milestone";
 
@@ -20,8 +22,12 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     if (result.error.kind === "not_found") throw data(null, { status: 404 });
     throw new Response(errorMessage(result.error), { status: 502 });
   }
-  return result.value;
+  // RF-21: with an observed milestone nothing more is paid; show what is still in custody. Optional: the page renders without it.
+  const custody = result.value.status === OBSERVED ? await harvest.custody(result.value.projectId) : null;
+  return { ...result.value, custody: custody?.ok ? custody.value : null };
 }
+
+const OBSERVED = "CHANGES_REQUESTED";
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<ProducerActionResult> {
   const form = await request.formData();
@@ -62,6 +68,9 @@ export default function ProducerMilestone({ loaderData: m }: Route.ComponentProp
       {/* Summary column first in the DOM so it reads before the forms when stacked; it moves to the right on wide screens. */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <aside className="flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-1">
+          {m.custody && (
+            <CustodyCard custody={m.custody} note="Hito observado: no se pagan jornales ni se abre el hito siguiente hasta que corrijas. Este dinero sigue en custodia." />
+          )}
           <BudgetSummary milestone={m} />
           <Separator />
           <RequirementsChecklist items={checklist} />

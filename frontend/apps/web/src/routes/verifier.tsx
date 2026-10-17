@@ -1,16 +1,28 @@
 import { ActionForm, TextField } from "~/components/action-form";
+import { HarvestCard, HarvestStepForm } from "~/components/harvest/harvest-card";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
+import { harvest, harvestAction, isHarvestIntent } from "~/harvest/module";
 import { loadMilestones, milestoneAction } from "~/milestones";
 import type { Route } from "./+types/verifier";
 
 export const meta = () => [{ title: "Por revisar · Surco" }];
-export const clientLoader = () => loadMilestones();
-export const clientAction = ({ request }: Route.ClientActionArgs) => milestoneAction(request);
+// RF-24: the harvest queue is optional; the milestone review still works without it.
+export async function clientLoader() {
+  const [milestones, harvests] = await Promise.all([loadMilestones(), harvest.listForReview()]);
+  return { milestones, harvests: harvests.ok ? harvests.value : [] };
+}
+
+export async function clientAction({ request }: Route.ClientActionArgs) {
+  const form = await request.clone().formData();
+  return isHarvestIntent(form.get("intent")) ? harvestAction(form) : milestoneAction(request);
+}
 
 export default function Verifier({ loaderData }: Route.ComponentProps) {
-  const pending = loaderData.filter((m) => m.status === "evidence_submitted");
-  const rest = loaderData.filter((m) => m.status !== "evidence_submitted");
+  const { milestones, harvests } = loaderData;
+  const pending = milestones.filter((m) => m.status === "evidence_submitted");
+  const rest = milestones.filter((m) => m.status !== "evidence_submitted");
+  const toCertify = harvests.filter((h) => h.harvest?.status === "DECLARED");
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,6 +50,35 @@ export default function Verifier({ loaderData }: Route.ComponentProps) {
           </MilestoneCard>
         ))}
       </MilestoneList>
+      {toCertify.length > 0 && (
+        <section aria-labelledby="harvests-heading" className="flex flex-col gap-4">
+          <h2 id="harvests-heading" className="text-xl text-primary">
+            Cosechas por certificar
+          </h2>
+          {toCertify.map((h) => (
+            <HarvestCard key={h.projectId} title={`${h.projectCode} · ${h.projectTitle}`} harvest={h.harvest}>
+              <blockquote className="border-l-4 border-lime-deep pl-3">{h.harvest?.evidence}</blockquote>
+              <HarvestStepForm
+                projectId={h.projectId}
+                intent="certify-harvest"
+                label="Certificar cosecha"
+                fields={[
+                  { name: "quantityKg", errorKey: "certified_quantity_kg", label: "Cantidad certificada Q (kg)", numeric: true },
+                  { name: "qualityGrade", errorKey: "quality_grade", label: "Calidad certificada" },
+                  {
+                    name: "pricePerKg",
+                    errorKey: "price.price_per_kg",
+                    label: "Precio por kilo (COP)",
+                    hint: "Sin contrato de compra registrado, este precio define la orden Q × P.",
+                    numeric: true,
+                  },
+                  { name: "notes", errorKey: "notes", label: "Notas (opcional)", hint: "Humedad, residuos u otros hallazgos.", multiline: true },
+                ]}
+              />
+            </HarvestCard>
+          ))}
+        </section>
+      )}
       {rest.length > 0 && (
         <section className="flex flex-col gap-6">
           <h2 className="text-xl text-primary">Otros hitos</h2>

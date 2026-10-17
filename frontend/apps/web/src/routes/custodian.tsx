@@ -3,7 +3,11 @@ import type { Milestone } from "@agro/shared/api/client";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { Input } from "@agro/shared/ui/input";
 import { StatusBadge } from "@agro/shared/ui/status-badge";
+import type { Custody } from "@agro/shared/modules/harvest/domain/harvest";
 import { ActionForm } from "~/components/action-form";
+import { CustodyCard } from "~/components/harvest/custody-card";
+import { harvest } from "~/harvest/module";
+import { milestones as projectMilestones } from "~/producer/module";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
 import { loadMilestones } from "~/milestones";
@@ -13,8 +17,24 @@ import type { Route } from "./+types/custodian";
 export const meta = () => [{ title: "Pagos · Surco" }];
 export async function clientLoader() {
   const milestones = await loadMilestones();
-  const [orders, suppliers] = await Promise.all([loadOrders(milestones), loadSuppliers()]);
-  return { milestones, orders, suppliers };
+  const [orders, suppliers, custody] = await Promise.all([loadOrders(milestones), loadSuppliers(), observedCustody(milestones)]);
+  return { milestones, orders, suppliers, custody };
+}
+
+// RF-21: an observed milestone pays nothing more, so the operator sees what stays in its project's custody. The legacy milestone
+// shape has no project, so its PRD detail gives it. Best effort: a failed read just hides the card.
+async function observedCustody(milestones: Milestone[]): Promise<Record<string, Custody>> {
+  const entries = await Promise.all(
+    milestones
+      .filter((m) => m.status === "observado")
+      .map(async (m): Promise<[string, Custody] | null> => {
+        const detail = await projectMilestones.getMilestoneDetail(m.id);
+        if (!detail.ok) return null;
+        const custody = await harvest.custody(detail.value.projectId);
+        return custody.ok ? [m.id, custody.value] : null;
+      }),
+  );
+  return Object.fromEntries(entries.filter((e): e is [string, Custody] => e !== null));
 }
 export const clientAction = ({ request }: Route.ClientActionArgs) => custodianAction(request);
 
@@ -131,7 +151,7 @@ function RegisterSupplier({ suppliers }: { suppliers: Supplier[] }) {
 }
 
 export default function Custodian({ loaderData }: Route.ComponentProps) {
-  const { milestones, orders, suppliers } = loaderData;
+  const { milestones, orders, suppliers, custody } = loaderData;
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -152,6 +172,7 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
                 <GrantStatus milestone={m} />
                 {!m.fundedAt && !m.closedAt && <ActionForm id={m.id} intent="fund" label="Aprobar grant del hito" />}
               </div>
+              {custody[m.id] && <CustodyCard custody={custody[m.id]} note="Hito observado: el grant sigue vivo, sin jornales ni hito siguiente. Este es el saldo que sigue en custodia." />}
               <Orders milestone={m} orders={orders[m.id] ?? []} suppliers={suppliers} />
               <Lines milestone={m} payable={Boolean(m.fundedAt)} receipts />
               {m.lines.some((l) => l.status === "en_cola") && (

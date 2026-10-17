@@ -1,4 +1,4 @@
-import { ArrowLeft, HandCoins } from "lucide-react";
+import { ArrowLeft, ChartLine, HandCoins } from "lucide-react";
 import { Form, Link, data, redirectDocument, useNavigation, useSearchParams } from "react-router";
 import type { Investment, InvestmentStatus } from "@agro/shared/modules/investments/domain/investment";
 import { rateText } from "@agro/shared/modules/investments/domain/investment";
@@ -152,7 +152,15 @@ export default function InvestorProject({ loaderData, actionData }: Route.Compon
           <p className="mt-2 text-pretty text-muted-foreground">{project.description}</p>
           <SimulationNotice />
         </div>
-        <ProjectStatusBadge status={project.currentStatus} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ProjectStatusBadge status={project.currentStatus} />
+          <Button asChild variant="outline" size="compact">
+            <Link to={`/investor/projects/${project.id}/panel`}>
+              <ChartLine aria-hidden="true" />
+              Ver mi panel
+            </Link>
+          </Button>
+        </div>
       </header>
       <Card>
         <CardHeader>
