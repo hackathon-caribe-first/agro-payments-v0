@@ -9,9 +9,9 @@ const TONES: Record<Tone, string> = {
 };
 
 // Status is always text + color + symbol, never color alone.
-export function StatusBadge({ label, tone, symbol }: { label: string; tone: Tone; symbol: string }) {
+export function StatusBadge({ label, tone, symbol, className }: { label: string; tone: Tone; symbol: string; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-sm font-semibold", TONES[tone])}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-sm font-semibold", TONES[tone], className)}>
       <span aria-hidden="true">{symbol}</span>
       {label}
     </span>

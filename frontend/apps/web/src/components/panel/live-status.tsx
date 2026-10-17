@@ -10,7 +10,7 @@ const TIME = new Intl.DateTimeFormat("es-CO", { timeStyle: "medium" });
 // the tab comes back. "Actualizado hace X s" ticks every second; the screen-reader copy only changes when new data arrives,
 // so it is announced once per refresh instead of once per second.
 export function LiveStatus({ generatedAt, everyMs }: { generatedAt: string; everyMs: number }) {
-  const revalidator = useRevalidator();
+  const revalidator = useLiveRevalidate(everyMs);
   const [now, setNow] = useState(() => Date.parse(generatedAt));
 
   useEffect(() => {
@@ -18,18 +18,6 @@ export function LiveStatus({ generatedAt, everyMs }: { generatedAt: string; ever
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, [generatedAt]);
-
-  useEffect(() => {
-    const refresh = () => {
-      if (!document.hidden && revalidator.state === "idle") void revalidator.revalidate();
-    };
-    const timer = setInterval(refresh, everyMs);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [everyMs, revalidator]);
 
   const seconds = secondsSince(generatedAt, now);
   const busy = revalidator.state !== "idle";
@@ -47,4 +35,21 @@ export function LiveStatus({ generatedAt, everyMs }: { generatedAt: string; ever
       </Button>
     </div>
   );
+}
+
+/** The refresh without the status line: revalidates every `everyMs` while the tab is visible, and as soon as it comes back. */
+export function useLiveRevalidate(everyMs: number) {
+  const revalidator = useRevalidator();
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden && revalidator.state === "idle") void revalidator.revalidate();
+    };
+    const timer = setInterval(refresh, everyMs);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [everyMs, revalidator]);
+  return revalidator;
 }
