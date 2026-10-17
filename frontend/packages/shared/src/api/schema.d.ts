@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/support/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open Payments requests as curl (RF-28); ?project_id narrows to one project, ?limit (default 100, max 500) */
+        get: operations["SupportController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/producer/projects": {
         parameters: {
             query?: never;
@@ -826,6 +843,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/admission": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's latest admission; 404 before the first one */
+        get: operations["AdmissionController_latest"];
+        put?: never;
+        /** Nine filters with evidence plus the seven A15 blocks → binary result, score, level, milestones, financeable %, jornales line */
+        post: operations["AdmissionController_assess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/purchase-contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-04; 404 while the project has none */
+        get: operations["ContractsController_purchaseContract"];
+        /** RF-04: creates or replaces it before publishing; the buyer by email, their wallet validated (GET in open-payments mode) */
+        put: operations["ContractsController_putPurchaseContract"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/insurance-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-05; 404 while the project has none */
+        get: operations["ContractsController_policy"];
+        /** RF-05: the latest simulation's premium and terms win; without one they come in the body. 409 once the premium was paid */
+        put: operations["ContractsController_putPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/insurance-policy/premium-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** RF-14: the fiduciaria approves the premium grant on custody (net premium cap); redirect_url is null in simulated mode */
+        post: operations["ContractsController_startPremiumGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/insurance-policy/pay-premium": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** RF-14: pays the net premium from custody to the insurer (or syncs one in flight); 409 before activation or without the grant */
+        post: operations["ContractsController_payPremium"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/insurance-policy/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ContractsController_claims"];
+        put?: never;
+        /** RF-25: validates the threshold or index rule and computes the A6 indemnity; in open-payments mode opens the incoming payment on custody */
+        post: operations["ContractsController_fileClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/insurance-policy/claims/{claimId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** RF-25: books the indemnity into custody (ledger CREDIT INDEMNITY); in open-payments mode only once the insurer paid it */
+        post: operations["ContractsController_confirmClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-09: the latest version with its signatures; the parties (the buyer included) read it */
+        get: operations["ContractsController_contract"];
+        put?: never;
+        /** RF-09: renders the template; unchanged terms answer the current version, changed ones a new version without signatures */
+        post: operations["ContractsController_generateContract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/contracts/{id}/signatures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** RF-09: the caller signs every party they are on the latest version (user, role, time, ip, user agent, hash) */
+        post: operations["ContractsController_sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assistant/messages": {
         parameters: {
             query?: never;
@@ -980,6 +1154,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/harvests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-24: the verifier's queue, every harvest with its project (verifier or admin; the verifier must sign in) */
+        get: operations["HarvestController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/harvest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's harvest (null before the declaration) and project status */
+        get: operations["HarvestController_get"];
+        put?: never;
+        /** The owner producer declares the harvest: HARVEST_DECLARED */
+        post: operations["HarvestController_declare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/harvest/certify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The verifier certifies Q and quality; the contract formula (or the request's price) sets Q·P_g: HARVEST_CERTIFIED */
+        post: operations["HarvestController_certify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/harvest/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The buyer pays Q·P_g into custody: MARKET_PAYMENT_HELD at once (simulated) or payment_redirect_url to approve in the wallet */
+        post: operations["HarvestController_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/harvest/reception": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The paying buyer confirms reception: DELIVERED_TO_BUYER, which lets the settlement execute */
+        post: operations["HarvestController_reception"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/custody": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-21: what is still in custody, with credits by category and debits (milestone lines, liquidation payouts) */
+        get: operations["HarvestController_custody"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/investor/projects/{projectId}/panel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** RF-27: the investor's position (every investment for fidu and admin): capture, custody, grants, receipts, realized vs median TIR */
+        get: operations["HarvestController_panel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Newest first, at most 50 */
+        get: operations["NotificationsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marks one read; another user's notice is a 404 */
+        post: operations["NotificationsController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1104,6 +1432,8 @@ export interface components {
         ProjectStatus: "DRAFT" | "CONTRACT_SIGNED" | "FUNDING_IN_PROGRESS" | "FUNDED_IN_CUSTODY" | "IN_EXECUTION" | "HARVEST_DECLARED" | "HARVEST_CERTIFIED" | "LISTED_IN_MARKET" | "MARKET_PAYMENT_HELD" | "DELIVERED_TO_BUYER" | "SETTLEMENT_PROCESSING" | "SETTLED_AND_CLOSED" | "CANCELLED_OR_DISPUTED";
         ProjectResponseDto: {
             current_status: components["schemas"]["ProjectStatus"];
+            /** @description RF-01: GeoJSON Polygon of the plot; omitted when not drawn */
+            plot_polygon?: Record<string, never>;
             id: string;
             /** @description AGR-YYYY-NNN, sequential per year */
             project_code: string;
@@ -1120,6 +1450,8 @@ export interface components {
             start_date: string;
             estimated_end_date: string;
             currency: string;
+            /** @description RF-01: the producer's COP wallet, paid by the productor line; omitted when not given */
+            producer_wallet_address?: string;
         };
         ApiErrorDto: {
             errors: {
@@ -1185,15 +1517,27 @@ export interface components {
         };
         /** @enum {string} */
         EvidenceLogType: "PHOTO_EVIDENCE" | "SOIL_ANALYSIS" | "IOT_READING" | "WEATHER_ALERT" | "AGRONOMIC_NOTE";
+        PhotoHashDto: {
+            url: string;
+            sha256: string;
+        };
+        EvidenceLocationDto: {
+            latitude: number;
+            longitude: number;
+        };
         EvidenceLogResponseDto: {
             log_type: components["schemas"]["EvidenceLogType"];
             evidence_payload: {
                 [key: string]: number | boolean | string[];
             };
+            /** @description RF-19/RF-35: sha256 (hex) per photo URL; present only when reported */
+            photo_hashes?: components["schemas"]["PhotoHashDto"][];
             id: string;
             milestone_id: string;
             notes: string;
             created_at: string;
+            /** @description RF-19/RF-35: where the evidence was taken; present only when reported */
+            location?: components["schemas"]["EvidenceLocationDto"] | null;
         };
         /** @enum {string} */
         MilestoneReviewVerdict: "SUBMITTED" | "CHANGES_REQUESTED" | "APPROVED_FAVORABLE" | "PAYOUT_EXECUTED";
@@ -1232,8 +1576,12 @@ export interface components {
             evidence_payload: {
                 [key: string]: number | boolean | string[];
             };
+            /** @description RF-19/RF-35, optional: one sha256 hex per photo URL of evidence_payload */
+            photo_hashes?: components["schemas"]["PhotoHashDto"][];
             /** @description At most 1000 characters */
             notes: string;
+            /** @description RF-19/RF-35, optional: latitude ±90, longitude ±180 */
+            location?: components["schemas"]["EvidenceLocationDto"];
         };
     };
     responses: never;
@@ -1439,6 +1787,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MilestoneDto"];
                 };
+            };
+        };
+    };
+    SupportController_list: {
+        parameters: {
+            query?: {
+                project_id?: string;
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2376,6 +2744,273 @@ export interface operations {
             };
         };
     };
+    AdmissionController_latest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdmissionController_assess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_purchaseContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_putPurchaseContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_putPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_startPremiumGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_payPremium: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_claims: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_fileClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_confirmClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                claimId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_generateContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContractsController_sign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AssistantController_sendMessage: {
         parameters: {
             query?: never;
@@ -2564,6 +3199,192 @@ export interface operations {
             path: {
                 id: string;
                 intentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_declare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_certify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_pay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_reception: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_custody: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HarvestController_panel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
             cookie?: never;
         };

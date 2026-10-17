@@ -190,6 +190,27 @@ paths:
       summary: Operator resolves the lines the gateway left en_cola
       tags:
         - milestones
+  /api/support/traces:
+    get:
+      operationId: SupportController_list
+      parameters:
+        - name: project_id
+          required: false
+          in: query
+          schema:
+            type: string
+        - name: limit
+          required: false
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Open Payments requests as curl (RF-28); ?project_id narrows to one
+        project, ?limit (default 100, max 500)
+      tags:
+        - support
   /api/producer/projects:
     get:
       operationId: ProjectsController_listProducerProjects
@@ -985,6 +1006,225 @@ paths:
         rule; 409 { errors: { _form } } otherwise"
       tags:
         - simulation
+  /api/projects/{projectId}/admission:
+    post:
+      operationId: AdmissionController_assess
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: Nine filters with evidence plus the seven A15 blocks → binary result,
+        score, level, milestones, financeable %, jornales line
+      tags:
+        - simulation
+    get:
+      operationId: AdmissionController_latest
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The project's latest admission; 404 before the first one
+      tags:
+        - simulation
+  /api/projects/{projectId}/purchase-contract:
+    get:
+      operationId: ContractsController_purchaseContract
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: RF-04; 404 while the project has none
+      tags:
+        - contracts
+    put:
+      operationId: ContractsController_putPurchaseContract
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-04: creates or replaces it before publishing; the buyer by email,
+        their wallet validated (GET in open-payments mode)"
+      tags:
+        - contracts
+  /api/projects/{projectId}/insurance-policy:
+    get:
+      operationId: ContractsController_policy
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: RF-05; 404 while the project has none
+      tags:
+        - contracts
+    put:
+      operationId: ContractsController_putPolicy
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-05: the latest simulation's premium and terms win; without one they
+        come in the body. 409 once the premium was paid"
+      tags:
+        - contracts
+  /api/projects/{projectId}/insurance-policy/premium-grant:
+    post:
+      operationId: ContractsController_startPremiumGrant
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-14: the fiduciaria approves the premium grant on custody (net
+        premium cap); redirect_url is null in simulated mode"
+      tags:
+        - contracts
+  /api/projects/{projectId}/insurance-policy/pay-premium:
+    post:
+      operationId: ContractsController_payPremium
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-14: pays the net premium from custody to the insurer (or syncs one
+        in flight); 409 before activation or without the grant"
+      tags:
+        - contracts
+  /api/projects/{projectId}/insurance-policy/claims:
+    get:
+      operationId: ContractsController_claims
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - contracts
+    post:
+      operationId: ContractsController_fileClaim
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: "RF-25: validates the threshold or index rule and computes the A6
+        indemnity; in open-payments mode opens the incoming payment on custody"
+      tags:
+        - contracts
+  /api/projects/{projectId}/insurance-policy/claims/{claimId}/confirm:
+    post:
+      operationId: ContractsController_confirmClaim
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: claimId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-25: books the indemnity into custody (ledger CREDIT INDEMNITY); in
+        open-payments mode only once the insurer paid it"
+      tags:
+        - contracts
+  /api/projects/{projectId}/contract:
+    get:
+      operationId: ContractsController_contract
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-09: the latest version with its signatures; the parties (the buyer
+        included) read it"
+      tags:
+        - contracts
+    post:
+      operationId: ContractsController_generateContract
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-09: renders the template; unchanged terms answer the current
+        version, changed ones a new version without signatures"
+      tags:
+        - contracts
+  /api/contracts/{id}/signatures:
+    post:
+      operationId: ContractsController_sign
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: "RF-09: the caller signs every party they are on the latest version
+        (user, role, time, ip, user agent, hash)"
+      tags:
+        - contracts
   /api/assistant/messages:
     post:
       operationId: AssistantController_sendMessage
@@ -1139,6 +1379,151 @@ paths:
       summary: Rejects a confirmed order; no line is created
       tags:
         - payouts
+  /api/harvests:
+    get:
+      operationId: HarvestController_list
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: "RF-24: the verifier's queue, every harvest with its project (verifier
+        or admin; the verifier must sign in)"
+      tags:
+        - harvest
+  /api/projects/{projectId}/harvest:
+    get:
+      operationId: HarvestController_get
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The project's harvest (null before the declaration) and project status
+      tags:
+        - harvest
+    post:
+      operationId: HarvestController_declare
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: "The owner producer declares the harvest: HARVEST_DECLARED"
+      tags:
+        - harvest
+  /api/projects/{projectId}/harvest/certify:
+    post:
+      operationId: HarvestController_certify
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "The verifier certifies Q and quality; the contract formula (or the
+        request's price) sets Q·P_g: HARVEST_CERTIFIED"
+      tags:
+        - harvest
+  /api/projects/{projectId}/harvest/payment:
+    post:
+      operationId: HarvestController_pay
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "The buyer pays Q·P_g into custody: MARKET_PAYMENT_HELD at once
+        (simulated) or payment_redirect_url to approve in the wallet"
+      tags:
+        - harvest
+  /api/projects/{projectId}/harvest/reception:
+    post:
+      operationId: HarvestController_reception
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "The paying buyer confirms reception: DELIVERED_TO_BUYER, which lets
+        the settlement execute"
+      tags:
+        - harvest
+  /api/projects/{projectId}/custody:
+    get:
+      operationId: HarvestController_custody
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-21: what is still in custody, with credits by category and debits
+        (milestone lines, liquidation payouts)"
+      tags:
+        - harvest
+  /api/investor/projects/{projectId}/panel:
+    get:
+      operationId: HarvestController_panel
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-27: the investor's position (every investment for fidu and admin):
+        capture, custody, grants, receipts, realized vs median TIR"
+      tags:
+        - harvest
+  /api/notifications:
+    get:
+      operationId: NotificationsController_list
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: Newest first, at most 50
+      tags:
+        - notifications
+  /api/notifications/{id}/read:
+    post:
+      operationId: NotificationsController_markRead
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Marks one read; another user's notice is a 404
+      tags:
+        - notifications
 info:
   title: Agro Payments API
   description: ""
@@ -1476,6 +1861,9 @@ components:
         current_status:
           allOf:
             - $ref: "#/components/schemas/ProjectStatus"
+        plot_polygon:
+          type: object
+          description: "RF-01: GeoJSON Polygon of the plot; omitted when not drawn"
         id:
           type: string
         project_code:
@@ -1506,6 +1894,10 @@ components:
           type: string
         currency:
           type: string
+        producer_wallet_address:
+          type: string
+          description: "RF-01: the producer's COP wallet, paid by the productor line;
+            omitted when not given"
       required:
         - current_status
         - id
@@ -1689,6 +2081,26 @@ components:
         - IOT_READING
         - WEATHER_ALERT
         - AGRONOMIC_NOTE
+    PhotoHashDto:
+      type: object
+      properties:
+        url:
+          type: string
+        sha256:
+          type: string
+      required:
+        - url
+        - sha256
+    EvidenceLocationDto:
+      type: object
+      properties:
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required:
+        - latitude
+        - longitude
     EvidenceLogResponseDto:
       type: object
       properties:
@@ -1704,6 +2116,11 @@ components:
               - type: array
                 items:
                   type: string
+        photo_hashes:
+          description: "RF-19/RF-35: sha256 (hex) per photo URL; present only when reported"
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoHashDto"
         id:
           type: string
         milestone_id:
@@ -1712,6 +2129,13 @@ components:
           type: string
         created_at:
           type: string
+        location:
+          nullable: true
+          description: "RF-19/RF-35: where the evidence was taken; present only when
+            reported"
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/EvidenceLocationDto"
       required:
         - log_type
         - evidence_payload
@@ -1823,9 +2247,19 @@ components:
                   type: string
           description: "Exactly the milestone's required_evidences keys: numbers within
             min/max, booleans, http(s) photo URLs"
+        photo_hashes:
+          description: "RF-19/RF-35, optional: one sha256 hex per photo URL of
+            evidence_payload"
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoHashDto"
         notes:
           type: string
           description: At most 1000 characters
+        location:
+          description: "RF-19/RF-35, optional: latitude ±90, longitude ±180"
+          allOf:
+            - $ref: "#/components/schemas/EvidenceLocationDto"
       required:
         - log_type
         - evidence_payload
