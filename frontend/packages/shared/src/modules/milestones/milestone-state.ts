@@ -35,3 +35,16 @@ export function formatMoney(amount: number, currency: string, scale = 0) {
   const grouped = new Intl.NumberFormat("es-CO").format(BigInt(whole));
   return `${currency} ${negative ? "-" : ""}${hasFraction ? `${grouped},${fraction}` : grouped}`;
 }
+
+// RF-23 rates arrive as reduced "numerator/denominator" strings: long division in BigInt, truncated to `decimals`.
+export function formatRate(ratio: string, decimals = 4) {
+  const match = /^(\d+)\/(\d+)$/.exec(ratio);
+  if (!match) return null;
+  const [numerator, denominator] = [BigInt(match[1]), BigInt(match[2])];
+  if (denominator === 0n) return null;
+  const whole = numerator / denominator;
+  const fraction = ((numerator % denominator) * 10n ** BigInt(decimals)) / denominator;
+  const digits = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  const grouped = new Intl.NumberFormat("es-CO").format(whole);
+  return digits ? `${grouped},${digits}` : grouped;
+}

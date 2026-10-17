@@ -1,5 +1,5 @@
 import type { Milestone } from "@agro/shared/api/client";
-import { formatMoney, milestoneState } from "./milestone-state";
+import { formatMoney, formatRate, milestoneState } from "./milestone-state";
 
 type Line = Milestone["lines"][number];
 
@@ -12,6 +12,7 @@ const line = (id: string, status: Line["status"]): Line => ({
   status,
   reference: null,
   settledAt: null,
+  receipt: null,
 });
 
 const base: Milestone = {
@@ -59,5 +60,22 @@ describe("formatMoney", () => {
   test("works with a scale of 0 and with large safe integers exactly", () => {
     expect(formatMoney(6_000_000, "COP", 0)).toBe("COP 6.000.000");
     expect(formatMoney(9_007_199_254_740_991, "COP", 2)).toBe("COP 90.071.992.547.409,91");
+  });
+});
+
+describe("formatRate", () => {
+  it("renders a reduced ratio as an es-CO decimal, grouping the whole part", () => {
+    expect(formatRate("4100/1")).toBe("4.100");
+    expect(formatRate("1/2")).toBe("0,5");
+  });
+
+  it("truncates to four decimals with BigInt digits, never floats", () => {
+    expect(formatRate("300/301")).toBe("0,9966");
+    expect(formatRate("12345678901234567890/3")).toBe("4.115.226.300.411.522.630");
+  });
+
+  it("returns null for anything that is not a positive ratio", () => {
+    expect(formatRate("abc")).toBeNull();
+    expect(formatRate("1/0")).toBeNull();
   });
 });

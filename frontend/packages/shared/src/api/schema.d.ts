@@ -115,7 +115,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Starts funding: send the browser to redirectUrl so the investor approves one grant capped at the milestone amount */
+        /** Starts funding: send the browser to redirectUrl so the custody wallet holder approves one grant capped at the milestone amount */
         post: operations["MilestonesController_startFunding"];
         delete?: never;
         options?: never;
@@ -199,6 +199,32 @@ export interface components {
         LineKind: "productor" | "proveedor" | "trabajadores" | "plataforma";
         /** @enum {string} */
         LineStatus: "pendiente" | "en_cola" | "completado" | "fallido";
+        ReceiptAmountDto: {
+            /** @description Integer minor units of assetCode */
+            value: number;
+            assetCode: string;
+            assetScale: number;
+        };
+        LineReceiptDto: {
+            incomingPaymentId: string | null;
+            outgoingPaymentId: string | null;
+            quoteId: string | null;
+            /** @description Charged to the milestone grant on the custody wallet */
+            debitAmount: components["schemas"]["ReceiptAmountDto"] | null;
+            /** @description Credited to the beneficiary: quoted while en_cola, settled once completado */
+            receiveAmount: components["schemas"]["ReceiptAmountDto"] | null;
+            /**
+             * @description Implied receive/debit rate in major units, as a reduced "numerator/denominator" string
+             * @example 300/301
+             */
+            rate: string | null;
+            /** @description debit − receive in debit minor units; null when the assets differ */
+            fee: number | null;
+            /** @description Grant debit total before this payment, minor units */
+            grantSpentBefore: number | null;
+            /** @description Grant debit total re-read after settlement, minor units */
+            grantSpentAfter: number | null;
+        };
         LineDto: {
             kind: components["schemas"]["LineKind"];
             status: components["schemas"]["LineStatus"];
@@ -206,6 +232,8 @@ export interface components {
             reference: string | null;
             /** Format: date-time */
             settledAt: string | null;
+            /** @description Null until the gateway reports the payment (simulated payments have none) */
+            receipt: components["schemas"]["LineReceiptDto"] | null;
             id: string;
             beneficiary: string;
             walletAddress: string;
@@ -219,7 +247,7 @@ export interface components {
             lines: components["schemas"]["LineDto"][];
             /**
              * Format: date-time
-             * @description Set when the investor approved the grant that funds the lines; no line is paid before
+             * @description Set when the custody grant that funds the lines was approved; no line is paid before
              */
             fundedAt: string | null;
             /**

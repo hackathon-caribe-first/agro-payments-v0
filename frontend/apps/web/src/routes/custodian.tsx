@@ -56,7 +56,7 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
                   {!m.closedAt && <ActionForm id={m.id} intent="fund" label="Fondear hito" />}
                 </div>
               )}
-              <Lines milestone={m} payable={Boolean(m.fundedAt)} />
+              <Lines milestone={m} payable={Boolean(m.fundedAt)} receipts />
               {m.lines.some((l) => l.status === "en_cola") && (
                 <ActionForm id={m.id} intent="sync" label="Actualizar pagos en cola" variant="outline" />
               )}
