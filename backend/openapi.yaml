@@ -121,8 +121,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MilestoneDto"
-      summary: Verifier approves or observes the evidence. Approving pays the producer
-        line.
+      summary: Verifier approves or observes the evidence. Approving pays the jornales
+        line and the milestone fee (RF-20).
       tags:
         - milestones
   /milestones/{id}/funding:
@@ -141,8 +141,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FundingStartDto"
-      summary: "Starts funding: send the browser to redirectUrl so the custody wallet
-        holder approves one grant capped at the milestone amount"
+      summary: "RF-13: the fiduciaria starts the milestone grant; send the browser to
+        redirectUrl to approve it on the custody wallet. 409 while another
+        milestone of the project holds a live grant"
       tags:
         - milestones
   /milestones/{id}/lines/{lineId}/payment:
@@ -741,6 +742,403 @@ paths:
         projects
       tags:
         - negotiations
+  /api/projects/{projectId}/investments:
+    post:
+      operationId: InvestmentsController_invest
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: "Subscribes the caller (role investor): 201 CAPTURED (simulated) or
+        PENDING_CONSENT with consent_redirect_url"
+      tags:
+        - investments
+    get:
+      operationId: InvestmentsController_list
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: An investor sees their own; the owner producer, admin and fidu see all
+      tags:
+        - investments
+  /api/investments/{id}:
+    get:
+      operationId: InvestmentsController_get
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - investments
+  /api/projects/{projectId}/capture:
+    get:
+      operationId: InvestmentsController_capture
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "The capture bar: captured COP against the target, by the investors'
+        currencies"
+      tags:
+        - investments
+  /api/investor/projects:
+    get:
+      operationId: InvestmentsController_fundable
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: "The investor catalog: projects still raising (DRAFT, CONTRACT_SIGNED,
+        FUNDING_IN_PROGRESS) with their capture bar"
+      tags:
+        - investments
+  /api/investor/projects/{projectId}:
+    get:
+      operationId: InvestmentsController_investorProject
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: One project with its capture bar, whatever its status
+      tags:
+        - investments
+  /api/projects/{projectId}/settlement/preview:
+    post:
+      operationId: SettlementController_preview
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The cascade for these terms; nothing is stored. Amounts in whole pesos.
+      tags:
+        - settlement
+  /api/projects/{projectId}/settlement:
+    post:
+      operationId: SettlementController_create
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: Stores the cascade as a draft settlement; 409 while the project has an
+        approved, executing or executed one
+      tags:
+        - settlement
+  /api/settlements/{id}/approve:
+    post:
+      operationId: SettlementController_approve
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: draft → approved
+      tags:
+        - settlement
+  /api/settlements/{id}/execute:
+    post:
+      operationId: SettlementController_execute
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Pays pending payouts and syncs those in flight; call again until
+        executed. 409 when the gateway refuses a payout, or in open-payments
+        mode before the liquidation grant is approved.
+      tags:
+        - settlement
+  /api/settlements/{id}/liquidation-grant:
+    post:
+      operationId: SettlementController_startLiquidationGrant
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: "RF-26: the fiduciaria approves the liquidation grant on custody (Σ COP
+        payouts); redirect_url is null in simulated mode (nothing to approve).
+        409 unless approved"
+      tags:
+        - settlement
+  /api/settlements/{id}:
+    get:
+      operationId: SettlementController_get
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: A settlement with its plan, payouts and receipts; another producer's is
+        a 404
+      tags:
+        - settlement
+  /api/simulation/presets:
+    get:
+      operationId: SimulationController_presets
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: The PRD demo projects (P1 not publishable, P2 publishable) the motor
+        starts from
+      tags:
+        - simulation
+  /api/projects/{projectId}/simulation:
+    post:
+      operationId: SimulationController_run
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      summary: Runs the motor (20.000 scenarios, fixed seed) from a preset plus
+        overrides and stores the run
+      tags:
+        - simulation
+    get:
+      operationId: SimulationController_latest
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The project's latest sheet; 404 when it was never simulated
+      tags:
+        - simulation
+  /api/projects/{projectId}/publish:
+    post:
+      operationId: SimulationController_publish
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponseDto"
+      summary: "DRAFT → FUNDING_IN_PROGRESS when the latest sheet passes the offer
+        rule; 409 { errors: { _form } } otherwise"
+      tags:
+        - simulation
+  /api/assistant/messages:
+    post:
+      operationId: AssistantController_sendMessage
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: Send a message; answers the reply and, when a tool prepared one, the
+        pending intent to confirm
+      tags:
+        - assistant
+  /api/assistant/conversations/{id}:
+    get:
+      operationId: AssistantController_getConversation
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: The producer's own conversation with its messages and intents (RF-41
+        audit)
+      tags:
+        - assistant
+  /api/assistant/intents/{id}/confirm:
+    post:
+      operationId: AssistantController_confirm
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Explicit «sí»; order lines also need { pin }
+      tags:
+        - assistant
+  /api/assistant/intents/{id}/reject:
+    post:
+      operationId: AssistantController_reject
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - assistant
+  /api/assistant/pin:
+    get:
+      operationId: AssistantController_pinStatus
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: Whether the producer has a PIN, so the UI can ask to create one before
+        the first order
+      tags:
+        - assistant
+    put:
+      operationId: AssistantController_setPin
+      parameters: []
+      responses:
+        "204":
+          description: ""
+      summary: Create the 4-digit PIN, or change it with { pin, current_pin }
+      tags:
+        - assistant
+  /api/suppliers:
+    post:
+      operationId: PayoutsController_registerSupplier
+      parameters: []
+      responses:
+        "201":
+          description: ""
+      summary: Registers a supplier; 400 unless its wallet resolves and receives COP,
+        409 for a repeated name
+      tags:
+        - payouts
+    get:
+      operationId: PayoutsController_listSuppliers
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      summary: Registered suppliers, oldest first
+      tags:
+        - payouts
+  /api/milestones/{id}/orders:
+    get:
+      operationId: PayoutsController_listOrders
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Orders the producer confirmed through the assistant for this milestone,
+        with their approval state
+      tags:
+        - payouts
+  /api/milestones/{id}/orders/{intentId}/approve:
+    post:
+      operationId: PayoutsController_approveOrder
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: intentId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Turns a confirmed order into a proveedor line of the milestone
+        (remaining_cap in whole pesos after it); 409 when it does not fit the
+        cap or the supplier is not registered
+      tags:
+        - payouts
+  /api/milestones/{id}/orders/{intentId}/reject:
+    post:
+      operationId: PayoutsController_rejectOrder
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: intentId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      summary: Rejects a confirmed order; no line is created
+      tags:
+        - payouts
 info:
   title: Agro Payments API
   description: ""
@@ -761,6 +1159,7 @@ components:
             - investor
             - fidu
             - intermediator
+            - verifier
           type: string
         id:
           type: string
@@ -785,6 +1184,7 @@ components:
             - investor
             - fidu
             - intermediator
+            - verifier
           type: string
       required:
         - role
@@ -799,6 +1199,7 @@ components:
             - investor
             - fidu
             - intermediator
+            - verifier
           type: string
         id:
           type: string
