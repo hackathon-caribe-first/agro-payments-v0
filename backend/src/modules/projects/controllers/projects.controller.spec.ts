@@ -24,8 +24,14 @@ describe.each([ProjectsController, ProducerMilestonesController])("%o access con
     expect(meta(EXCEPTION_FILTERS_METADATA, controller)).toEqual([ApiErrorFilter]);
   });
 
-  it("lets seller, admin, fidu and investor read; buyer gets 403", () => {
-    expect(meta(ROLES_KEY, controller)).toEqual(READERS);
+  // Item 4 (e2e findings): the /buyer pages read a catalog project, its milestones and each milestone's detail; the buyer's
+  // visibility is the catalog rule enforced in ProjectQueries, not the route.
+  it("lets seller, admin, fidu and investor read; the buyer reads only the catalog project routes", () => {
+    if (controller === ProjectsController) expect(meta(ROLES_KEY, controller)).toEqual([...READERS, "buyer"]);
+    else {
+      expect(meta(ROLES_KEY, controller)).toEqual(READERS);
+      expect(meta(ROLES_KEY, controller, "getMilestone")).toEqual([...READERS, "buyer"]);
+    }
   });
 });
 

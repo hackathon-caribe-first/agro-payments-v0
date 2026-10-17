@@ -505,7 +505,10 @@ describe("TypeOrmInvestmentStore", () => {
     await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
     if (!dataSource) return;
     const { project, milestones } = buildProject({ id: "p-i", ownerUserId: "u-prod", input, wallets, now });
-    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+    const projects = new TypeOrmProjectAdapter(dataSource);
+    await projects.create(project, milestones);
+    // RF-07: only a published project takes investor money.
+    await projects.updateStatus("p-i", "FUNDING_IN_PROGRESS");
   });
 
   const wire = (ds: DataSource) => {

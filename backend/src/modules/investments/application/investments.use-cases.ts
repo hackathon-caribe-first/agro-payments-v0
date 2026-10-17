@@ -193,6 +193,11 @@ export class InvestmentUseCases {
     return { project, summary: captureSummary(project, await this.store.listByProject(projectId)) };
   }
 
+  /** Every investment id of the investor in the project, whatever its status (settlement privacy, RF-26). */
+  async investmentIdsOf(projectId: string, investorUserId: string): Promise<string[]> {
+    return (await this.store.listByProject(projectId)).filter((i) => i.investorUserId === investorUserId).map((i) => i.id);
+  }
+
   /**
    * RF-26 capital tier: one position per CAPTURED investment (its id), with the COP that reached custody, the wallet's
    * currency (anything but COP is paid with a fixed COP debit) and the wallet it came from.

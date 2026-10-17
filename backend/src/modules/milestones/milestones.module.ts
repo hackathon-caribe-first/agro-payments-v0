@@ -24,10 +24,12 @@ import { demoMilestones } from "./infrastructure/demo-milestones";
 import { MILESTONE_ENTITIES } from "./infrastructure/persistence/entities";
 import { TypeOrmGrantStore } from "./infrastructure/persistence/typeorm-grant-store.adapter";
 import { TypeOrmMilestoneAdapter } from "./infrastructure/persistence/typeorm-milestone.adapter";
+import { TypeOrmProjectCustody } from "./infrastructure/persistence/typeorm-project-custody.adapter";
 import { GrantStore } from "./ports/grant-store";
 import { MilestoneFunding } from "./ports/milestone-funding";
 import { MilestoneRepository } from "./ports/milestone.repository";
 import { PaymentGateway } from "./ports/payment-gateway";
+import { ProjectCustody } from "./ports/project-custody";
 
 // PAYMENT_GATEWAY picks the adapters: simulated (default) or open-payments, which shares one client and grant store.
 // Milestones persist in Postgres in both modes; grants (and their encryption key) exist only in open-payments mode.
@@ -45,6 +47,7 @@ export const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
     ReviewMilestoneUseCase,
     StartFundingUseCase,
     CompleteFundingUseCase,
+    { provide: ProjectCustody, inject: [DataSource], useFactory: (dataSource: DataSource) => new TypeOrmProjectCustody(dataSource) },
     { provide: WEB_APP_URL, useFactory: () => loadEnv().webOrigins[0] },
     {
       provide: MilestoneRepository,

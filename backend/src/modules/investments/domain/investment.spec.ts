@@ -15,7 +15,7 @@ import {
 } from "./investment";
 
 const now = new Date("2026-10-17T12:00:00Z");
-const project: { currentStatus: ProjectStatus; targetAmount: number } = { currentStatus: PROJECT_STATUS.DRAFT, targetAmount: 100_000_000 }; // 1.000.000,00 COP
+const project: { currentStatus: ProjectStatus; targetAmount: number } = { currentStatus: PROJECT_STATUS.FUNDING_IN_PROGRESS, targetAmount: 100_000_000 }; // 1.000.000,00 COP
 
 const investment = (overrides: Partial<Investment> = {}): Investment => ({
   id: "inv-1",
@@ -46,11 +46,9 @@ describe("canInvest", () => {
   const ask = (amount: number, investments: Investment[] = [], overrides: Partial<typeof project> = {}, capPct = 100) =>
     canInvest({ project: { ...project, ...overrides }, investments, investorUserId: "u-inv", amount, now, capPct });
 
-  it("accepts while the project is DRAFT, CONTRACT_SIGNED or FUNDING_IN_PROGRESS", () => {
-    for (const currentStatus of [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED, PROJECT_STATUS.FUNDING_IN_PROGRESS]) {
-      expect(ask(1_000_000, [], { currentStatus })).toBeNull();
-    }
-    for (const currentStatus of [PROJECT_STATUS.FUNDED_IN_CUSTODY, PROJECT_STATUS.IN_EXECUTION, PROJECT_STATUS.CANCELLED_OR_DISPUTED]) {
+  it("accepts only while the project is published (FUNDING_IN_PROGRESS, RF-07)", () => {
+    expect(ask(1_000_000, [], { currentStatus: PROJECT_STATUS.FUNDING_IN_PROGRESS })).toBeNull();
+    for (const currentStatus of [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED, PROJECT_STATUS.FUNDED_IN_CUSTODY, PROJECT_STATUS.IN_EXECUTION, PROJECT_STATUS.CANCELLED_OR_DISPUTED]) {
       expect(ask(1_000_000, [], { currentStatus })).toBe("project_status");
     }
   });
@@ -86,10 +84,14 @@ describe("canInvest", () => {
 });
 
 describe("projectStatusAfterCapture", () => {
-  it("moves a pre-custody project to FUNDING_IN_PROGRESS, and to FUNDED_IN_CUSTODY once custody reaches the target", () => {
-    expect(projectStatusAfterCapture(PROJECT_STATUS.DRAFT, 1, 100)).toBe(PROJECT_STATUS.FUNDING_IN_PROGRESS);
-    expect(projectStatusAfterCapture(PROJECT_STATUS.CONTRACT_SIGNED, 99, 100)).toBe(PROJECT_STATUS.FUNDING_IN_PROGRESS);
+  it("keeps a published project FUNDING_IN_PROGRESS, and moves it to FUNDED_IN_CUSTODY once custody reaches the target", () => {
+    expect(projectStatusAfterCapture(PROJECT_STATUS.FUNDING_IN_PROGRESS, 99, 100)).toBe(PROJECT_STATUS.FUNDING_IN_PROGRESS);
     expect(projectStatusAfterCapture(PROJECT_STATUS.FUNDING_IN_PROGRESS, 100, 100)).toBe(PROJECT_STATUS.FUNDED_IN_CUSTODY);
+  });
+
+  it("never moves an unpublished project (DRAFT, CONTRACT_SIGNED): only the publish gate opens funding (RF-07)", () => {
+    expect(projectStatusAfterCapture(PROJECT_STATUS.DRAFT, 100, 100)).toBe(PROJECT_STATUS.DRAFT);
+    expect(projectStatusAfterCapture(PROJECT_STATUS.CONTRACT_SIGNED, 1, 100)).toBe(PROJECT_STATUS.CONTRACT_SIGNED);
   });
 
   it("never regresses a project already funded or beyond", () => {

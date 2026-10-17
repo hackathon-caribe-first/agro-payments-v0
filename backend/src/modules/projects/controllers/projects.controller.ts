@@ -5,6 +5,7 @@ import { ApiAuthGuard } from "../../auth/controllers/api-auth.guard";
 import { CurrentUser } from "../../auth/controllers/current-user.decorator";
 import { Roles } from "../../auth/controllers/roles.decorator";
 import { RolesGuard } from "../../auth/controllers/roles.guard";
+import type { Role } from "../../auth/ports/role";
 import type { AuthenticatedUser } from "../../auth/ports/session-resolver";
 import { MILESTONE_ROLES } from "../../milestones/controllers/milestone-roles";
 import { CreateProjectUseCase } from "../application/create-project.use-case";
@@ -15,13 +16,16 @@ import { MilestoneSummaryResponseDto } from "./dtos/project-milestone.dto";
 import { ApiErrorDto, CreateProjectRequestDto, ProjectResponseDto } from "./dtos/project.dto";
 
 const { producer, operator, fiduciaria, investor } = MILESTONE_ROLES;
+// The buyer pages read a catalog project and its milestones (only projects of the buyer catalog, see ProjectQueries).
+const buyer = "buyer" as const satisfies Role;
 
 // PRD producer projects for the web app on feat/producer-milestones. Not a global prefix: legacy routes stay unprefixed.
 @ApiTags("projects")
 @Controller("api")
 @UseGuards(ApiAuthGuard, RolesGuard)
 @UseFilters(ApiErrorFilter)
-@Roles(producer, operator, fiduciaria, investor)
+// Routes without their own @Roles are reads (project, milestones): the buyer reads catalog projects only (ProjectQueries).
+@Roles(producer, operator, fiduciaria, investor, buyer)
 export class ProjectsController {
   constructor(
     private readonly queries: ProjectQueries,

@@ -182,3 +182,21 @@ export function applyPayoutResult(s: Settlement, id: string, result: LineResult,
   const allExecuted = payouts.every((p) => p.status === PAYOUT_STATUS.EXECUTED);
   return { ...s, payouts, status: allExecuted ? SETTLEMENT_STATUS.EXECUTED : SETTLEMENT_STATUS.FAILED, executedAt: allExecuted ? now : null };
 }
+
+/**
+ * What an investor may read of a settlement: their own positions, allocations and payouts; other investors' wallets and amounts are
+ * omitted (the tier claims, paid amounts and investorsTotal stay as aggregates). Producer, platform and integrator entries remain.
+ */
+export function onlyInvestorsOwn(s: Settlement, ownInvestmentIds: ReadonlySet<string>): Settlement {
+  const visible = (b: Beneficiary) => b.kind !== BENEFICIARY_KIND.INVESTOR || ownInvestmentIds.has(b.id);
+  return {
+    ...s,
+    terms: { ...s.terms, investors: s.terms.investors.filter((i) => ownInvestmentIds.has(i.id)) },
+    plan: {
+      ...s.plan,
+      tiers: s.plan.tiers.map((t) => ({ ...t, allocations: t.allocations.filter((a) => visible(a.beneficiary)) })),
+      totals: s.plan.totals.filter((a) => visible(a.beneficiary)),
+    },
+    payouts: s.payouts.filter((p) => visible(p.beneficiary)),
+  };
+}

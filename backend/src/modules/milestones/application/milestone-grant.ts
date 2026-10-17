@@ -3,6 +3,8 @@
 // revoked, which happens when N closes approved (RF-22), so "closed" stands for "approved and revoked" here.
 
 import { DomainError } from "../../../shared/domain-errors";
+import { PROJECT_STATUS, type ProjectStatus } from "../../projects/application/project";
+import type { CustodyStanding } from "../ports/project-custody";
 import type { Milestone } from "./milestone";
 
 export const GRANT_STATE = { NONE: "none", ACTIVE: "active", REVOKED: "revoked" } as const;
@@ -24,4 +26,22 @@ export function assertGrantCanStart(m: Milestone, siblings: readonly Milestone[]
   const order = m.sequenceOrder ?? 0;
   const open = others.find((s) => (s.sequenceOrder ?? 0) < order && !s.closedAt);
   if (open) throw new DomainError(`Milestone «${open.title}» (${open.id}) must be approved and its grant revoked before ${m.id} gets one`);
+}
+
+// RF-05: custody pays milestones from FUNDED_IN_CUSTODY until the harvest is delivered. Before it (DRAFT, CONTRACT_SIGNED,
+// FUNDING_IN_PROGRESS) custody holds nothing to spend; from SETTLEMENT_PROCESSING on it belongs to the liquidation.
+const STATUS_ORDER: readonly ProjectStatus[] = Object.values(PROJECT_STATUS);
+const between = (s: ProjectStatus, from: ProjectStatus, to: ProjectStatus) =>
+  STATUS_ORDER.indexOf(s) >= STATUS_ORDER.indexOf(from) && STATUS_ORDER.indexOf(s) <= STATUS_ORDER.indexOf(to);
+export const custodyPaysMilestones = (status: ProjectStatus) => between(status, PROJECT_STATUS.FUNDED_IN_CUSTODY, PROJECT_STATUS.DELIVERED_TO_BUYER);
+
+/** A project milestone's grant needs the project funded in custody and enough custody left for its amount. Legacy milestones are never gated. */
+export function assertCustodyCovers(m: Milestone, standing: CustodyStanding | null): void {
+  if (m.projectId === null) return;
+  if (!standing || !custodyPaysMilestones(standing.status)) {
+    throw new DomainError("El proyecto aún no tiene la custodia fondeada: el hito no puede recibir su grant todavía.");
+  }
+  if (m.amount > standing.available) {
+    throw new DomainError("La custodia del proyecto no tiene saldo suficiente para el monto de este hito.");
+  }
 }

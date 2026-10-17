@@ -72,11 +72,13 @@ describe("harvest wire shape", () => {
       milestoneDebits: 100_00,
       settlementDebits: 50_00,
       balance: 430_00,
+      overdrawn: false,
     };
     expect(toCustodyResponse("p1", statement)).toEqual({
       project_id: "p1",
       currency: "COP",
       balance: 430,
+      overdrawn: false,
       credited: 600,
       credits: [
         { category: "HARVEST_PAYMENT", amount: 500 },

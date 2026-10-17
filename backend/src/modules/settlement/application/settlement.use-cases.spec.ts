@@ -248,6 +248,9 @@ describe("SettlementUseCases with captured investors", () => {
     async forProject() {
       return this.positions;
     }
+    async investmentIdsOf() {
+      return [];
+    }
   }
 
   it("builds the capital tier from the captured investments when the request has no investors", async () => {
