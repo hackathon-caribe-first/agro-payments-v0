@@ -189,6 +189,190 @@ paths:
       summary: Operator resolves the lines the gateway left en_cola
       tags:
         - milestones
+  /api/producer/projects:
+    get:
+      operationId: ProjectsController_listProducerProjects
+      parameters: []
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectResponseDto"
+      summary: Projects owned by the signed-in producer, oldest first
+      tags:
+        - projects
+  /api/projects/{projectId}:
+    get:
+      operationId: ProjectsController_getProject
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponseDto"
+        "404":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: Get a project; another producer's project is a 404
+      tags:
+        - projects
+  /api/projects:
+    post:
+      operationId: ProjectsController_createProject
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequestDto"
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponseDto"
+        "400":
+          description: errors keyed by field path, e.g. milestones.2.laborBudget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: Create a DRAFT project with its ordered milestones; the caller is the
+        owner. Budgets in whole pesos.
+      tags:
+        - projects
+  /api/projects/{projectId}/milestones:
+    get:
+      operationId: ProjectsController_listMilestones
+      parameters:
+        - name: projectId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MilestoneSummaryResponseDto"
+        "404":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: A project's milestones in sequence order, with their derived status
+      tags:
+        - projects
+  /api/milestones/{id}:
+    get:
+      operationId: ProducerMilestonesController_getMilestone
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDetailResponseDto"
+        "404":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: "Milestone detail: requirements, evidence logs and review history"
+      tags:
+        - projects
+  /api/milestones/{id}/logs:
+    post:
+      operationId: ProducerMilestonesController_addLog
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceLogRequestDto"
+      responses:
+        "201":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceLogResponseDto"
+        "400":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+        "409":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: Producer records a field log; 409 when the status takes no evidence,
+        400 when the payload misses the requirements
+      tags:
+        - projects
+  /api/milestones/{id}/submit:
+    post:
+      operationId: ProducerMilestonesController_submit
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MilestoneDetailResponseDto"
+        "409":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorDto"
+      summary: Producer submits for review once the latest value of every requirement
+        is met; 409 otherwise
+      tags:
+        - projects
 info:
   title: Agro Payments API
   description: ""
@@ -501,3 +685,379 @@ components:
             through the funding callback
       required:
         - redirectUrl
+    ProjectStatus:
+      type: string
+      enum:
+        - DRAFT
+        - CONTRACT_SIGNED
+        - FUNDING_IN_PROGRESS
+        - FUNDED_IN_CUSTODY
+        - IN_EXECUTION
+        - HARVEST_DECLARED
+        - HARVEST_CERTIFIED
+        - LISTED_IN_MARKET
+        - MARKET_PAYMENT_HELD
+        - DELIVERED_TO_BUYER
+        - SETTLEMENT_PROCESSING
+        - SETTLED_AND_CLOSED
+        - CANCELLED_OR_DISPUTED
+    ProjectResponseDto:
+      type: object
+      properties:
+        current_status:
+          allOf:
+            - $ref: "#/components/schemas/ProjectStatus"
+        id:
+          type: string
+        project_code:
+          type: string
+          description: AGR-YYYY-NNN, sequential per year
+        title:
+          type: string
+        production_type:
+          type: string
+        description:
+          type: string
+        target_amount:
+          type: number
+          description: Σ(supplies + labor) of the milestones, whole pesos; the platform
+            fee is on top
+        custody_balance:
+          type: number
+        total_disbursed:
+          type: number
+        investor_roi_pct:
+          type: number
+        platform_fee_pct:
+          type: number
+        start_date:
+          type: string
+          description: yyyy-mm-dd
+        estimated_end_date:
+          type: string
+        currency:
+          type: string
+      required:
+        - current_status
+        - id
+        - project_code
+        - title
+        - production_type
+        - description
+        - target_amount
+        - custody_balance
+        - total_disbursed
+        - investor_roi_pct
+        - platform_fee_pct
+        - start_date
+        - estimated_end_date
+        - currency
+    ApiErrorDto:
+      type: object
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        error:
+          type: string
+      required:
+        - errors
+        - error
+    RequirementDto:
+      type: object
+      properties:
+        type:
+          enum:
+            - number
+            - boolean_system_check
+            - photo_array
+          type: string
+        field_key:
+          type: string
+        label:
+          type: string
+        min:
+          type: number
+        max:
+          type: number
+        min_items:
+          type: number
+      required:
+        - type
+        - field_key
+        - label
+    RequirementsSchemaDto:
+      type: object
+      properties:
+        required_evidences:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementDto"
+      required:
+        - required_evidences
+    CreateProjectMilestoneRequestDto:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        estimated_completion_date:
+          type: string
+          description: yyyy-mm-dd, within the project period
+        supplies_budget:
+          type: number
+          description: Whole pesos
+        labor_budget:
+          type: number
+          description: Whole pesos; must be above zero (it pays the producer line)
+        sequence_order:
+          type: number
+          description: 1-based; milestones open in this order
+        requirements_schema:
+          $ref: "#/components/schemas/RequirementsSchemaDto"
+      required:
+        - title
+        - description
+        - estimated_completion_date
+        - supplies_budget
+        - labor_budget
+        - sequence_order
+        - requirements_schema
+    CreateProjectRequestDto:
+      type: object
+      properties:
+        production_type:
+          type: string
+          enum:
+            - CAFE_ESPECIAL
+            - CACAO
+            - AGUACATE_HASS
+            - OTRO
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateProjectMilestoneRequestDto"
+        title:
+          type: string
+        description:
+          type: string
+        start_date:
+          type: string
+        estimated_end_date:
+          type: string
+      required:
+        - production_type
+        - milestones
+        - title
+        - description
+        - start_date
+        - estimated_end_date
+    MilestoneProgressStatus:
+      type: string
+      enum:
+        - LOCKED
+        - ACTIVE
+        - SUPPLIES_ORDERED
+        - SUPPLIES_PAID
+        - IN_FIELD_EXECUTION
+        - SUBMITTED_FOR_REVIEW
+        - CHANGES_REQUESTED
+        - TECHNICALLY_APPROVED
+        - LABOR_PAYOUT_PENDING
+        - COMPLETED_AND_PAID
+      description: Derived from the milestone, its lines and the project order (see
+        milestone-progress.ts)
+    MilestoneSummaryResponseDto:
+      type: object
+      properties:
+        status:
+          description: Derived from the milestone, its lines and the project order (see
+            milestone-progress.ts)
+          allOf:
+            - $ref: "#/components/schemas/MilestoneProgressStatus"
+        id:
+          type: string
+        project_id:
+          type: string
+          description: Empty for the legacy demo milestones, which belong to no project
+        sequence_order:
+          type: number
+          description: 0 for the legacy demo milestones
+        title:
+          type: string
+        supplies_budget:
+          type: number
+          description: Σ proveedor lines
+        labor_budget:
+          type: number
+          description: Σ productor + trabajadores lines
+        supplies_executed:
+          type: number
+        labor_executed:
+          type: number
+        currency:
+          type: string
+      required:
+        - status
+        - id
+        - project_id
+        - sequence_order
+        - title
+        - supplies_budget
+        - labor_budget
+        - supplies_executed
+        - labor_executed
+        - currency
+    EvidenceLogType:
+      type: string
+      enum:
+        - PHOTO_EVIDENCE
+        - SOIL_ANALYSIS
+        - IOT_READING
+        - WEATHER_ALERT
+        - AGRONOMIC_NOTE
+    EvidenceLogResponseDto:
+      type: object
+      properties:
+        log_type:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceLogType"
+        evidence_payload:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: number
+              - type: boolean
+              - type: array
+                items:
+                  type: string
+        id:
+          type: string
+        milestone_id:
+          type: string
+        notes:
+          type: string
+        created_at:
+          type: string
+      required:
+        - log_type
+        - evidence_payload
+        - id
+        - milestone_id
+        - notes
+        - created_at
+    MilestoneReviewVerdict:
+      type: string
+      enum:
+        - SUBMITTED
+        - CHANGES_REQUESTED
+        - APPROVED_FAVORABLE
+        - PAYOUT_EXECUTED
+    MilestoneReviewResponseDto:
+      type: object
+      properties:
+        verdict:
+          allOf:
+            - $ref: "#/components/schemas/MilestoneReviewVerdict"
+        comment:
+          type: string
+          nullable: true
+        id:
+          type: string
+        created_at:
+          type: string
+      required:
+        - verdict
+        - comment
+        - id
+        - created_at
+    MilestoneDetailResponseDto:
+      type: object
+      properties:
+        status:
+          description: Derived from the milestone, its lines and the project order (see
+            milestone-progress.ts)
+          allOf:
+            - $ref: "#/components/schemas/MilestoneProgressStatus"
+        required_evidences:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementDto"
+        evidence_logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceLogResponseDto"
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/MilestoneReviewResponseDto"
+        description:
+          type: string
+        estimated_completion_date:
+          type: string
+          description: yyyy-mm-dd; omitted when unknown (legacy demo milestones)
+        id:
+          type: string
+        project_id:
+          type: string
+          description: Empty for the legacy demo milestones, which belong to no project
+        sequence_order:
+          type: number
+          description: 0 for the legacy demo milestones
+        title:
+          type: string
+        supplies_budget:
+          type: number
+          description: Σ proveedor lines
+        labor_budget:
+          type: number
+          description: Σ productor + trabajadores lines
+        supplies_executed:
+          type: number
+        labor_executed:
+          type: number
+        currency:
+          type: string
+      required:
+        - status
+        - required_evidences
+        - evidence_logs
+        - reviews
+        - description
+        - id
+        - project_id
+        - sequence_order
+        - title
+        - supplies_budget
+        - labor_budget
+        - supplies_executed
+        - labor_executed
+        - currency
+    EvidenceLogRequestDto:
+      type: object
+      properties:
+        log_type:
+          allOf:
+            - $ref: "#/components/schemas/EvidenceLogType"
+        evidence_payload:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: number
+              - type: boolean
+              - type: array
+                items:
+                  type: string
+          description: "Exactly the milestone's required_evidences keys: numbers within
+            min/max, booleans, http(s) photo URLs"
+        notes:
+          type: string
+          description: At most 1000 characters
+      required:
+        - log_type
+        - evidence_payload
+        - notes

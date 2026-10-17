@@ -20,7 +20,7 @@ export const unfundedMilestone = (): Milestone =>
 
 export const sampleMilestone = (): Milestone => fund(unfundedMilestone(), new Date("2026-10-16T12:00:00Z"));
 
-class FakeRepository extends MilestoneRepository {
+export class FakeRepository extends MilestoneRepository {
   constructor(private readonly milestones: Map<string, Milestone>) {
     super();
   }
@@ -29,6 +29,9 @@ class FakeRepository extends MilestoneRepository {
   }
   async findById(id: string) {
     return this.milestones.get(id) ?? null;
+  }
+  async findByProject(projectId: string) {
+    return [...this.milestones.values()].filter((m) => m.projectId === projectId).sort((a, b) => (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0));
   }
   async save(m: Milestone) {
     this.milestones.set(m.id, m);

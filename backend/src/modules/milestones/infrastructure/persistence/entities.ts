@@ -1,5 +1,5 @@
 import { GrantEntity } from "./grant.entity";
-import { MilestoneEntity, MilestoneLineEntity } from "./milestone.entity";
+import { MilestoneEntity, MilestoneEvidenceLogEntity, MilestoneLineEntity, MilestoneReviewEntity } from "./milestone.entity";
 
 /** Registered with TypeOrmModule.forFeature, so autoLoadEntities picks them up. */
-export const MILESTONE_ENTITIES = [MilestoneEntity, MilestoneLineEntity, GrantEntity];
+export const MILESTONE_ENTITIES = [MilestoneEntity, MilestoneLineEntity, MilestoneEvidenceLogEntity, MilestoneReviewEntity, GrantEntity];

@@ -1,4 +1,5 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
+import type { EvidencePayload, Requirement } from "../../application/milestone";
 import { minorUnits } from "./minor-units.transformer";
 
 // Rows, not domain objects: TypeOrmMilestoneAdapter maps them. Schema lives in the migrations (no synchronize).
@@ -33,6 +34,52 @@ export class MilestoneEntity {
   fundedAt: Date | null;
   @Column({ type: "timestamptz", name: "closed_at", nullable: true })
   closedAt: Date | null;
+  @Column({ type: "text", name: "project_id", nullable: true })
+  projectId: string | null;
+  @Column({ type: "integer", name: "sequence_order", nullable: true })
+  sequenceOrder: number | null;
+  @Column("text")
+  description: string;
+  /** pg `date`, read back as "yyyy-mm-dd". */
+  @Column({ type: "date", name: "estimated_completion_date", nullable: true })
+  estimatedCompletionDate: string | null;
+  /** The domain Requirement[] as is (camelCase keys). */
+  @Column({ type: "jsonb", name: "required_evidences" })
+  requiredEvidences: Requirement[];
+}
+
+@Entity({ name: "milestone_evidence_logs" })
+export class MilestoneEvidenceLogEntity {
+  @PrimaryColumn({ type: "text", name: "milestone_id" })
+  milestoneId: string;
+  @PrimaryColumn("text")
+  id: string;
+  @Column("integer")
+  position: number;
+  @Column({ type: "text", name: "log_type" })
+  logType: string;
+  @Column("text")
+  notes: string;
+  @Column({ type: "jsonb", name: "evidence_payload" })
+  evidencePayload: EvidencePayload;
+  @Column({ type: "timestamptz", name: "created_at" })
+  createdAt: Date;
+}
+
+@Entity({ name: "milestone_reviews" })
+export class MilestoneReviewEntity {
+  @PrimaryColumn({ type: "text", name: "milestone_id" })
+  milestoneId: string;
+  @PrimaryColumn("text")
+  id: string;
+  @Column("integer")
+  position: number;
+  @Column("text")
+  verdict: string;
+  @Column({ type: "text", nullable: true })
+  comment: string | null;
+  @Column({ type: "timestamptz", name: "created_at" })
+  createdAt: Date;
 }
 
 @Entity({ name: "milestone_lines" })

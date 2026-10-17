@@ -157,6 +157,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/producer/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Projects owned by the signed-in producer, oldest first */
+        get: operations["ProjectsController_listProducerProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project; another producer's project is a 404 */
+        get: operations["ProjectsController_getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a DRAFT project with its ordered milestones; the caller is the owner. Budgets in whole pesos. */
+        post: operations["ProjectsController_createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's milestones in sequence order, with their derived status */
+        get: operations["ProjectsController_listMilestones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/milestones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Milestone detail: requirements, evidence logs and review history */
+        get: operations["ProducerMilestonesController_getMilestone"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/milestones/{id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Producer records a field log; 409 when the status takes no evidence, 400 when the payload misses the requirements */
+        post: operations["ProducerMilestonesController_addLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/milestones/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Producer submits for review once the latest value of every requirement is met; 409 otherwise */
+        post: operations["ProducerMilestonesController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -276,6 +395,141 @@ export interface components {
         FundingStartDto: {
             /** @description Wallet consent page; the browser leaves the app and comes back through the funding callback */
             redirectUrl: string;
+        };
+        /** @enum {string} */
+        ProjectStatus: "DRAFT" | "CONTRACT_SIGNED" | "FUNDING_IN_PROGRESS" | "FUNDED_IN_CUSTODY" | "IN_EXECUTION" | "HARVEST_DECLARED" | "HARVEST_CERTIFIED" | "LISTED_IN_MARKET" | "MARKET_PAYMENT_HELD" | "DELIVERED_TO_BUYER" | "SETTLEMENT_PROCESSING" | "SETTLED_AND_CLOSED" | "CANCELLED_OR_DISPUTED";
+        ProjectResponseDto: {
+            current_status: components["schemas"]["ProjectStatus"];
+            id: string;
+            /** @description AGR-YYYY-NNN, sequential per year */
+            project_code: string;
+            title: string;
+            production_type: string;
+            description: string;
+            /** @description Σ(supplies + labor) of the milestones, whole pesos; the platform fee is on top */
+            target_amount: number;
+            custody_balance: number;
+            total_disbursed: number;
+            investor_roi_pct: number;
+            platform_fee_pct: number;
+            /** @description yyyy-mm-dd */
+            start_date: string;
+            estimated_end_date: string;
+            currency: string;
+        };
+        ApiErrorDto: {
+            errors: {
+                [key: string]: string[];
+            };
+            error: string;
+        };
+        RequirementDto: {
+            /** @enum {string} */
+            type: "number" | "boolean_system_check" | "photo_array";
+            field_key: string;
+            label: string;
+            min?: number;
+            max?: number;
+            min_items?: number;
+        };
+        RequirementsSchemaDto: {
+            required_evidences: components["schemas"]["RequirementDto"][];
+        };
+        CreateProjectMilestoneRequestDto: {
+            title: string;
+            description: string;
+            /** @description yyyy-mm-dd, within the project period */
+            estimated_completion_date: string;
+            /** @description Whole pesos */
+            supplies_budget: number;
+            /** @description Whole pesos; must be above zero (it pays the producer line) */
+            labor_budget: number;
+            /** @description 1-based; milestones open in this order */
+            sequence_order: number;
+            requirements_schema: components["schemas"]["RequirementsSchemaDto"];
+        };
+        CreateProjectRequestDto: {
+            /** @enum {string} */
+            production_type: "CAFE_ESPECIAL" | "CACAO" | "AGUACATE_HASS" | "OTRO";
+            milestones: components["schemas"]["CreateProjectMilestoneRequestDto"][];
+            title: string;
+            description: string;
+            start_date: string;
+            estimated_end_date: string;
+        };
+        /**
+         * @description Derived from the milestone, its lines and the project order (see milestone-progress.ts)
+         * @enum {string}
+         */
+        MilestoneProgressStatus: "LOCKED" | "ACTIVE" | "SUPPLIES_ORDERED" | "SUPPLIES_PAID" | "IN_FIELD_EXECUTION" | "SUBMITTED_FOR_REVIEW" | "CHANGES_REQUESTED" | "TECHNICALLY_APPROVED" | "LABOR_PAYOUT_PENDING" | "COMPLETED_AND_PAID";
+        MilestoneSummaryResponseDto: {
+            /** @description Derived from the milestone, its lines and the project order (see milestone-progress.ts) */
+            status: components["schemas"]["MilestoneProgressStatus"];
+            id: string;
+            /** @description Empty for the legacy demo milestones, which belong to no project */
+            project_id: string;
+            /** @description 0 for the legacy demo milestones */
+            sequence_order: number;
+            title: string;
+            /** @description Σ proveedor lines */
+            supplies_budget: number;
+            /** @description Σ productor + trabajadores lines */
+            labor_budget: number;
+            supplies_executed: number;
+            labor_executed: number;
+            currency: string;
+        };
+        /** @enum {string} */
+        EvidenceLogType: "PHOTO_EVIDENCE" | "SOIL_ANALYSIS" | "IOT_READING" | "WEATHER_ALERT" | "AGRONOMIC_NOTE";
+        EvidenceLogResponseDto: {
+            log_type: components["schemas"]["EvidenceLogType"];
+            evidence_payload: {
+                [key: string]: number | boolean | string[];
+            };
+            id: string;
+            milestone_id: string;
+            notes: string;
+            created_at: string;
+        };
+        /** @enum {string} */
+        MilestoneReviewVerdict: "SUBMITTED" | "CHANGES_REQUESTED" | "APPROVED_FAVORABLE" | "PAYOUT_EXECUTED";
+        MilestoneReviewResponseDto: {
+            verdict: components["schemas"]["MilestoneReviewVerdict"];
+            comment: string | null;
+            id: string;
+            created_at: string;
+        };
+        MilestoneDetailResponseDto: {
+            /** @description Derived from the milestone, its lines and the project order (see milestone-progress.ts) */
+            status: components["schemas"]["MilestoneProgressStatus"];
+            required_evidences: components["schemas"]["RequirementDto"][];
+            evidence_logs: components["schemas"]["EvidenceLogResponseDto"][];
+            reviews: components["schemas"]["MilestoneReviewResponseDto"][];
+            description: string;
+            /** @description yyyy-mm-dd; omitted when unknown (legacy demo milestones) */
+            estimated_completion_date?: string;
+            id: string;
+            /** @description Empty for the legacy demo milestones, which belong to no project */
+            project_id: string;
+            /** @description 0 for the legacy demo milestones */
+            sequence_order: number;
+            title: string;
+            /** @description Σ proveedor lines */
+            supplies_budget: number;
+            /** @description Σ productor + trabajadores lines */
+            labor_budget: number;
+            supplies_executed: number;
+            labor_executed: number;
+            currency: string;
+        };
+        EvidenceLogRequestDto: {
+            log_type: components["schemas"]["EvidenceLogType"];
+            /** @description Exactly the milestone's required_evidences keys: numbers within min/max, booleans, http(s) photo URLs */
+            evidence_payload: {
+                [key: string]: number | boolean | string[];
+            };
+            /** @description At most 1000 characters */
+            notes: string;
         };
     };
     responses: never;
@@ -480,6 +734,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneDto"];
+                };
+            };
+        };
+    };
+    ProjectsController_listProducerProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponseDto"][];
+                };
+            };
+        };
+    };
+    ProjectsController_getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponseDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProjectsController_createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponseDto"];
+                };
+            };
+            /** @description errors keyed by field path, e.g. milestones.2.laborBudget */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProjectsController_listMilestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneSummaryResponseDto"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProducerMilestonesController_getMilestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneDetailResponseDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProducerMilestonesController_addLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceLogRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceLogResponseDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProducerMilestonesController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneDetailResponseDto"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
         };

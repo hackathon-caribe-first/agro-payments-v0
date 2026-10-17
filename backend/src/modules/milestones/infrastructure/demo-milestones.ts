@@ -5,7 +5,8 @@ import type { OpenPaymentsEnv } from "../../../shared/config/env";
 /** Real testnet wallet and asset; without it the seed uses COP on placeholder wallets for the simulated gateway. */
 export type TestnetSeed = Pick<OpenPaymentsEnv, "receiverWalletAddress" | "assetCode" | "assetScale">;
 
-const placeholder = (name: string) => `https://ilp.interledger-test.dev/${name}`;
+/** Wallet for the simulated gateway; it never reaches a real wallet. */
+export const placeholderWallet = (name: string) => `https://ilp.interledger-test.dev/${name}`;
 
 const seed = (wallet: (name: string) => string, currency: string, assetScale: number) =>
   (id: string, title: string, producer: number, supplier: number, workers: number, fee: number): Milestone =>
@@ -27,7 +28,7 @@ const seed = (wallet: (name: string) => string, currency: string, assetScale: nu
 export function demoMilestones(testnet: TestnetSeed | null = null): Milestone[] {
   if (!testnet) {
     // Amounts are COP minor units (scale 2): 450_000_000 is COP 4.500.000.
-    const cop = seed(placeholder, "COP", 2);
+    const cop = seed(placeholderWallet, "COP", 2);
     return [
       cop("preparacion-suelo", "Preparación del suelo", 225_000_000, 135_000_000, 80_000_000, 10_000_000),
       cop("siembra", "Siembra", 300_000_000, 180_000_000, 100_000_000, 20_000_000),

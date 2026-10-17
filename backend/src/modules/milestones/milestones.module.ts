@@ -22,7 +22,8 @@ import { demoMilestones } from "./infrastructure/demo-milestones";
 import { MILESTONE_ENTITIES } from "./infrastructure/persistence/entities";
 import { TypeOrmGrantStore } from "./infrastructure/persistence/typeorm-grant-store.adapter";
 import { TypeOrmMilestoneAdapter } from "./infrastructure/persistence/typeorm-milestone.adapter";
-import { GrantStore } from "./ports/grant-store";import { MilestoneFunding } from "./ports/milestone-funding";
+import { GrantStore } from "./ports/grant-store";
+import { MilestoneFunding } from "./ports/milestone-funding";
 import { MilestoneRepository } from "./ports/milestone.repository";
 import { PaymentGateway } from "./ports/payment-gateway";
 
@@ -83,5 +84,6 @@ const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
       },
     },
   ],
+  exports: [MilestoneRepository],
 })
 export class MilestonesModule {}

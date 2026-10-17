@@ -29,6 +29,8 @@ export type Env = {
   paymentGateway: PaymentGatewayMode;
   /** Set only when paymentGateway is open-payments. */
   openPayments: OpenPaymentsEnv | null;
+  /** Demo only: /api routes act as the seeded demo producer when there is no session (see ResolveApiUserUseCase). */
+  demoIdentity: boolean;
 };
 
 function required(name: string): string {
@@ -61,6 +63,12 @@ function openPaymentsEnv(): OpenPaymentsEnv {
   };
 }
 
+export function parseDemoIdentity(value: string | undefined): boolean {
+  if (value === undefined || value === "" || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("DEMO_IDENTITY must be true or false");
+}
+
 // Reads .env once (if present) and validates the variables the app needs.
 export function loadEnv(): Env {
   if (existsSync(".env")) process.loadEnvFile(".env");
@@ -74,5 +82,6 @@ export function loadEnv(): Env {
     webOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(",").map((origin) => origin.trim()),
     paymentGateway: gateway,
     openPayments: gateway === PAYMENT_GATEWAYS.OPEN_PAYMENTS ? openPaymentsEnv() : null,
+    demoIdentity: parseDemoIdentity(process.env.DEMO_IDENTITY),
   };
 }

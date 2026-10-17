@@ -29,6 +29,39 @@ export type LineKind = (typeof LINE_KIND)[keyof typeof LINE_KIND];
 
 export type Decision = "approved" | "observado";
 
+/** History entry kinds; the /api maps them to the PRD verdicts (SUBMITTED, CHANGES_REQUESTED, APPROVED_FAVORABLE, PAYOUT_EXECUTED). */
+export const REVIEW_VERDICT = {
+  SUBMITTED: "submitted",
+  OBSERVADO: "observado",
+  APPROVED: "approved",
+  PAYOUT_EXECUTED: "payout_executed",
+} as const;
+export type ReviewVerdict = (typeof REVIEW_VERDICT)[keyof typeof REVIEW_VERDICT];
+
+export type ReviewEntry = { id: string; verdict: ReviewVerdict; comment: string | null; createdAt: Date };
+
+export const LOG_TYPE = {
+  PHOTO_EVIDENCE: "PHOTO_EVIDENCE",
+  SOIL_ANALYSIS: "SOIL_ANALYSIS",
+  IOT_READING: "IOT_READING",
+  WEATHER_ALERT: "WEATHER_ALERT",
+  AGRONOMIC_NOTE: "AGRONOMIC_NOTE",
+} as const;
+export type LogType = (typeof LOG_TYPE)[keyof typeof LOG_TYPE];
+
+export type EvidenceValue = number | boolean | string[];
+export type EvidencePayload = Record<string, EvidenceValue>;
+
+export type EvidenceLog = { id: string; logType: LogType; notes: string; evidencePayload: EvidencePayload; createdAt: Date };
+
+export const REQUIREMENT_TYPE = { NUMBER: "number", BOOLEAN_SYSTEM_CHECK: "boolean_system_check", PHOTO_ARRAY: "photo_array" } as const;
+
+/** PRD required_evidences: what the logs must show before the milestone can be submitted. */
+export type Requirement =
+  | { fieldKey: string; label: string; type: typeof REQUIREMENT_TYPE.NUMBER; min?: number; max?: number }
+  | { fieldKey: string; label: string; type: typeof REQUIREMENT_TYPE.BOOLEAN_SYSTEM_CHECK }
+  | { fieldKey: string; label: string; type: typeof REQUIREMENT_TYPE.PHOTO_ARRAY; minItems: number };
+
 /** An amount in integer minor units of its own asset. */
 export interface ReceiptAmount {
   value: number;
@@ -87,6 +120,18 @@ export type Milestone = {
   fundedAt: Date | null;
   /** Set once every line is final (completado or fallido). */
   closedAt: Date | null;
+  /** Null for the legacy demo milestones, which belong to no project. */
+  projectId: string | null;
+  /** 1-based position in its project; milestones open in this order. */
+  sequenceOrder: number | null;
+  description: string;
+  /** ISO yyyy-mm-dd. */
+  estimatedCompletionDate: string | null;
+  requirements: Requirement[];
+  /** Append-only field log (PRD evidence_logs). */
+  evidenceLogs: EvidenceLog[];
+  /** Append-only verdict history (PRD milestone reviews); `review` above stays the latest decision. */
+  reviews: ReviewEntry[];
 };
 
 export type LineInput = Pick<Line, "id" | "kind" | "beneficiary" | "walletAddress" | "amount">;
@@ -98,6 +143,11 @@ export type MilestoneInput = {
   currency?: string;
   assetScale?: number;
   lines: LineInput[];
+  projectId?: string | null;
+  sequenceOrder?: number | null;
+  description?: string;
+  estimatedCompletionDate?: string | null;
+  requirements?: Requirement[];
 };
 
 const isFinal = (l: Line) => l.status === LINE_STATUS.COMPLETADO || l.status === LINE_STATUS.FALLIDO;
@@ -122,8 +172,21 @@ export function createMilestone(input: MilestoneInput): Milestone {
     lines: lines.map((l) => ({ ...l, status: LINE_STATUS.PENDIENTE, reference: null, settledAt: null, receipt: null })),
     fundedAt: null,
     closedAt: null,
+    projectId: input.projectId ?? null,
+    sequenceOrder: input.sequenceOrder ?? null,
+    description: input.description ?? "",
+    estimatedCompletionDate: input.estimatedCompletionDate ?? null,
+    requirements: input.requirements ?? [],
+    evidenceLogs: [],
+    reviews: [],
   };
 }
+
+// Ids are scoped to the milestone and never reused: the history is append-only.
+const withReview = (m: Milestone, verdict: ReviewVerdict, comment: string | null, now: Date): ReviewEntry[] => [
+  ...m.reviews,
+  { id: `${m.id}-rev-${m.reviews.length + 1}`, verdict, comment, createdAt: now },
+];
 
 export function fund(m: Milestone, now: Date): Milestone {
   if (m.fundedAt) throw new DomainError(`Milestone ${m.id} is already funded`);
@@ -135,13 +198,20 @@ export function submitEvidence(m: Milestone, description: string, now: Date): Mi
     throw new DomainError(`Milestone ${m.id} cannot receive evidence while ${m.status}`);
   }
   if (!description.trim()) throw new DomainError("Evidence needs a description");
-  return { ...m, status: MILESTONE_STATUS.EVIDENCE_SUBMITTED, evidence: { description: description.trim(), submittedAt: now }, review: null };
+  return {
+    ...m,
+    status: MILESTONE_STATUS.EVIDENCE_SUBMITTED,
+    evidence: { description: description.trim(), submittedAt: now },
+    review: null,
+    reviews: withReview(m, REVIEW_VERDICT.SUBMITTED, null, now),
+  };
 }
 
 export function review(m: Milestone, decision: Decision, reason: string | null, now: Date): Milestone {
   if (m.status !== MILESTONE_STATUS.EVIDENCE_SUBMITTED) throw new DomainError(`Milestone ${m.id} has no evidence to review`);
   if (decision === "observado" && !reason?.trim()) throw new DomainError("An observation needs a reason");
-  return { ...m, status: decision, review: { decision, reason: reason?.trim() || null, reviewedAt: now } };
+  const comment = reason?.trim() || null;
+  return { ...m, status: decision, review: { decision, reason: comment, reviewedAt: now }, reviews: withReview(m, decision, comment, now) };
 }
 
 // Lines are paid only from a funded milestone. Supplier lines any time before it closes; the producer line only after approval.
@@ -208,7 +278,9 @@ export function applyLineResult(
     receipt: mergeReceipt(line.receipt, result.receipt),
   };
   const lines = m.lines.map((l) => (l.id === lineId ? updated : l));
-  return { ...m, lines, closedAt: lines.every(isFinal) ? now : null };
+  const producerPaid = line.kind === LINE_KIND.PRODUCTOR && updated.status === LINE_STATUS.COMPLETADO;
+  const reviews = producerPaid ? withReview(m, REVIEW_VERDICT.PAYOUT_EXECUTED, null, now) : m.reviews;
+  return { ...m, lines, reviews, closedAt: lines.every(isFinal) ? now : null };
 }
 
 // RF-22: a milestone's grant is revoked once it closed after approval (every line final).
