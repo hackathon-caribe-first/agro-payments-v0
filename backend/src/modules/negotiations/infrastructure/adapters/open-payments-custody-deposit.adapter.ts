@@ -10,7 +10,7 @@ import type { FundingCallback } from "../../../milestones/ports/milestone-fundin
 import { GRANT_PURPOSE, GRANT_STATUS } from "../../../milestones/ports/grant-store";
 import { CustodyDeposit, type DepositOrder } from "../../ports/custody-deposit";
 
-/** The grant's debitAmount cap: the agreed total plus 1% (rounded up) for ILP fees. The quote, not the cap, decides what is debited. */
+/** The grant's debitAmount cap: the amount plus 1% (rounded up) for ILP fees and rate drift. The quote, not the cap, decides what is debited. */
 export const depositDebitLimit = (amount: number) => amount + Math.ceil(amount / 100);
 
 type Wallet = { id: string; assetCode: string; assetScale: number };
@@ -32,6 +32,7 @@ export async function payIntoCustody(
   grant: { access: { accessToken: string }; payerWalletAddress: string; debitLimit: number },
   order: CustodyAmount,
   what: string,
+  { confirm = false }: { confirm?: boolean } = {},
 ): Promise<{ reference: string }> {
   const { client, custodyWalletAddress } = op;
   const payer = await client.walletAddress.get({ url: grant.payerWalletAddress });
@@ -47,8 +48,24 @@ export async function payIntoCustody(
   if (debit > grant.debitLimit) throw new DomainError(`${what} would debit ${debit}, above the approved ${grant.debitLimit}`);
   // The token is fresh from the continue call, so no rotation is needed here.
   const outgoing = await client.outgoingPayment.create({ url: payer.resourceServer, accessToken: grant.access.accessToken }, { walletAddress: payer.id, quoteId: quote.id });
-  // ponytail: a created outgoing payment counts as paid; confirm by polling the incoming payment's completion later.
+  if (outgoing.failed) throw new DomainError(`${what}: the wallet rejected the outgoing payment`);
+  // ponytail: other callers (harvest) still count a created outgoing payment as paid; the buyer deposit confirms receipt on custody.
+  if (confirm) await confirmReceived(op, incoming.id, incomingToken, what);
   return { reference: outgoing.id };
+}
+
+const CONFIRM_ATTEMPTS = 10;
+const CONFIRM_DELAY_MS = 1_000;
+
+/** Polls the custody incoming payment until it is completed or fully received. Throws if the funds do not show up in time. */
+async function confirmReceived({ client }: OpenPayments, incomingUrl: string, accessToken: string, what: string) {
+  for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
+    const incoming = await client.incomingPayment.get({ url: incomingUrl, accessToken });
+    const target = incoming.incomingAmount?.value;
+    if (incoming.completed || (target !== undefined && BigInt(incoming.receivedAmount.value) >= BigInt(target))) return;
+    await new Promise((resolve) => setTimeout(resolve, CONFIRM_DELAY_MS));
+  }
+  throw new DomainError(`${what}: the payment was sent but custody has not received it yet. Check the wallet before retrying, to avoid paying twice`);
 }
 
 // PRD v3: the buyer moves the agreed project total from their wallet into the custody wallet. start() asks the buyer's wallet for
@@ -65,14 +82,29 @@ export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
   }
 
   async start(order: DepositOrder) {
-    if (!this.buyerWalletAddress) throw new DomainError("OP_BUYER_WALLET_ADDRESS is not set: the buyer has no wallet to deposit from");
+    const buyerWalletAddress = order.buyerWalletAddress ?? this.buyerWalletAddress;
+    if (!buyerWalletAddress) throw new DomainError("The project has no purchase contract with a buyer wallet and OP_BUYER_WALLET_ADDRESS is not set: the buyer has no wallet to deposit from");
     const { client, grants, custodyWalletAddress } = this.op;
-    const buyer = await client.walletAddress.get({ url: this.buyerWalletAddress });
+    const buyer = await client.walletAddress.get({ url: buyerWalletAddress });
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
-    assertWalletAsset(buyer, order);
     assertWalletAsset(custody, order);
 
-    const limit = depositDebitLimit(order.amount);
+    // The buyer wallet may hold another currency: quote with the project's receive side fixed (the incoming payment's amount) and cap
+    // the grant at that debit, in the buyer's own asset. The 1% margin covers the re-quote payIntoCustody takes on complete().
+    const incomingToken = await requestToken(this.op, custody.authServer, { type: "incoming-payment", actions: ["create", "read", "complete"] });
+    const incoming = await client.incomingPayment.create(
+      { url: custody.resourceServer, accessToken: incomingToken },
+      { walletAddress: custody.id, incomingAmount: { value: String(order.amount), assetCode: order.currency, assetScale: order.assetScale } },
+    );
+    const quoteToken = await requestToken(this.op, buyer.authServer, { type: "quote", actions: ["create", "read"] });
+    const quote = await client.quote.create({ url: buyer.resourceServer, accessToken: quoteToken }, { walletAddress: buyer.id, receiver: incoming.id, method: "ilp" });
+    // This incoming payment only priced the deposit: complete() pays into a fresh one. Close it so it does not stay pending on custody.
+    try {
+      await client.incomingPayment.complete({ url: incoming.id, accessToken: incomingToken });
+    } catch {
+      // Best effort: an unclosed pricing payment only stays pending until it expires.
+    }
+    const limit = depositDebitLimit(Number(quote.debitAmount.value));
     const finishUri = `${this.apiUrl}/api/negotiations/${encodeURIComponent(order.negotiationId)}/deposit/callback`;
     const { redirectUrl, pending } = await requestInteractiveOutgoingGrant(this.op, buyer, limit, finishUri);
     // Starting again leaves the older pending grant behind: the callback only ever continues the newest one.
@@ -98,6 +130,6 @@ export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
   async complete(order: DepositOrder, callback: FundingCallback) {
     const grant = await this.op.grants.findLatestForNegotiation(order.negotiationId);
     const active = await finalizeInteractiveGrant(this.op, grant, callback, `Deposit ${order.negotiationId}`);
-    return payIntoCustody(this.op, active, order, `Deposit ${order.negotiationId}`);
+    return payIntoCustody(this.op, active, order, `Deposit ${order.negotiationId}`, { confirm: true });
   }
 }

@@ -181,7 +181,7 @@ describe("NegotiationsService accept", () => {
     const done = await service.decide(r.id, 2, "accept", BUYER, { actor: "BUYER", expected_total: 4_500_000 });
     expect(done).toMatchObject({ status: "ACCEPTED", agreed_total: 4_500_000, deposit_status: "DEPOSITED", deposited_at: expect.any(String) });
     expect(done.history.at(-1)).toMatchObject({ actor: "BUYER", type: "DEPOSIT", from: "ACCEPTED", to: "ACCEPTED", payload: { amount: 4_500_000, currency: "COP", ledger_entry_id: done.ledger_entry_id } });
-    expect((custody as InstantCustody).orders).toEqual([{ negotiationId: r.id, projectId: "p1", amount: 450_000_000, currency: "COP", assetScale: 2 }]);
+    expect((custody as InstantCustody).orders).toEqual([{ negotiationId: r.id, projectId: "p1", amount: 450_000_000, currency: "COP", assetScale: 2, buyerWalletAddress: null }]);
 
     expect(await service.ledger("p1", [BUYER])).toEqual([
       { id: done.ledger_entry_id, project_id: "p1", type: "CREDIT", category: "BUYER_DEPOSIT", amount: 4_500_000, currency: "COP", negotiation_id: r.id, buyer_id: BUYER.id, created_at: done.deposited_at, payment_reference: null },

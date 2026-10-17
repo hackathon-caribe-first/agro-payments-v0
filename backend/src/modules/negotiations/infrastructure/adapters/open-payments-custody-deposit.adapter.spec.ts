@@ -14,13 +14,19 @@ const gnapHash = (clientNonce: string, interactRef: string, grantEndpoint: strin
 function setup(buyerWallet: string | null = BUYER_WALLET.id, wallets = [BUYER_WALLET, CUSTODY_WALLET]) {
   const mock = mockOpenPayments(wallets);
   mock.op.custodyWalletAddress = CUSTODY_WALLET.id;
+  // Custody has received the payment by default; specs override it to model a payment that never lands.
+  mock.client.incomingPayment.get.mockImplementation((async ({ url }: { url: string }) => ({ id: url, completed: true, receivedAmount: { value: String(order.amount), assetCode: "COP", assetScale: 2 } })) as never);
+  // The buyer's wallet quotes the exact total by default (same currency); specs override it to model FX.
+  mock.client.quote.create.mockImplementation((async () => ({ id: "https://rs.custody.test/quotes/q-1", debitAmount: { value: String(order.amount), assetCode: "COP", assetScale: 2 } })) as never);
   return { ...mock, deposit: new OpenPaymentsCustodyDeposit(mock.op, buyerWallet, API) };
 }
 
 async function started() {
   const ctx = setup();
   const result = await ctx.deposit.start(order);
-  const nonce = (ctx.client.grant.request.mock.calls[0][1].interact as { finish: { nonce: string } }).finish.nonce;
+  // start() takes non-interactive tokens (incoming payment, quote) before the interactive grant, so find that one.
+  const interactive = ctx.client.grant.request.mock.calls.find((call) => (call[1] as { interact?: unknown }).interact)!;
+  const nonce = (interactive[1].interact as { finish: { nonce: string } }).finish.nonce;
   return { ...ctx, result, callback: { interactRef: "ref-1", hash: gnapHash(nonce, "ref-1", BUYER_WALLET.authServer) } };
 }
 
@@ -57,12 +63,26 @@ describe("OpenPaymentsCustodyDeposit.start", () => {
     expect(await grants.findLatestForMilestone("qr-1")).toBeNull();
   });
 
-  it("refuses without OP_BUYER_WALLET_ADDRESS, or when a wallet does not hold the project's asset (no FX), before any grant", async () => {
+  it("refuses without any buyer wallet, or when the custody wallet does not hold the project's asset, before any grant", async () => {
     const unset = setup(null);
     await expect(unset.deposit.start(order)).rejects.toThrow(/OP_BUYER_WALLET_ADDRESS/);
-    const usd = setup(BUYER_WALLET.id, [{ ...BUYER_WALLET, assetCode: "USD" }, CUSTODY_WALLET]);
+    const usd = setup(BUYER_WALLET.id, [BUYER_WALLET, { ...CUSTODY_WALLET, assetCode: "USD" }]);
     await expect(usd.deposit.start(order)).rejects.toThrow(DomainError);
     expect(usd.client.grant.request).not.toHaveBeenCalled();
+  });
+
+  it("prefers the wallet on the order (the purchase contract's) over the deployment one", async () => {
+    const { deposit, client } = setup(null);
+    await deposit.start({ ...order, buyerWalletAddress: BUYER_WALLET.id });
+    expect(client.grant.request).toHaveBeenCalledWith({ url: BUYER_WALLET.authServer }, expect.anything());
+  });
+
+  it("caps the grant at the quoted debit in the buyer's own currency when it differs from the project's", async () => {
+    const eur = { ...BUYER_WALLET, assetCode: "EUR" };
+    const { deposit, client, grants } = setup(BUYER_WALLET.id, [eur, CUSTODY_WALLET]);
+    client.quote.create.mockImplementation((async () => ({ id: "https://rs.custody.test/quotes/q-1", debitAmount: { value: "100000", assetCode: "EUR", assetScale: 2 } })) as never);
+    await deposit.start(order);
+    expect(await grants.findLatestForNegotiation("qr-1")).toMatchObject({ assetCode: "EUR", debitLimit: depositDebitLimit(100_000) });
   });
 });
 

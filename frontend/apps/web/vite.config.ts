@@ -8,6 +8,6 @@ export default defineConfig({
   server: {
     port: 5175,
     // Same-origin /api in dev (VITE_MILESTONES_BASE_URL defaults to "/api"), Better Auth's /api/auth included, so cookies just work.
-    proxy: { "/api": { target: "http://localhost:3010" } },
+    proxy: { "/api": { target: process.env.API_PROXY_TARGET ?? "http://localhost:3000" } },
   },
 });

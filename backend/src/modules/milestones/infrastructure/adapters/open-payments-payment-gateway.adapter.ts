@@ -1,4 +1,5 @@
 import { Logger } from "@nestjs/common";
+import { OpenPaymentsClientError } from "@interledger/open-payments";
 import { DomainError } from "../../../../shared/domain-errors";
 import type { ReceiptAmount } from "../../application/milestone";
 import { type GrantScope, type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../../ports/payment-gateway";
@@ -47,6 +48,15 @@ function receiptAmount(amount: OpAmount | null | undefined): ReceiptAmount | nul
   return amount && value !== null ? { value, assetCode: amount.assetCode, assetScale: amount.assetScale } : null;
 }
 
+// A 5xx from the wallet or auth server is transient: refuse the attempt (the line stays pendiente and can be paid again, RF-18 finds
+// any payment that did get created) instead of failing the line for good.
+function unavailableAsRefusal(error: unknown): never {
+  if (error instanceof OpenPaymentsClientError && error.status !== undefined && error.status >= 500) {
+    throw new DomainError(`Open Payments is unavailable (HTTP ${error.status}); the line stays pendiente, try again`);
+  }
+  throw error;
+}
+
 // Pays each line from the milestone's grant (v3: custody → beneficiary): incoming payment on the beneficiary,
 // quote and outgoing payment on the grant's payer wallet.
 export class OpenPaymentsGateway extends PaymentGateway {
@@ -63,7 +73,7 @@ export class OpenPaymentsGateway extends PaymentGateway {
     const key = `${request.milestoneId}:${request.lineId}`;
     const existing = this.paid.get(key);
     if (existing) return existing;
-    const result = await withOpTraceContext(traceContext(request), () => this.send(request));
+    const result = await withOpTraceContext(traceContext(request), () => this.send(request)).catch(unavailableAsRefusal);
     if (result.reference) this.paid.set(key, result);
     return result;
   }

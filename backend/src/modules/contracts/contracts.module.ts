@@ -54,7 +54,14 @@ import { PurchaseContracts } from "./ports/purchase-contracts";
       inject: [ProjectRepository, MilestoneRepository, ContractsStore, SimulationRunRepository, UserDirectory, WalletDirectory, PaymentGateway, PremiumFunding, IndemnityInflow],
       useFactory: (...deps: ConstructorParameters<typeof ContractsUseCases>) => new ContractsUseCases(...deps),
     },
-    { provide: PurchaseContracts, inject: [ContractsStore], useFactory: (store: ContractsStore) => ({ exists: async (id: string) => (await store.findPurchaseContract(id)) !== null }) },
+    {
+      provide: PurchaseContracts,
+      inject: [ContractsStore],
+      useFactory: (store: ContractsStore): PurchaseContracts => ({
+        exists: async (id: string) => (await store.findPurchaseContract(id)) !== null,
+        buyerWalletAddress: async (id: string) => (await store.findPurchaseContract(id))?.buyerWalletAddress ?? null,
+      }),
+    },
   ],
   exports: [PurchaseContracts],
 })

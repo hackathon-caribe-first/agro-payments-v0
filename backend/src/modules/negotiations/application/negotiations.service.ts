@@ -54,6 +54,7 @@ import {
   startNegotiationDtoSchema,
   startOpenRequestNegotiationDtoSchema,
 } from "../domain/wire";
+import { PurchaseContracts } from "../../contracts/ports/purchase-contracts";
 import { CustodyDeposit, type DepositOrder } from "../ports/custody-deposit";
 import { type LedgerRecord, type NegotiationRecord, NegotiationStore, type OpenRequestRecord } from "../ports/negotiation-store";
 
@@ -123,6 +124,8 @@ export class NegotiationsService {
     @Inject(CLOCK) private readonly clock: Clock,
     // RF-37: the deposit that activates the project is announced to its producer.
     @Optional() private readonly events?: DomainEvents,
+    // The buyer wallet of the deposit comes from the project's purchase contract (RF-04).
+    @Optional() private readonly contracts?: PurchaseContracts,
   ) {}
 
   private today = () => isoToday(this.clock.now());
@@ -581,6 +584,7 @@ export class NegotiationsService {
       amount: pesosToMinor(request.agreed_total ?? 0, project.assetScale),
       currency: project.currency,
       assetScale: project.assetScale,
+      buyerWalletAddress: (await this.contracts?.buyerWalletAddress(project.id)) ?? null,
     };
   }
 

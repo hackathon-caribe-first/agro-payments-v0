@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { loadEnv } from "../../shared/config/env";
 import { AuthModule } from "../auth/auth.module";
+import { ContractsModule } from "../contracts/contracts.module";
 import type { OpenPayments } from "../milestones/infrastructure/adapters/open-payments.client";
 import { MilestonesModule, OPEN_PAYMENTS } from "../milestones/milestones.module";
 import { CLOCK, type Clock, NegotiationsService } from "./application/negotiations.service";
@@ -16,7 +17,7 @@ import { NegotiationStore } from "./ports/negotiation-store";
 // Block 3: the buyer side of the web app — catalog, project and open-request negotiations, and the custody deposit.
 // The deposit adapter follows PAYMENT_GATEWAY: simulated (synchronous, like the mock) or open-payments (buyer wallet → custody wallet).
 @Module({
-  imports: [AuthModule, MilestonesModule],
+  imports: [AuthModule, MilestonesModule, ContractsModule],
   controllers: [NegotiationsController, DepositCallbackController],
   providers: [
     NegotiationsService,
