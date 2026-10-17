@@ -74,6 +74,7 @@ describe("custodyStatement (RF-21: what is still in custody)", () => {
       milestoneDebits: first.amount,
       settlementDebits: 0,
       balance: 500_000_000 - first.amount,
+      overdrawn: false,
     });
     const afterLiquidation = custodyStatement(project, { credits: {}, debits: {} }, [], [executed(null)]);
     expect(afterLiquidation.settlementDebits).toBe(200_000_000);
@@ -95,6 +96,13 @@ describe("custodyStatement (RF-21: what is still in custody)", () => {
     expect(statement.debits).toEqual([{ category: "PREMIUM", amount: 20_000_000 }]);
     expect(statement.balance).toBe(550_000_000 - 20_000_000 - first.amount);
     expect(statement.balance).toBe(statement.credited - statement.ledgerDebits - statement.milestoneDebits - statement.settlementDebits);
+  });
+
+  it("shows an overdraft as it is: a negative balance flagged overdrawn, never clamped to zero", () => {
+    let m = fund({ ...unfundedMilestone(), projectId: "p1" }, at);
+    m = applyLineResult(m, "l-prov", { status: "completado", reference: "R" }, at);
+    const statement = custodyStatement(sampleProject({ custodyBalance: 0 }), { credits: {}, debits: {} }, [m], []);
+    expect(statement).toMatchObject({ milestoneDebits: 300_000, balance: -300_000, overdrawn: true });
   });
 });
 

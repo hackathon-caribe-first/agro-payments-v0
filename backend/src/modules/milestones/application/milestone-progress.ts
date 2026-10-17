@@ -73,6 +73,17 @@ function isLocked(m: Milestone, siblings: readonly Milestone[]) {
   );
 }
 
+/**
+ * The LOCKED rule for any milestone status: its project's custody is not funded, or an earlier milestone is not approved yet.
+ * The legacy /milestones routes use it so a project milestone cannot take evidence or a verdict while /api/milestones shows it LOCKED.
+ */
+export function assertUnlocked(m: Milestone, siblings: readonly Milestone[], gate?: CustodyGate): void {
+  if (m.projectId === null) return;
+  if (gate?.custodyFunded === false || isLocked(m, siblings)) {
+    throw new DomainError("El hito está bloqueado: el proyecto aún no tiene la custodia fondeada o falta aprobar el hito anterior.");
+  }
+}
+
 export function progressStatus(m: Milestone, siblings: readonly Milestone[], gate?: CustodyGate): ProgressStatus {
   if (m.closedAt) return PROGRESS_STATUS.COMPLETED_AND_PAID;
   switch (m.status) {

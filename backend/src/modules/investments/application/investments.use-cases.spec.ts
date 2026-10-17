@@ -196,6 +196,21 @@ describe("InvestmentUseCases reads", () => {
     expect((await useCases.fundable(INVESTOR)).map((e) => [e.project.id, e.summary.raised])).toEqual([["p1", 15_000_000]]);
   });
 
+  it("the catalog never lists an unpublished project (DRAFT, CONTRACT_SIGNED), RF-07", async () => {
+    const { store, useCases } = await seeded();
+    store.projects.set("p2", sampleProject({ id: "p2", currentStatus: PROJECT_STATUS.DRAFT }));
+    store.projects.set("p3", sampleProject({ id: "p3", currentStatus: PROJECT_STATUS.CONTRACT_SIGNED }));
+    expect((await useCases.fundable(INVESTOR)).map((e) => e.project.id)).toEqual(["p1"]);
+  });
+
+  it("refuses to invest in an unpublished project (DRAFT, CONTRACT_SIGNED), RF-07", async () => {
+    for (const currentStatus of [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED]) {
+      const { store, useCases } = setup({ currentStatus });
+      await expect(useCases.invest("p1", INVESTOR, order())).rejects.toThrow(/no recibe inversiones/);
+      expect(store.ledger).toHaveLength(0);
+    }
+  });
+
   it("one project with its capture bar, whatever its status, for the investor's project page", async () => {
     const { store, useCases } = await seeded();
     store.projects.set("p1", { ...store.projects.get("p1")!, currentStatus: PROJECT_STATUS.FUNDED_IN_CUSTODY });

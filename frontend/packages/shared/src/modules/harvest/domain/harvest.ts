@@ -33,7 +33,9 @@ export interface HarvestEnvelope {
 export interface Custody {
   projectId: string;
   currency: string;
+  /** Not clamped: negative when custody is overdrawn. */
   balance: number;
+  overdrawn: boolean;
   credited: number;
   credits: { category: string; amount: number }[];
   /** Ledger DEBITs (the insurance premium, RF-14) by category. */

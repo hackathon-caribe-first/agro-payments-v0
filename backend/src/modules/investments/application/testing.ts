@@ -30,7 +30,8 @@ export const sampleProject = (overrides: Partial<Project> = {}): Project => ({
   totalDisbursed: 0,
   investorRoiPct: 0,
   platformFeePct: 3,
-  currentStatus: PROJECT_STATUS.DRAFT,
+  // RF-07: investors only reach published projects.
+  currentStatus: PROJECT_STATUS.FUNDING_IN_PROGRESS,
   startDate: "2026-11-01",
   estimatedEndDate: "2027-05-01",
   currency: "COP",

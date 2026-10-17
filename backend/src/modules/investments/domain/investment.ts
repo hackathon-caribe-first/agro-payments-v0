@@ -46,10 +46,9 @@ export interface Investment {
 // ponytail: every investor is treated as non-qualified and only the 10 % cap applies; change this constant to tune the demo.
 export const NON_QUALIFIED_CAP_PCT = 10;
 
-// PRD v3 Fase 0 step 8 / Fase 1: subscriptions happen before custody is complete. PRD-strict capture starts at CONTRACT_SIGNED
-// (the purchase contract is signed before raising), but no flow sets that status yet, so DRAFT is accepted too.
-// ponytail: drop DRAFT once the purchase contract (RF-09) moves projects to CONTRACT_SIGNED.
-export const FUNDABLE_STATUSES: readonly ProjectStatus[] = [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED, PROJECT_STATUS.FUNDING_IN_PROGRESS];
+// RF-07: investors only subscribe to a published project. The publish gate (simulation module) is the only flow that moves a
+// project to FUNDING_IN_PROGRESS; DRAFT and CONTRACT_SIGNED are still being prepared and never take investor money.
+export const FUNDABLE_STATUSES: readonly ProjectStatus[] = [PROJECT_STATUS.FUNDING_IN_PROGRESS];
 
 // An abandoned consent must not hold the project's remaining amount (or block the investor) forever.
 // ponytail: a pending investment stops reserving after 30 minutes; a late wallet callback still completes it (its money is real).
@@ -87,7 +86,7 @@ export function canInvest({ project, investments, investorUserId, amount, now, c
   return null;
 }
 
-/** Pre-custody projects fill up; a project already funded or beyond keeps its status. */
+/** A published project fills up; any other status (unpublished, funded or beyond) is kept. */
 export function projectStatusAfterCapture(status: ProjectStatus, custodyAfter: number, target: number): ProjectStatus {
   if (!FUNDABLE_STATUSES.includes(status)) return status;
   return custodyAfter >= target ? PROJECT_STATUS.FUNDED_IN_CUSTODY : PROJECT_STATUS.FUNDING_IN_PROGRESS;

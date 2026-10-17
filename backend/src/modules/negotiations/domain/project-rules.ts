@@ -9,6 +9,9 @@ export type MilestoneStatus = ProgressStatus;
 // A project can be negotiated while it is being set up or funded; once the custody account is funded it is closed to it.
 const NEGOTIABLE_PROJECT_STATUSES: readonly Project["currentStatus"][] = ["DRAFT", "CONTRACT_SIGNED", "FUNDING_IN_PROGRESS"];
 
+// The buyer catalog lists every project but a cancelled or disputed one; buyers read those projects and their milestones.
+export const isInBuyerCatalog = (status: Project["currentStatus"]): boolean => status !== "CANCELLED_OR_DISPUTED";
+
 export const isProjectNegotiable = (status: Project["currentStatus"]): boolean => NEGOTIABLE_PROJECT_STATUSES.includes(status);
 
 // A milestone whose work is already approved or paid cannot be renegotiated.

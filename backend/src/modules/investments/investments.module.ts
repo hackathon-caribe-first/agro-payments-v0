@@ -30,7 +30,14 @@ import { InvestmentStore } from "./ports/investment-store";
       inject: [OPEN_PAYMENTS],
       useFactory: (op: OpenPayments | null) => (op ? new OpenPaymentsInvestmentCapture(op, loadEnv().apiUrl) : new SimulatedInvestmentCapture()),
     },
-    { provide: CapturedInvestors, inject: [InvestmentUseCases], useFactory: (useCases: InvestmentUseCases) => ({ forProject: (id: string) => useCases.capturedPositions(id) }) },
+    {
+      provide: CapturedInvestors,
+      inject: [InvestmentUseCases],
+      useFactory: (useCases: InvestmentUseCases): CapturedInvestors => ({
+        forProject: (id: string) => useCases.capturedPositions(id),
+        investmentIdsOf: (id: string, investorUserId: string) => useCases.investmentIdsOf(id, investorUserId),
+      }),
+    },
   ],
   exports: [CapturedInvestors],
 })

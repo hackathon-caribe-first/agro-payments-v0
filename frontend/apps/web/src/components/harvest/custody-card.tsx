@@ -1,6 +1,7 @@
 import type { Custody } from "@agro/shared/modules/harvest/domain/harvest";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
+import { cn } from "@agro/shared/lib/utils";
 
 const CATEGORY_LABELS: Record<string, string> = {
   BUYER_DEPOSIT: "Depósitos del comprador",
@@ -23,7 +24,12 @@ export function CustodyCard({ custody, note }: { custody: Custody; note?: string
         <CardTitle className="text-base text-primary">Saldo en custodia</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4">
-        <p className="text-2xl font-semibold tabular-nums text-primary">{money(custody.balance)}</p>
+        <p className={cn("text-2xl font-semibold tabular-nums", custody.overdrawn ? "text-destructive" : "text-primary")}>{money(custody.balance)}</p>
+        {custody.overdrawn && (
+          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Custodia sobregirada: salió más dinero del que ha ingresado. Revisa los pagos de hitos antes de seguir.
+          </p>
+        )}
         {note && <p className="text-sm text-muted-foreground">{note}</p>}
         <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-sm">
           {custody.credits.map((c) => (

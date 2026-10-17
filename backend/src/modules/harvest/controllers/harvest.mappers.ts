@@ -54,6 +54,7 @@ export function toCustodyResponse(projectId: string, s: CustodyStatement) {
     project_id: projectId,
     currency: s.currency,
     balance: pesos(s.balance),
+    overdrawn: s.overdrawn,
     credited: pesos(s.credited),
     credits: s.credits.map((c) => ({ category: c.category, amount: pesos(c.amount) })),
     debits: s.debits.map((d) => ({ category: d.category, amount: pesos(d.amount) })),

@@ -34,9 +34,21 @@ describe("SimulatedPaymentGateway", () => {
     expect(await gateway.check("SIM-ABCDEF12")).toEqual({ status: "completado", reference: "SIM-ABCDEF12" });
   });
 
-  it("reports the fixed debit on the receipt when the custody debit is fixed (foreign-currency wallet)", async () => {
-    const result = await gateway.pay({ ...request, walletAddress: "https://wallet.test/inversionista-eur", fixedDebitAmount: true });
-    expect(result.status).toBe("en_cola");
-    expect(result.receipt).toEqual({ debitAmount: { value: 300_000, assetCode: "COP", assetScale: 2 } });
+  // RF-23: simulated payments carry a full synthetic receipt (debit = receive, SIM- ids), fixed debit or not.
+  it("reports a synthetic receipt: debit = receive in the line asset, SIM- ids, unknown grant totals", async () => {
+    for (const fixedDebitAmount of [true, undefined]) {
+      const result = await gateway.pay({ ...request, walletAddress: "https://wallet.test/inversionista-eur", fixedDebitAmount });
+      const id = result.reference!.slice("SIM-".length);
+      expect(result.status).toBe("en_cola");
+      expect(result.receipt).toEqual({
+        incomingPaymentId: `SIM-IN-${id}`,
+        outgoingPaymentId: `SIM-OUT-${id}`,
+        quoteId: `SIM-QUOTE-${id}`,
+        debitAmount: { value: 300_000, assetCode: "COP", assetScale: 2 },
+        receiveAmount: { value: 300_000, assetCode: "COP", assetScale: 2 },
+        grantSpentBefore: null,
+        grantSpentAfter: null,
+      });
+    }
   });
 });

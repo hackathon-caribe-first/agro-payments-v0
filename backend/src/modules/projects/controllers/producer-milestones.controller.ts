@@ -30,6 +30,8 @@ export class ProducerMilestonesController {
 
   /** Milestone detail: requirements, evidence logs and review history */
   @Get(":id")
+  // The buyer pages read the delivery date of a catalog project's milestone; legacy demo milestones have no project and stay staff-only.
+  @Roles(producer, operator, fiduciaria, investor, "buyer")
   @ApiNotFoundResponse({ type: ApiErrorDto })
   async getMilestone(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser): Promise<MilestoneDetailResponseDto> {
     return toMilestoneDetailResponse(await this.queries.milestone(id, user));

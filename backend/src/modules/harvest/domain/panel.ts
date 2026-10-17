@@ -23,14 +23,23 @@ export interface CustodyStatement {
   milestoneDebits: number;
   /** Liquidation payouts paid or in flight from custody. */
   settlementDebits: number;
-  /** What is still in custody. */
+  /** What is still in custody; negative when more left custody than reached it (an overdraft, never hidden). */
   balance: number;
+  overdrawn: boolean;
 }
 
 const MOVING: readonly string[] = [PAYOUT_STATUS.EXECUTED, PAYOUT_STATUS.EXECUTING];
 
 /** The custody ledger grouped by category, in the project's minor units. */
 export type LedgerTotals = { credits: Record<string, number>; debits: Record<string, number> };
+
+const milestoneSpend = (milestones: readonly Milestone[]) => milestones.reduce((sum, m) => sum + spentFromCustody(m), 0);
+const settlementSpend = (settlements: readonly Settlement[]) =>
+  settlements.flatMap((s) => s.payouts).filter((p) => MOVING.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+
+/** RF-21: what custody still holds — custody_balance minus milestone lines and liquidation payouts paid or in flight. Not clamped. */
+export const custodyAvailable = (project: Pick<Project, "custodyBalance">, milestones: readonly Milestone[], settlements: readonly Settlement[]) =>
+  project.custodyBalance - milestoneSpend(milestones) - settlementSpend(settlements);
 
 // Applies the custody rule documented on Project.custodyBalance: the premium is already out of custodyBalance, so the balance
 // subtracts only what the ledger does not hold (milestone lines and liquidation payouts); credited adds the ledger debits back.
@@ -40,8 +49,9 @@ export function custodyStatement(
   milestones: readonly Milestone[],
   settlements: readonly Settlement[],
 ): CustodyStatement {
-  const milestoneDebits = milestones.reduce((sum, m) => sum + spentFromCustody(m), 0);
-  const settlementDebits = settlements.flatMap((s) => s.payouts).filter((p) => MOVING.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+  const milestoneDebits = milestoneSpend(milestones);
+  const settlementDebits = settlementSpend(settlements);
+  const balance = custodyAvailable(project, milestones, settlements);
   const ledgerDebits = Object.values(ledger.debits).reduce((sum, amount) => sum + amount, 0);
   return {
     currency: project.currency,
@@ -52,7 +62,8 @@ export function custodyStatement(
     debits: Object.entries(ledger.debits).map(([category, amount]) => ({ category, amount })),
     milestoneDebits,
     settlementDebits,
-    balance: Math.max(0, project.custodyBalance - milestoneDebits - settlementDebits),
+    balance,
+    overdrawn: balance < 0,
   };
 }
 

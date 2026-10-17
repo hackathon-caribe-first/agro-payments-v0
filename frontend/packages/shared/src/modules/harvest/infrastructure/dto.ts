@@ -37,6 +37,8 @@ export const custodyDtoSchema = z.object({
   project_id: z.string(),
   currency: z.string(),
   balance: z.number(),
+  // RF-21: true when more left custody than reached it (balance < 0); older servers omit it.
+  overdrawn: z.boolean().optional(),
   credited: z.number(),
   credits: z.array(z.object({ category: z.string(), amount: z.number() })),
   // Ledger DEBITs (the insurance premium), already out of custody_balance; `credited` adds them back.

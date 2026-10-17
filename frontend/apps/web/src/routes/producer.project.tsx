@@ -158,7 +158,8 @@ export default function ProducerProject({ loaderData }: Route.ComponentProps) {
             )}
           </section>
 
-          <AdmissionSection projectId={project.id} admission={admission} />
+          {/* RF-02/RF-03: admission is evaluated while the project is a DRAFT; afterwards the aside's AdmissionCard is read-only. */}
+          {project.currentStatus === "DRAFT" && <AdmissionSection projectId={project.id} admission={admission} />}
 
           {(projectHarvest || canDeclare) && (
             <HarvestCard harvest={projectHarvest}>

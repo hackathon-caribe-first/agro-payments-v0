@@ -65,6 +65,7 @@ export type SignatureMeta = { ip: string | null; userAgent: string | null };
  */
 export const PREMIUM_PAYABLE: readonly ProjectStatus[] = [PROJECT_STATUS.FUNDED_IN_CUSTODY, PROJECT_STATUS.IN_EXECUTION];
 const CLOSED: readonly ProjectStatus[] = [PROJECT_STATUS.SETTLEMENT_PROCESSING, PROJECT_STATUS.SETTLED_AND_CLOSED, PROJECT_STATUS.CANCELLED_OR_DISPUTED];
+const CLAIM_CLOSED = "El proyecto ya está en liquidación o cerrado: no admite reclamaciones a la póliza.";
 const WALLET_ERROR = "No pudimos validar esa wallet: revisa la dirección.";
 
 type Clock = { now: () => Date };
@@ -343,6 +344,7 @@ export class ContractsUseCases {
 
   async fileClaim(projectId: string, viewer: Viewer, input: ClaimInput): Promise<InsuranceClaim> {
     const project = await this.project(projectId, viewer);
+    if (CLOSED.includes(project.currentStatus)) throw new RejectedError(CLAIM_CLOSED);
     const policy = await this.store.findPolicy(project.id);
     if (!policy || !premiumPaid(policy)) throw new RejectedError("La póliza no está vigente: la prima se paga desde la custodia antes de reclamar.");
     // ponytail: one indemnity per policy (one cycle); a partial second claim needs the insurer's adjustment flow.
@@ -374,6 +376,7 @@ export class ContractsUseCases {
     const claim = await this.store.findClaim(claimId);
     if (!claim || claim.projectId !== project.id) throw new NotFoundError(`Claim ${claimId} not found`);
     if (claim.status === CLAIM_STATUS.CONFIRMED) return claim;
+    if (CLOSED.includes(project.currentStatus)) throw new RejectedError(CLAIM_CLOSED);
     if (claim.incomingPaymentUrl) {
       const received = await this.inflow.received(claim.incomingPaymentUrl);
       if (received < claim.amount) {

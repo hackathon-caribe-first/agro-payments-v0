@@ -37,7 +37,7 @@ import {
   remainingToAward,
   saleQuoteTotal,
 } from "../domain/presale-rules";
-import { type MilestoneStatus, projectQuotationTotal } from "../domain/project-rules";
+import { isInBuyerCatalog, type MilestoneStatus, projectQuotationTotal } from "../domain/project-rules";
 import { buildCounterOfferSchema, capMessage } from "../domain/schemas/counter-offer";
 import { buildCreateOpenRequestSchema } from "../domain/schemas/create-open-request";
 import { buildMilestoneCounterSchema, buildStartMilestoneNegotiationSchema } from "../domain/schemas/start-milestone-negotiation";
@@ -184,13 +184,13 @@ export class NegotiationsService {
   // ---- catalog ----
 
   async catalog(): Promise<CatalogEntry[]> {
-    const projects = (await this.store.listProjects()).filter((p) => p.currentStatus !== PROJECT_STATUS.CANCELLED_OR_DISPUTED);
+    const projects = (await this.store.listProjects()).filter((p) => isInBuyerCatalog(p.currentStatus));
     return Promise.all(projects.map((p) => this.catalogEntry(p)));
   }
 
   async catalogProject(id: string): Promise<CatalogEntry> {
     const project = await this.store.findProject(id);
-    if (!project || project.currentStatus === PROJECT_STATUS.CANCELLED_OR_DISPUTED) throw new NotFoundError("Project not found");
+    if (!project || !isInBuyerCatalog(project.currentStatus)) throw new NotFoundError("Project not found");
     return this.catalogEntry(project);
   }
 

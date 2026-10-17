@@ -19,6 +19,7 @@ import {
   approveSettlement,
   createSettlement,
   type InvestorPosition,
+  onlyInvestorsOwn,
   PAYOUT_STATUS,
   planPayouts,
   type Settlement,
@@ -197,6 +198,9 @@ export class SettlementUseCases {
     await this.project(settlement.projectId, viewer).catch(() => {
       throw new NotFoundError(`Settlement ${id} not found`);
     });
-    return settlement;
+    // An investor reads only their own payouts; the owner producer, operator and fiduciaria see every beneficiary.
+    if (viewer.role !== "investor") return settlement;
+    const own = (await this.captured?.investmentIdsOf(settlement.projectId, viewer.id)) ?? [];
+    return onlyInvestorsOwn(settlement, new Set(own));
   }
 }

@@ -2,6 +2,7 @@
 import { type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../ports/payment-gateway";
 import { type FundingCallback, MilestoneFunding } from "../ports/milestone-funding";
 import { MilestoneRepository } from "../ports/milestone.repository";
+import { type CustodyStanding, ProjectCustody } from "../ports/project-custody";
 import { createMilestone, fund, LINE_KIND, type Milestone } from "./milestone";
 import { MilestoneStore } from "./milestone-store";
 
@@ -94,3 +95,17 @@ export class FakeFunding extends MilestoneFunding {
     this.revoked.push(milestoneId);
   }
 }
+
+// Answers a fixed standing per project id; unknown projects read as missing.
+export class FakeProjectCustody extends ProjectCustody {
+  constructor(private readonly standings: Record<string, CustodyStanding> = {}) {
+    super();
+  }
+  async standing(projectId: string) {
+    return this.standings[projectId] ?? null;
+  }
+}
+
+/** Project p1 funded in custody with plenty available: the default for specs about other rules. */
+export const fundedCustody = (standing: Partial<CustodyStanding> = {}) =>
+  new FakeProjectCustody({ p1: { status: "FUNDED_IN_CUSTODY", available: 100_000_000, ...standing } });
