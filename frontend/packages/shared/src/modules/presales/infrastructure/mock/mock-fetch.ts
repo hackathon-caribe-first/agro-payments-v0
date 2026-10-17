@@ -63,7 +63,7 @@ const EXPIRED_MESSAGE = "La oferta venció.";
 const UNAVAILABLE_MESSAGE = "Esta acción ya no está disponible para la negociación.";
 
 const BACKING_MESSAGES = {
-  closed: "El proyecto elegido no tiene una preventa abierta.",
+  closed: "El proyecto elegido no está publicado.",
   unit: "La unidad del proyecto no coincide con la de la solicitud.",
   not_owned: "El proyecto elegido no pertenece a este productor.",
   sold_out: "El proyecto elegido no tiene disponibilidad.",
@@ -185,8 +185,8 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
 
       const existing = store.presaleListings.filter((l) => l.project_id === project.id).map(toListing);
       const block = publishBlock(project.current_status, existing);
-      if (block === "project_status") return conflict("No se puede publicar una preventa para un proyecto en este estado.");
-      if (block === "open_listing_exists") return conflict("Este proyecto ya tiene una preventa abierta.");
+      if (block === "project_status") return conflict("No se puede publicar un proyecto en este estado.");
+      if (block === "open_listing_exists") return conflict("Este proyecto ya está publicado.");
 
       const parsed = buildPublishListingSchema(now).safeParse({
         title: dto.data.title,
@@ -225,7 +225,7 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
       const listing = findListing(close[1]);
       if (!listing) return json({ error: "Presale not found" }, 404);
       const next = nextStatus(LISTING_TRANSITIONS, listing.status, "close");
-      if (!next) return conflict("La preventa ya no está abierta.");
+      if (!next) return conflict("La publicación ya está cerrada.");
       listing.status = next;
       return json(serializeListing(listing));
     }
@@ -239,9 +239,9 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
       if (!dto.success) return malformed();
 
       const asDomain = domainListing(listing);
-      if (asDomain.status !== "OPEN") return conflict("Esta preventa no admite nuevas solicitudes.");
+      if (asDomain.status !== "OPEN") return conflict("Este proyecto ya no recibe solicitudes.");
       const available = availableQuantity(asDomain);
-      if (available <= 0) return conflict("Esta preventa no tiene disponibilidad.");
+      if (available <= 0) return conflict("Este proyecto no tiene disponibilidad.");
 
       const parsed = buildRequestQuoteSchema({ available, today: now }).safeParse({
         quantity: dto.data.quantity,
@@ -333,10 +333,10 @@ export function createPresalesMockFetch(store: PresalesMockStore, delegate: type
       const listingDomain = domainListing(listing);
       // A closed listing blocks the first response; live negotiations may still be countered.
       if (action === "respond" && listingDomain.status !== "OPEN") {
-        return conflict("La preventa está cerrada: no se pueden enviar nuevas cotizaciones.");
+        return conflict("La publicación está cerrada: no se pueden enviar nuevas cotizaciones.");
       }
       const available = availableQuantity(listingDomain);
-      if (available <= 0) return conflict("Esta preventa no tiene disponibilidad.");
+      if (available <= 0) return conflict("Este proyecto no tiene disponibilidad.");
 
       const openRequest = request.open_request_id ? findOpenRequest(request.open_request_id) : undefined;
       const cap = offerCap({

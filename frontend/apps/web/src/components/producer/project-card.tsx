@@ -54,7 +54,7 @@ export function ProjectCard({ overview }: { overview: ProjectOverview }) {
               Fin estimado: {dateFormat.format(new Date(project.estimatedEndDate))}
             </p>
             <Button asChild variant="outline" size="compact">
-              <Link to={`/productor/proyectos/${project.id}`}>
+              <Link to={`/producer/projects/${project.id}`}>
                 Ver proyecto
                 <ArrowRight aria-hidden="true" />
               </Link>

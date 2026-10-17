@@ -35,7 +35,7 @@ export function MilestoneListItem({ milestone }: { milestone: MilestoneSummary }
             <p className="text-sm text-muted-foreground">Este hito se habilita cuando se completa el anterior.</p>
           ) : (
             <Button asChild variant="outline" size="compact" className="self-start">
-              <Link to={`/productor/hitos/${milestone.id}`}>
+              <Link to={`/producer/milestones/${milestone.id}`}>
                 Ver detalle
                 <ArrowRight aria-hidden="true" />
               </Link>

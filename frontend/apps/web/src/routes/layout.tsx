@@ -18,10 +18,10 @@ import { Button } from "@agro/shared/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@agro/shared/ui/tooltip";
 
 const MODULES: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/productor", label: "Productor", icon: Sprout },
-  { to: "/comprador", label: "Comprador", icon: ShoppingBasket },
-  { to: "/verificador", label: "Verificador", icon: ClipboardCheck },
-  { to: "/custodio", label: "Custodio", icon: Landmark },
+  { to: "/producer", label: "Productor", icon: Sprout },
+  { to: "/buyer", label: "Comprador", icon: ShoppingBasket },
+  { to: "/verifier", label: "Verificador", icon: ClipboardCheck },
+  { to: "/custodian", label: "Custodio", icon: Landmark },
 ];
 
 function AppSidebar() {

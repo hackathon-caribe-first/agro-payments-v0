@@ -3,13 +3,13 @@ import { ActionForm } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Shares } from "~/components/shares";
 import { loadMilestones, milestoneAction } from "~/milestones";
-import type { Route } from "./+types/custodio";
+import type { Route } from "./+types/custodian";
 
 export const meta = () => [{ title: "Pagos · Surco" }];
 export const clientLoader = () => loadMilestones();
 export const clientAction = ({ request }: Route.ClientActionArgs) => milestoneAction(request);
 
-export default function Custodio({ loaderData }: Route.ComponentProps) {
+export default function Custodian({ loaderData }: Route.ComponentProps) {
   const payable = loaderData.filter((m) => m.status === "approved");
 
   return (

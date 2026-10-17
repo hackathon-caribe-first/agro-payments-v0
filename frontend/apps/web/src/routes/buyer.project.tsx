@@ -1,5 +1,6 @@
-import { ArrowLeft, ClipboardList } from "lucide-react";
-import { Link, data, isRouteErrorResponse, redirect, useRouteError } from "react-router";
+import { ArrowLeft, Handshake } from "lucide-react";
+import { useEffect } from "react";
+import { Link, data, isRouteErrorResponse, redirect, useLocation, useRouteError } from "react-router";
 import { productionTypeLabel } from "@agro/shared/modules/projects/domain/project-draft";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { availableQuantity } from "@agro/shared/modules/presales/domain/presale-rules";
@@ -13,9 +14,9 @@ import { formatDay, formatQuantity, unitText } from "~/components/presale/format
 import { ListingStatusBadge } from "~/components/presale/status-badges";
 import { ProjectStatusBadge } from "~/components/producer/project-status";
 import { buyer } from "~/buyer/module";
-import type { Route } from "./+types/comprador.preventa";
+import type { Route } from "./+types/buyer.project";
 
-export const meta = () => [{ title: "Preventa · Surco" }];
+export const meta = () => [{ title: "Proyecto · Surco" }];
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const result = await buyer.getListingDetail(params.listingId);
@@ -35,23 +36,31 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
     desiredDeliveryDate: text(form, "desiredDeliveryDate"),
     notes: text(form, "notes"),
   });
-  return result.ok ? redirect(`/comprador/solicitudes/${result.value.id}`) : toActionData(result.error);
+  return result.ok ? redirect(`/buyer/negotiations/${result.value.id}`) : toActionData(result.error);
 }
 
-export default function CompradorPreventa({ loaderData, actionData }: Route.ComponentProps) {
+export default function BuyerProject({ loaderData, actionData }: Route.ComponentProps) {
+  const { hash } = useLocation();
+  // Arriving from the catalog (#request-form): bring the form into view and focus its first field.
+  useEffect(() => {
+    if (hash !== "#request-form") return;
+    const card = document.getElementById("request-form");
+    card?.scrollIntoView({ block: "start" });
+    card?.querySelector<HTMLElement>("input, textarea, select")?.focus({ preventScroll: true });
+  }, [hash]);
   const { listing, project, progress, canRequest } = loaderData;
   const available = availableQuantity(listing);
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link to="/comprador" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
+        <Link to="/buyer" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
           <ArrowLeft aria-hidden="true" className="size-4" />
-          Volver a las preventas
+          Volver a los proyectos
         </Link>
         <Button asChild variant="outline" size="compact">
-          <Link to="/comprador/solicitudes">
-            <ClipboardList aria-hidden="true" />
-            Mis solicitudes
+          <Link to="/buyer/negotiations">
+            <Handshake aria-hidden="true" />
+            Mis negociaciones
           </Link>
         </Button>
       </div>
@@ -113,7 +122,7 @@ export default function CompradorPreventa({ loaderData, actionData }: Route.Comp
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="request-form" className="scroll-mt-4">
             <CardHeader>
               <CardTitle className="text-lg text-primary">Solicitar cotización</CardTitle>
             </CardHeader>
@@ -122,7 +131,7 @@ export default function CompradorPreventa({ loaderData, actionData }: Route.Comp
                 <RequestQuoteForm available={available} unitText={unitText(listing, 2)} actionData={actionData} />
               ) : (
                 <p className="text-muted-foreground">
-                  {available <= 0 ? "Sin disponibilidad: ya no se pueden solicitar cotizaciones." : "Esta preventa está cerrada."}
+                  {available <= 0 ? "Sin disponibilidad: ya no se pueden solicitar cotizaciones." : "Este proyecto ya no recibe solicitudes."}
                 </p>
               )}
             </CardContent>
@@ -138,12 +147,12 @@ export function ErrorBoundary() {
   const notFound = isRouteErrorResponse(error) && error.status === 404;
   return (
     <>
-      <h1 className="text-2xl text-primary">{notFound ? "No encontramos esta preventa" : "No pudimos cargar la preventa"}</h1>
+      <h1 className="text-2xl text-primary">{notFound ? "No encontramos este proyecto" : "No pudimos cargar el proyecto"}</h1>
       <p className="mt-2 text-muted-foreground">
-        {notFound ? "Puede que el enlace sea incorrecto o que la preventa ya no exista." : "Intenta de nuevo en unos minutos."}
+        {notFound ? "Puede que el enlace sea incorrecto o que el proyecto ya no esté publicado." : "Intenta de nuevo en unos minutos."}
       </p>
-      <Link to="/comprador" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
-        Volver a las preventas
+      <Link to="/buyer" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
+        Volver a los proyectos
       </Link>
     </>
   );

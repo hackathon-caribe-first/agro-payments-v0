@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Megaphone } from "lucide-react";
+import { ArrowLeft, Handshake, Megaphone } from "lucide-react";
 import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
 import { productionTypeLabel } from "@agro/shared/modules/projects/domain/project-draft";
 import { Button } from "@agro/shared/ui/button";
@@ -6,7 +6,7 @@ import { MilestoneListItem } from "~/components/producer/milestone-list-item";
 import { ProjectStatusBadge } from "~/components/producer/project-status";
 import { errorMessage } from "~/producer/error-copy";
 import { producer } from "~/producer/module";
-import type { Route } from "./+types/productor.proyecto";
+import type { Route } from "./+types/producer.project";
 
 export const meta = () => [{ title: "Proyecto · Surco" }];
 
@@ -19,11 +19,11 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return result.value;
 }
 
-export default function ProductorProyecto({ loaderData }: Route.ComponentProps) {
+export default function ProducerProject({ loaderData }: Route.ComponentProps) {
   const { project, milestones } = loaderData;
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/productor" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
+      <Link to="/producer" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
         <ArrowLeft aria-hidden="true" className="size-4" />Volver a mis proyectos
       </Link>
       <header className="flex flex-col gap-2">
@@ -35,15 +35,15 @@ export default function ProductorProyecto({ loaderData }: Route.ComponentProps) 
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <ProjectStatusBadge status={project.currentStatus} />
           <Button asChild variant="outline" size="compact">
-            <Link to={`/productor/proyectos/${project.id}/preventa`}>
+            <Link to={`/producer/projects/${project.id}/publication`}>
               <Megaphone aria-hidden="true" />
-              Preventa
+              Publicación
             </Link>
           </Button>
           <Button asChild variant="outline" size="compact">
-            <Link to={`/productor/solicitudes?proyecto=${project.id}`}>
-              <FileText aria-hidden="true" />
-              Solicitudes
+            <Link to={`/producer/negotiations?project=${project.id}`}>
+              <Handshake aria-hidden="true" />
+              Negociaciones
             </Link>
           </Button>
         </div>
@@ -75,7 +75,7 @@ export function ErrorBoundary() {
       <p className="mt-2 text-muted-foreground">
         {notFound ? "Puede que el enlace sea incorrecto o que el proyecto ya no exista." : "Intenta de nuevo en unos minutos."}
       </p>
-      <Link to="/productor" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
+      <Link to="/producer" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
         Volver a mis proyectos
       </Link>
     </>

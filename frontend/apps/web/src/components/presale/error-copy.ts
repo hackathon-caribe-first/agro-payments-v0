@@ -4,7 +4,7 @@ import type { PresaleError } from "@agro/shared/modules/presales/domain/errors";
 export type PresaleActionData = { fieldErrors: FieldErrors };
 
 const BACKING_MESSAGES = {
-  closed: "El proyecto elegido no tiene una preventa abierta.",
+  closed: "El proyecto elegido no está publicado.",
   unit: "La unidad del proyecto no coincide con la de la solicitud.",
   not_owned: "El proyecto elegido no pertenece a este productor.",
   sold_out: "El proyecto elegido no tiene disponibilidad.",
@@ -14,15 +14,15 @@ function transitionMessage(from: string, action: string): string {
   switch (action) {
     case "publish":
       return from === "OPEN"
-        ? "Este proyecto ya tiene una preventa abierta."
-        : "No se puede publicar una preventa para un proyecto en este estado.";
+        ? "Este proyecto ya está publicado."
+        : "No se puede publicar un proyecto en este estado.";
     case "close":
-      return "La preventa ya no está abierta.";
+      return "La publicación ya está cerrada.";
     case "request":
-      return from === "SOLD_OUT" ? "Esta preventa ya no tiene disponibilidad." : "Esta preventa no admite nuevas solicitudes.";
+      return from === "SOLD_OUT" ? "Este proyecto ya no tiene disponibilidad." : "Este proyecto ya no recibe solicitudes.";
     case "respond":
       return from === "OPEN" || from === "CLOSED"
-        ? "La preventa está cerrada: no se pueden enviar nuevas ofertas."
+        ? "La publicación está cerrada: no se pueden enviar nuevas ofertas."
         : "Esta solicitud ya no admite una oferta.";
     case "accept":
     case "reject":
@@ -54,7 +54,7 @@ export function presaleErrorMessage(error: PresaleError): string {
     case "network":
       return "No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.";
     case "oversold":
-      return error.available > 0 ? `Supera la cantidad disponible (${error.available}).` : "Esta preventa ya no tiene disponibilidad.";
+      return error.available > 0 ? `Supera la cantidad disponible (${error.available}).` : "Este proyecto ya no tiene disponibilidad.";
     case "invalid_transition":
       return transitionMessage(error.from, error.action);
     case "not_your_turn":

@@ -62,20 +62,20 @@ export function ListingPanel({ listing, actionData }: { listing: PresaleListing;
         <AlertDialogTrigger asChild>
           <Button type="button" variant="outline" size="compact" disabled={pending} className="self-start">
             <Lock aria-hidden="true" />
-            {pending ? "Cerrando…" : "Cerrar preventa"}
+            {pending ? "Cerrando…" : "Cerrar publicación"}
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Cerrar esta preventa?</AlertDialogTitle>
+            <AlertDialogTitle>¿Cerrar esta publicación?</AlertDialogTitle>
             <AlertDialogDescription>
-              Ya no recibirá nuevas solicitudes ni cotizaciones. Las cotizaciones de venta vigentes podrán seguir aceptándose. Esta acción no se puede deshacer.
+              Dejará de recibir solicitudes de cotización. Las ofertas vigentes podrán seguir aceptándose. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel size="compact">Cancelar</AlertDialogCancel>
             <AlertDialogAction size="compact" type="submit" form="close-listing-form">
-              Cerrar preventa
+              Cerrar publicación
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

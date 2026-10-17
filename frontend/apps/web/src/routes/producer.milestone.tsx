@@ -10,7 +10,7 @@ import { MilestoneStatusBadge } from "~/components/producer/status-label";
 import { SubmitReviewForm } from "~/components/producer/submit-review-form";
 import { errorMessage, toActionResult, type ProducerActionResult } from "~/producer/error-copy";
 import { PHOTO_OPTIONS, milestones } from "~/producer/module";
-import type { Route } from "./+types/productor.hito";
+import type { Route } from "./+types/producer.milestone";
 
 export const meta = () => [{ title: "Detalle del hito · Surco" }];
 
@@ -39,7 +39,7 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
   return { ok: false, message: "Acción desconocida." };
 }
 
-export default function ProductorHito({ loaderData: m }: Route.ComponentProps) {
+export default function ProducerMilestone({ loaderData: m }: Route.ComponentProps) {
   const fieldData = currentFieldData(m.logs);
   const checklist = requirementChecklist(m.requirements, fieldData);
   const missing = missingRequirements(m.requirements, fieldData);
@@ -47,7 +47,7 @@ export default function ProductorHito({ loaderData: m }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to={`/productor/proyectos/${m.projectId}`} className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
+      <Link to={`/producer/projects/${m.projectId}`} className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
         <ArrowLeft aria-hidden="true" className="size-4" />Volver al proyecto
       </Link>
       <header className="flex flex-col gap-2">
@@ -107,7 +107,7 @@ export function ErrorBoundary() {
       <p className="mt-2 text-muted-foreground">
         {notFound ? "Puede que el enlace sea incorrecto o que el hito ya no exista." : "Intenta de nuevo en unos minutos."}
       </p>
-      <Link to="/productor" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
+      <Link to="/producer" className="mt-6 inline-block font-brand font-bold text-primary underline underline-offset-4">
         Volver a mis proyectos
       </Link>
     </>

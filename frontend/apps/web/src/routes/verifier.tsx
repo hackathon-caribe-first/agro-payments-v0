@@ -1,13 +1,13 @@
 import { ActionForm, TextField } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { loadMilestones, milestoneAction } from "~/milestones";
-import type { Route } from "./+types/verificador";
+import type { Route } from "./+types/verifier";
 
 export const meta = () => [{ title: "Por revisar · Surco" }];
 export const clientLoader = () => loadMilestones();
 export const clientAction = ({ request }: Route.ClientActionArgs) => milestoneAction(request);
 
-export default function Verificador({ loaderData }: Route.ComponentProps) {
+export default function Verifier({ loaderData }: Route.ComponentProps) {
   const pending = loaderData.filter((m) => m.status === "evidence_submitted");
   const rest = loaderData.filter((m) => m.status !== "evidence_submitted");
 

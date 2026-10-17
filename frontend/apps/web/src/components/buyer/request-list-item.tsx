@@ -1,39 +1,42 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 import type { RequestEntry } from "@agro/shared/modules/presales/application/use-cases";
+import { Badge } from "@agro/shared/ui/badge";
 import { Button } from "@agro/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
-import { formatDay, formatQuantity } from "~/components/presale/format";
+import { LatestOffer } from "~/components/negotiation/latest-offer";
+import { originLabel } from "~/components/negotiation/origin";
+import { turnLabel } from "~/components/negotiation/turn-indicator";
 import { RequestStatusBadge } from "~/components/presale/status-badges";
 
+// A negotiation in the buyer's inbox (both origins).
 export function RequestListItem({ entry }: { entry: RequestEntry }) {
-  const { request, listing } = entry;
+  const { request, listing, turn } = entry;
+  const turnText = turnLabel(turn, "BUYER");
   return (
     <li className="min-w-0">
       <Card className="h-full gap-3 py-4">
         <CardHeader className="px-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <CardTitle className="min-w-0 break-words text-base text-primary">{listing?.title ?? "Preventa"}</CardTitle>
+            <div className="min-w-0">
+              <p className="text-sm text-muted-foreground">{originLabel(request.origin)}</p>
+              <CardTitle className="min-w-0 break-words text-base text-primary">{listing?.title ?? "Proyecto"}</CardTitle>
+              {request.producerName && <p className="text-sm text-muted-foreground">{request.producerName}</p>}
+            </div>
             <RequestStatusBadge status={request.status} />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 px-4">
-          <dl className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Cantidad</dt>
-              <dd className="font-semibold tabular-nums">{formatQuantity(request.quantity, listing)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Entrega deseada</dt>
-              <dd className="font-semibold">{formatDay(request.desiredDeliveryDate)}</dd>
-            </div>
-          </dl>
-          <Button asChild variant="outline" size="compact" className="self-start">
-            <Link to={`/comprador/solicitudes/${request.id}`}>
-              Ver solicitud
-              <ArrowRight aria-hidden="true" />
-            </Link>
-          </Button>
+          <LatestOffer request={request} unit={listing} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="compact">
+              <Link to={`/buyer/negotiations/${request.id}`}>
+                Ver negociación
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </Button>
+            {turnText && <Badge variant={turn === "BUYER" ? "default" : "secondary"}>{turnText}</Badge>}
+          </div>
         </CardContent>
       </Card>
     </li>

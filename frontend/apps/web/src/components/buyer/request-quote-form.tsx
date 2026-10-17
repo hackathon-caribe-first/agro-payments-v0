@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { Handshake } from "lucide-react";
 import { Form, useNavigation } from "react-router";
 import { FORM_LEVEL_KEY } from "@agro/shared/modules/milestones/domain/errors";
 import { Alert, AlertDescription } from "@agro/shared/ui/alert";
@@ -44,7 +44,7 @@ export function RequestQuoteForm({ available, unitText, actionData }: { availabl
       ) : null}
 
       <Button type="submit" size="compact" disabled={pending} className="self-start">
-        <FileText aria-hidden="true" />
+        <Handshake aria-hidden="true" />
         {pending ? "Enviando…" : "Solicitar cotización"}
       </Button>
     </Form>

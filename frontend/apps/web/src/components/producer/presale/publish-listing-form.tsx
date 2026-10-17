@@ -20,7 +20,7 @@ export function PublishListingForm({ actionData }: { actionData?: PresaleActionD
     <Form method="post" ref={formRef} noValidate className="flex flex-col gap-4">
       <input type="hidden" name="intent" value="publish" />
 
-      <Field id="listing-title" label="Título de la preventa" errors={errors.title}>
+      <Field id="listing-title" label="Título de la publicación" errors={errors.title}>
         {(aria) => <Input id="listing-title" name="title" maxLength={120} onChange={() => clear("title")} {...aria} />}
       </Field>
       <Field id="listing-summary" label="Resumen" errors={errors.summary}>
@@ -85,7 +85,7 @@ export function PublishListingForm({ actionData }: { actionData?: PresaleActionD
 
       <Button type="submit" size="compact" disabled={pending} className="self-start">
         <Megaphone aria-hidden="true" />
-        {pending ? "Publicando…" : "Publicar preventa"}
+        {pending ? "Publicando…" : "Publicar proyecto"}
       </Button>
     </Form>
   );

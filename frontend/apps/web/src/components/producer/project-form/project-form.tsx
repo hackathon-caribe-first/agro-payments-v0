@@ -113,7 +113,7 @@ export function ProjectForm({ actionData }: { actionData?: CreateProjectActionDa
             {pending ? "Creando…" : "Crear proyecto"}
           </Button>
           <Button asChild variant="outline" size="compact">
-            <Link to="/productor">
+            <Link to="/producer">
               <X aria-hidden="true" />
               Cancelar
             </Link>
