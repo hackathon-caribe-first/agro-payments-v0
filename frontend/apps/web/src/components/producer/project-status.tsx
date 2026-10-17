@@ -7,8 +7,9 @@ type ProjectStatusLabel = { label: string; tone: Tone; symbol: string };
 const PROJECT_STATUS_LABELS: Record<ProjectStatus, ProjectStatusLabel> = {
   DRAFT: { label: "Borrador", tone: "neutral", symbol: "○" },
   CONTRACT_SIGNED: { label: "Contrato firmado", tone: "neutral", symbol: "✓" },
-  FUNDING_IN_PROGRESS: { label: "En espera de aprobación", tone: "warning", symbol: "◷" },
-  FUNDED_IN_CUSTODY: { label: "Cotización aprobada", tone: "success", symbol: "✓" },
+  // PRD v3: a published project raises capital, then it is funded in custody.
+  FUNDING_IN_PROGRESS: { label: "En captación", tone: "warning", symbol: "◷" },
+  FUNDED_IN_CUSTODY: { label: "Fondeado en custodia", tone: "success", symbol: "✓" },
   IN_EXECUTION: { label: "En ejecución", tone: "warning", symbol: "◷" },
   HARVEST_DECLARED: { label: "Cosecha declarada", tone: "warning", symbol: "◷" },
   HARVEST_CERTIFIED: { label: "Cosecha certificada", tone: "success", symbol: "✓" },
