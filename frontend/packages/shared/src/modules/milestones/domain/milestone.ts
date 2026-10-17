@@ -35,6 +35,20 @@ export interface EvidenceLog {
   notes: string;
   evidencePayload: EvidencePayload;
   createdAt: string;
+  /** RF-19/RF-35: where the evidence was taken; absent when not reported. */
+  location?: EvidenceLocation | null;
+  /** RF-19/RF-35: sha256 (hex) per photo URL; absent when not reported. */
+  photoHashes?: PhotoHash[];
+}
+
+export interface EvidenceLocation {
+  latitude: number;
+  longitude: number;
+}
+
+export interface PhotoHash {
+  url: string;
+  sha256: string;
 }
 
 export interface Review {

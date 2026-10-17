@@ -27,6 +27,8 @@ export const evidenceLogDtoSchema = z.object({
   notes: z.string(),
   evidence_payload: z.record(z.string(), z.union([z.number(), z.boolean(), z.array(z.string())])),
   created_at: z.string(),
+  location: z.object({ latitude: z.number(), longitude: z.number() }).nullable().optional(),
+  photo_hashes: z.array(z.object({ url: z.string(), sha256: z.string() })).optional(),
 });
 
 export const reviewDtoSchema = z.object({
@@ -61,6 +63,8 @@ export const evidenceLogRequestDtoSchema = z.object({
   log_type: z.enum(LOG_TYPES),
   notes: z.string(),
   evidence_payload: evidenceLogDtoSchema.shape.evidence_payload,
+  location: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
+  photo_hashes: evidenceLogDtoSchema.shape.photo_hashes,
 });
 
 export type RequirementDto = z.infer<typeof requirementDtoSchema>;

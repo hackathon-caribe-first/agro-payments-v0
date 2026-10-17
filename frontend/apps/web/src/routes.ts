@@ -38,6 +38,7 @@ export default [
     route("verifier", "routes/verifier.tsx"),
     route("custodian", "routes/custodian.tsx"),
     route("custodian/projects/:projectId", "routes/custodian.project.tsx"),
+    route("custodian/traces", "routes/custodian.traces.tsx"),
     // LEGACY Spanish URLs: all redirect to the English ones (see routes/legacy-redirect.tsx).
     route("productor", "routes/legacy-redirect.tsx", { id: "legacy-productor" }),
     route("productor/*", "routes/legacy-redirect.tsx", { id: "legacy-productor-splat" }),

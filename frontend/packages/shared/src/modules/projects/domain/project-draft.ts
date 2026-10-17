@@ -29,6 +29,10 @@ export interface ProjectDraft {
   startDate: string;
   estimatedEndDate: string;
   milestones: NewMilestoneDraft[];
+  /** RF-01, optional: GeoJSON Polygon of the plot. */
+  plotPolygon?: { type: "Polygon"; coordinates: [number, number][][] };
+  /** RF-01, optional: https wallet address (validated with GET by the backend in Open Payments mode). */
+  producerWalletAddress?: string;
 }
 
 // Validated input handed to the repository (after the zod schema).

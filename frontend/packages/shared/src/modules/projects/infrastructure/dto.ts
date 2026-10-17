@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { PROJECT_STATUSES } from "../domain/project";
 
+// RF-01: GeoJSON Polygon, [longitude, latitude] positions.
+export const plotPolygonDtoSchema = z.object({
+  type: z.literal("Polygon"),
+  coordinates: z.array(z.array(z.tuple([z.number(), z.number()]))),
+});
+
 // Transport shape (snake_case, PRD projects table). Validated at the boundary, then mapped to domain types.
 export const projectDtoSchema = z.object({
   id: z.string(),
@@ -17,6 +23,8 @@ export const projectDtoSchema = z.object({
   start_date: z.string(),
   estimated_end_date: z.string(),
   currency: z.string(),
+  plot_polygon: plotPolygonDtoSchema.optional(),
+  producer_wallet_address: z.string().optional(),
 });
 
 export type ProjectDto = z.infer<typeof projectDtoSchema>;
@@ -39,6 +47,8 @@ export const createProjectRequestDtoSchema = z.object({
       requirements_schema: z.object({ required_evidences: z.array(z.never()) }),
     }),
   ),
+  plot_polygon: plotPolygonDtoSchema.optional(),
+  producer_wallet_address: z.string().optional(),
 });
 
 export type CreateProjectRequestDto = z.infer<typeof createProjectRequestDtoSchema>;

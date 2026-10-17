@@ -17,6 +17,34 @@ const milestoneSchema = z.object({
   laborBudget: budget("Mano de obra"),
 });
 
+const isPosition = ([lon, lat]: [number, number]) => Math.abs(lon) <= 180 && Math.abs(lat) <= 90;
+
+// RF-01: same rules and messages as the backend's validatePlotPolygon.
+export const plotPolygonSchema = z
+  .object(
+    {
+      type: z.literal("Polygon", { error: "El lote debe ser un polígono GeoJSON." }),
+      coordinates: z
+        .array(z.array(z.tuple([z.number(), z.number()]), { error: "Dibuja el contorno del lote." }), { error: "Dibuja el contorno del lote." })
+        .min(1, { error: "Dibuja el contorno del lote." }),
+    },
+    { error: "El lote debe ser un polígono GeoJSON." },
+  )
+  .superRefine((polygon, ctx) => {
+    for (const ring of polygon.coordinates) {
+      const issue = (message: string) => ctx.addIssue({ code: "custom", message });
+      if (ring.length < 4 || ring.length > 1000) return issue("El contorno del lote necesita al menos 4 puntos.");
+      if (!ring.every(isPosition)) return issue("Cada punto del lote debe tener longitud (±180) y latitud (±90).");
+      const [first, last] = [ring[0], ring[ring.length - 1]];
+      if (first[0] !== last[0] || first[1] !== last[1]) return issue("El contorno del lote debe cerrar en el punto donde empieza.");
+    }
+  });
+
+export const producerWalletSchema = z
+  .string({ error: "La billetera debe ser una dirección https." })
+  .trim()
+  .refine((v) => URL.canParse(v) && new URL(v).protocol === "https:", { error: "La billetera debe ser una dirección https." });
+
 // Keys are positional (e.g. `milestones.2.laborBudget`) so the UI can show each error next to its field.
 export const createProjectInputSchema = z
   .object({
@@ -26,6 +54,8 @@ export const createProjectInputSchema = z
     startDate: isoDate("Ingresa una fecha de inicio válida."),
     estimatedEndDate: isoDate("Ingresa una fecha de finalización válida."),
     milestones: z.array(milestoneSchema, { error: "Agrega al menos un hito." }).min(1, { error: "Agrega al menos un hito." }),
+    plotPolygon: plotPolygonSchema.optional(),
+    producerWalletAddress: producerWalletSchema.optional(),
   })
   .superRefine((input, ctx) => {
     if (input.estimatedEndDate < input.startDate) {

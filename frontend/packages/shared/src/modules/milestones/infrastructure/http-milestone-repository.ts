@@ -47,6 +47,8 @@ export class HttpMilestoneRepository implements MilestoneRepository {
       log_type: input.logType,
       notes: input.notes,
       evidence_payload: input.evidencePayload,
+      ...(input.location && { location: input.location }),
+      ...(input.photoHashes && input.photoHashes.length > 0 && { photo_hashes: input.photoHashes }),
     };
     const response = await this.request(`/milestones/${encodeURIComponent(milestoneId)}/logs`, {
       method: "POST",

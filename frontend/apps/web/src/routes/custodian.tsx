@@ -1,6 +1,8 @@
-import { Form, redirect, useSearchParams } from "react-router";
+import { ScrollText } from "lucide-react";
+import { Form, Link, redirect, useSearchParams } from "react-router";
 import type { Milestone } from "@agro/shared/api/client";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
+import { Button } from "@agro/shared/ui/button";
 import { Input } from "@agro/shared/ui/input";
 import { StatusBadge } from "@agro/shared/ui/status-badge";
 import type { Custody } from "@agro/shared/modules/harvest/domain/harvest";
@@ -199,6 +201,12 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
           proyecto. Con el grant vivo se aprueban las órdenes del productor y se paga a los proveedores. Los jornales y el fee se pagan
           solos cuando el verificador aprueba; al cerrar el hito el grant se revoca.
         </p>
+        <Button asChild variant="outline" size="compact" className="mt-3">
+          <Link to="/custodian/traces">
+            <ScrollText aria-hidden="true" />
+            Traza de Open Payments
+          </Link>
+        </Button>
       </header>
       <GrantResult milestones={milestones} />
       <PremiumGrantLink />

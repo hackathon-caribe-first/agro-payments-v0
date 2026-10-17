@@ -16,6 +16,7 @@ import {
 } from "@agro/shared/ui/sidebar";
 import { Button } from "@agro/shared/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@agro/shared/ui/tooltip";
+import { NotificationsBell } from "~/components/notifications-bell";
 
 const MODULES: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/producer", label: "Productor", icon: Sprout },
@@ -88,10 +89,15 @@ function Shell({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       {/* min-w-0 lets the inset shrink with its flex parent instead of overflowing when the sidebar opens. */}
       <SidebarInset className="min-w-0">
-        {/* Mobile only: the sidebar is an off-canvas sheet and needs an opener outside it. */}
-        <header className="flex h-12 items-center gap-3 border-b bg-card px-4 md:hidden">
-          <SidebarToggle />
-          <PageTitle />
+        {/* Mobile: the sidebar is an off-canvas sheet and needs an opener outside it. Every size: the RF-37 notices bell. */}
+        <header className="flex h-12 items-center gap-3 border-b bg-card px-4">
+          <div className="flex items-center gap-3 md:hidden">
+            <SidebarToggle />
+            <PageTitle />
+          </div>
+          <div className="ml-auto">
+            <NotificationsBell />
+          </div>
         </header>
         <div className="w-full min-w-0 px-4 py-4 md:px-6 md:py-6">{children}</div>
       </SidebarInset>

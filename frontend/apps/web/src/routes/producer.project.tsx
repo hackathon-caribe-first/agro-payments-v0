@@ -7,11 +7,13 @@ import { CustodyCard } from "~/components/harvest/custody-card";
 import { HarvestCard, HarvestStepForm } from "~/components/harvest/harvest-card";
 import { AgreementBanner } from "~/components/negotiation/agreement-banner";
 import { presaleErrorMessage } from "~/components/presale/error-copy";
+import { AdmissionCard } from "~/components/producer/admission-card";
 import { MilestoneListItem } from "~/components/producer/milestone-list-item";
 import { RequestInboxItem } from "~/components/producer/presale/request-inbox-item";
 import { ProjectStatusBadge } from "~/components/producer/project-status";
 import { escrow } from "~/escrow/module";
 import { harvest, harvestAction } from "~/harvest/module";
+import { loadAdmission } from "~/producer/admission";
 import { errorMessage } from "~/producer/error-copy";
 import { producer } from "~/producer/module";
 import { producerPresales } from "~/producer/presales";
@@ -22,12 +24,13 @@ export const meta = () => [{ title: "Proyecto · Surco" }];
 // The page composes five reads: the project with its milestones, the negotiations on it, its escrow ledger, its harvest (RF-24)
 // and what is still in custody (RF-21). The last two are optional: the page still renders without them.
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const [project, negotiations, ledger, harvestRead, custody] = await Promise.all([
+  const [project, negotiations, ledger, harvestRead, custody, admission] = await Promise.all([
     producer.getProjectWithMilestones(params.projectId),
     producerPresales.listProducerRequests(params.projectId),
     escrow.getProjectLedger(params.projectId),
     harvest.get(params.projectId),
     harvest.custody(params.projectId),
+    loadAdmission(params.projectId),
   ]);
   if (!project.ok) {
     if (project.error.kind === "not_found") throw data(null, { status: 404 });
@@ -40,6 +43,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     ledger: ledger.ok ? ledger.value : null,
     harvest: harvestRead.ok ? harvestRead.value.harvest : null,
     custody: custody.ok ? custody.value : null,
+    admission,
   };
 }
 
@@ -49,7 +53,7 @@ export const clientAction = async ({ request }: Route.ClientActionArgs) => harve
 const DECLARABLE = ["FUNDED_IN_CUSTODY", "IN_EXECUTION"];
 
 export default function ProducerProject({ loaderData }: Route.ComponentProps) {
-  const { project, milestones, negotiations, ledger, harvest: projectHarvest, custody } = loaderData;
+  const { project, milestones, negotiations, ledger, harvest: projectHarvest, custody, admission } = loaderData;
   const canDeclare = !projectHarvest && DECLARABLE.includes(project.currentStatus);
   const agreement = negotiations.find((e) => e.request.scope === "PROJECT" && e.request.status === "ACCEPTED") ?? null;
   return (
@@ -92,6 +96,7 @@ export default function ProducerProject({ loaderData }: Route.ComponentProps) {
             <AgreementBanner deposit={agreement.request.deposit} to={`/producer/negotiations/${agreement.request.id}`} />
           )}
           {custody && <CustodyCard custody={custody} />}
+          <AdmissionCard admission={admission} />
           {ledger && <LedgerList ledger={ledger} currency={project.currency} />}
         </aside>
 

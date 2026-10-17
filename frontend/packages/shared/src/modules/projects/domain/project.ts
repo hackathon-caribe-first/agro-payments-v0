@@ -32,4 +32,13 @@ export interface Project {
   startDate: string;
   estimatedEndDate: string;
   currency: string;
+  /** RF-01: GeoJSON Polygon of the plot ([lon, lat] rings); absent when not drawn. */
+  plotPolygon?: PlotPolygon;
+  /** RF-01: the producer's COP wallet; the productor line pays here. */
+  producerWalletAddress?: string;
+}
+
+export interface PlotPolygon {
+  type: "Polygon";
+  coordinates: [number, number][][];
 }

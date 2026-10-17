@@ -44,6 +44,10 @@ export type EvidenceLogInput = {
   logType: LogType;
   notes: string;
   evidencePayload: EvidencePayload;
+  /** RF-19/RF-35, optional: where the evidence was taken. */
+  location?: { latitude: number; longitude: number };
+  /** RF-19/RF-35, optional: sha256 (hex) of each photo URL. */
+  photoHashes?: { url: string; sha256: string }[];
 };
 
 export function toFieldErrors(error: z.ZodError): FieldErrors {

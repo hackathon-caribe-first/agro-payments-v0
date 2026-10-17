@@ -39,6 +39,8 @@ const logFromDto = (dto: EvidenceLogDto): EvidenceLog => ({
   notes: dto.notes,
   evidencePayload: dto.evidence_payload,
   createdAt: dto.created_at,
+  ...(dto.location !== undefined && { location: dto.location }),
+  ...(dto.photo_hashes && { photoHashes: dto.photo_hashes }),
 });
 
 const reviewFromDto = (dto: ReviewDto): Review => ({
