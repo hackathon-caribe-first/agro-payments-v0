@@ -62,7 +62,14 @@ export type Project = {
   currency: string;
   assetScale: number;
   createdAt: Date;
+  /** RF-01: the plot as a GeoJSON Polygon (lon/lat); absent when the producer did not draw it. */
+  plotPolygon?: GeoPolygon;
+  /** RF-01: the producer's COP wallet (validated with GET); the productor line pays here. Absent: the platform fallback wallet. */
+  producerWalletAddress?: string;
 };
+
+/** GeoJSON Polygon: rings of [longitude, latitude]; the first ring is the plot, any other is a hole. */
+export type GeoPolygon = { type: "Polygon"; coordinates: [number, number][][] };
 
 /** The code is allocated by the repository, inside the transaction that stores the project. */
 export type NewProject = Omit<Project, "projectCode">;
@@ -84,6 +91,10 @@ export type NewProjectInput = {
   startDate: string;
   estimatedEndDate: string;
   milestones: NewMilestoneInput[];
+  /** RF-01, optional; checked by validatePlotPolygon. */
+  plotPolygon?: unknown;
+  /** RF-01, optional; https here, and a COP wallet by GET in open-payments mode (ProducerWalletCheck). */
+  producerWalletAddress?: unknown;
 };
 
 export type ProjectWallets = { producer: string; supplier: string; platform: string };
@@ -146,6 +157,27 @@ function date(errors: FieldErrors, path: string, value: unknown, message: string
   if (!isIsoDate(value)) addFieldError(errors, path, message);
 }
 
+const MAX_RING_POSITIONS = 1000;
+const isPosition = (p: unknown): p is [number, number] =>
+  Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === "number" && Number.isFinite(n)) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
+
+/** RF-01: a GeoJSON Polygon whose rings are closed, with 4+ positions each, longitudes in ±180 and latitudes in ±90. */
+export function validatePlotPolygon(value: unknown): { polygon: GeoPolygon | null; error: string | null } {
+  const invalid = (error: string) => ({ polygon: null, error });
+  if (typeof value !== "object" || value === null || (value as { type?: unknown }).type !== "Polygon") return invalid("El lote debe ser un polígono GeoJSON.");
+  const rings = (value as { coordinates?: unknown }).coordinates;
+  if (!Array.isArray(rings) || rings.length === 0) return invalid("Dibuja el contorno del lote.");
+  for (const ring of rings) {
+    if (!Array.isArray(ring) || ring.length < 4 || ring.length > MAX_RING_POSITIONS) return invalid("El contorno del lote necesita al menos 4 puntos.");
+    if (!ring.every(isPosition)) return invalid("Cada punto del lote debe tener longitud (±180) y latitud (±90).");
+    const [first, last] = [ring[0], ring[ring.length - 1]];
+    if (first[0] !== last[0] || first[1] !== last[1]) return invalid("El contorno del lote debe cerrar en el punto donde empieza.");
+  }
+  return { polygon: { type: "Polygon", coordinates: rings as [number, number][][] }, error: null };
+}
+
+const isHttpsUrl = (v: unknown): v is string => typeof v === "string" && URL.canParse(v) && new URL(v).protocol === "https:";
+
 export function validateNewProject(input: NewProjectInput): NewProjectInput {
   const errors: FieldErrors = {};
   const title = text(errors, "title", input.title, 3, 120, { missing: "Ingresa el nombre del proyecto.", short: "El nombre debe tener al menos 3 caracteres." });
@@ -157,6 +189,10 @@ export function validateNewProject(input: NewProjectInput): NewProjectInput {
   date(errors, "startDate", input.startDate, "Ingresa una fecha de inicio válida.");
   date(errors, "estimatedEndDate", input.estimatedEndDate, "Ingresa una fecha de finalización válida.");
   if (!Array.isArray(input.milestones) || input.milestones.length === 0) addFieldError(errors, "milestones", "Agrega al menos un hito.");
+  const plot = input.plotPolygon === undefined || input.plotPolygon === null ? null : validatePlotPolygon(input.plotPolygon);
+  if (plot?.error) addFieldError(errors, "plotPolygon", plot.error);
+  const wallet = input.producerWalletAddress === undefined || input.producerWalletAddress === null || input.producerWalletAddress === "" ? null : input.producerWalletAddress;
+  if (wallet !== null && !isHttpsUrl(wallet)) addFieldError(errors, "producerWalletAddress", "La billetera debe ser una dirección https.");
 
   const milestones = (Array.isArray(input.milestones) ? input.milestones : []).map((m, i) => {
     const at = (field: string) => `milestones.${i}.${field}`;
@@ -191,6 +227,8 @@ export function validateNewProject(input: NewProjectInput): NewProjectInput {
     startDate: input.startDate,
     estimatedEndDate: input.estimatedEndDate,
     milestones: milestones.map(({ title: t, description: d, source }) => ({ ...source, title: t, description: d })),
+    ...(plot?.polygon && { plotPolygon: plot.polygon }),
+    ...(wallet !== null && { producerWalletAddress: wallet }),
   };
 }
 
@@ -201,13 +239,14 @@ type BuildProject = { id: string; ownerUserId: string; input: NewProjectInput; w
 export function buildProject({ id, ownerUserId, input, wallets, now }: BuildProject): { project: NewProject; milestones: Milestone[] } {
   const valid = validateNewProject(input);
   const scale = PROJECT_ASSET_SCALE;
+  const producerWallet = typeof valid.producerWalletAddress === "string" ? valid.producerWalletAddress : wallets.producer;
   const milestones = valid.milestones.map((m, i) => {
     const milestoneId = `${id}-ms-${i + 1}`;
     const supplies = pesosToMinor(m.suppliesBudget, scale);
     const labor = pesosToMinor(m.laborBudget, scale);
     const fee = platformFee(supplies + labor, PLATFORM_FEE_PCT);
     const lines: LineInput[] = [
-      { id: `${milestoneId}-productor`, kind: LINE_KIND.PRODUCTOR, beneficiary: "Productor", walletAddress: wallets.producer, amount: labor },
+      { id: `${milestoneId}-productor`, kind: LINE_KIND.PRODUCTOR, beneficiary: "Productor", walletAddress: producerWallet, amount: labor },
       { id: `${milestoneId}-plataforma`, kind: LINE_KIND.PLATAFORMA, beneficiary: "Plataforma Surco", walletAddress: wallets.platform, amount: fee },
     ].filter((l) => l.amount > 0);
     return createMilestone({
@@ -243,6 +282,8 @@ export function buildProject({ id, ownerUserId, input, wallets, now }: BuildProj
     currency: PROJECT_CURRENCY,
     assetScale: scale,
     createdAt: now,
+    ...(valid.plotPolygon !== undefined && { plotPolygon: valid.plotPolygon as GeoPolygon }),
+    ...(typeof valid.producerWalletAddress === "string" && { producerWalletAddress: valid.producerWalletAddress }),
   };
   return { project, milestones };
 }

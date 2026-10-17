@@ -15,6 +15,7 @@
 
 import { addFieldError, DomainError, type FieldErrors, ValidationError } from "../../../shared/domain-errors";
 import {
+  type EvidenceAttestation,
   type EvidenceLog,
   type EvidencePayload,
   type EvidenceValue,
@@ -95,7 +96,7 @@ export function progressStatus(m: Milestone, siblings: readonly Milestone[], gat
   }
 }
 
-export type EvidenceLogInput = Pick<EvidenceLog, "logType" | "notes" | "evidencePayload">;
+export type EvidenceLogInput = Pick<EvidenceLog, "logType" | "notes" | "evidencePayload" | "attestation">;
 /** A log as it arrives, before validateEvidenceLog types it against the requirements. */
 export type EvidenceLogRequest = { [K in keyof EvidenceLogInput]: unknown };
 
@@ -128,6 +129,40 @@ function checkField(req: Requirement, value: unknown, path: string, errors: Fiel
   }
 }
 
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+const inRange = (v: unknown, limit: number): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= limit;
+
+// RF-19/RF-35: optional; absent (or null) means the log carries no location nor hashes. Each hash names one of the log's photos.
+function validateAttestation(raw: unknown, payload: unknown, errors: FieldErrors): EvidenceAttestation | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!isRecord(raw)) {
+    addFieldError(errors, "attestation", "La ubicación y las huellas de las fotos no tienen el formato esperado.");
+    return undefined;
+  }
+  let location: EvidenceAttestation["location"] = null;
+  if (raw.location !== undefined && raw.location !== null) {
+    const l = raw.location;
+    if (!isRecord(l) || !inRange(l.latitude, 90) || !inRange(l.longitude, 180)) addFieldError(errors, "attestation.location", "La ubicación no es válida.");
+    else location = { latitude: l.latitude, longitude: l.longitude };
+  }
+  const photos = new Set(isRecord(payload) ? Object.values(payload).flatMap((v) => (Array.isArray(v) ? v.filter((u): u is string => typeof u === "string") : [])) : []);
+  const hashes = raw.photoHashes ?? [];
+  const photoHashes: EvidenceAttestation["photoHashes"] = [];
+  if (!Array.isArray(hashes)) {
+    addFieldError(errors, "attestation.photoHashes", "Las huellas de las fotos deben ser una lista.");
+  } else {
+    hashes.forEach((h, i) => {
+      const path = `attestation.photoHashes.${i}`;
+      const sha256 = isRecord(h) && typeof h.sha256 === "string" ? h.sha256.toLowerCase() : "";
+      if (!isRecord(h) || typeof h.url !== "string" || !photos.has(h.url)) return addFieldError(errors, path, "La huella debe corresponder a una foto del registro.");
+      if (!SHA256_HEX.test(sha256)) return addFieldError(errors, path, "La huella debe ser un SHA-256 en hexadecimal.");
+      if (photoHashes.some((p) => p.url === h.url)) return addFieldError(errors, path, "Esa foto ya tiene huella.");
+      photoHashes.push({ url: h.url, sha256 });
+    });
+  }
+  return { location, photoHashes };
+}
+
 // Strict, like the web app: every requirement key must be present and no other key is allowed.
 export function validateEvidenceLog(requirements: readonly Requirement[], input: EvidenceLogRequest): EvidenceLogInput {
   const errors: FieldErrors = {};
@@ -142,8 +177,9 @@ export function validateEvidenceLog(requirements: readonly Requirement[], input:
     const known = new Set(requirements.map((r) => r.fieldKey));
     for (const key of Object.keys(payload)) if (!known.has(key)) addFieldError(errors, `evidencePayload.${key}`, "Campo no permitido.");
   }
+  const attestation = validateAttestation(input.attestation, payload, errors);
   if (Object.keys(errors).length > 0) throw new ValidationError(errors, "Evidence payload does not match the milestone requirements");
-  return { logType: input.logType as LogType, notes: input.notes as string, evidencePayload: payload as EvidencePayload };
+  return { logType: input.logType as LogType, notes: input.notes as string, evidencePayload: payload as EvidencePayload, ...(attestation && { attestation }) };
 }
 
 // 409 for the status first, then 400 for the payload: a closed door is reported before what was carried to it.

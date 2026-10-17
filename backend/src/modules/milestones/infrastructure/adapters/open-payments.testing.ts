@@ -152,6 +152,14 @@ export function mockOpenPayments(wallets: Wallet[] = [CUSTODY, RECEIVER]) {
         log(`outgoingPayment.get ${url}`);
         return { id: url, quoteId: `${CUSTODY.resourceServer}/quotes/q-1`, failed: false, debitAmount: amount("3010"), receiveAmount: amount("3000") };
       }),
+      // RF-18 lookup by metadata; empty unless a spec seeds a previous attempt.
+      list: vi.fn(async ({ url }: Auth & { walletAddress?: string }, _pagination?: unknown) => {
+        log(`outgoingPayment.list ${url}`);
+        return {
+          pagination: { hasNextPage: false, hasPreviousPage: false } as { hasNextPage: boolean; hasPreviousPage: boolean; endCursor?: string },
+          result: [] as { id: string; receiver: string; quoteId?: string; failed: boolean; debitAmount: Amount; receiveAmount: Amount; metadata?: Record<string, unknown> }[],
+        };
+      }),
       // Grant debit total; specs override it to model before/after a payment.
       getGrantSpentAmounts: vi.fn(async ({ url }: Auth) => {
         log(`outgoingPayment.getGrantSpentAmounts ${url}`);

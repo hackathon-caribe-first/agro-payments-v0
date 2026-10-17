@@ -31,6 +31,16 @@ export class MilestoneSummaryResponseDto {
   currency: string;
 }
 
+export class EvidenceLocationDto {
+  latitude: number;
+  longitude: number;
+}
+
+export class PhotoHashDto {
+  url: string;
+  sha256: string;
+}
+
 export class EvidenceLogResponseDto {
   id: string;
   milestone_id: string;
@@ -40,6 +50,11 @@ export class EvidenceLogResponseDto {
   @ApiProperty(EVIDENCE_PAYLOAD_SCHEMA)
   evidence_payload: EvidencePayload;
   created_at: string;
+  /** RF-19/RF-35: where the evidence was taken; present only when reported */
+  location?: EvidenceLocationDto | null;
+  /** RF-19/RF-35: sha256 (hex) per photo URL; present only when reported */
+  @ApiProperty({ required: false, type: () => [PhotoHashDto] })
+  photo_hashes?: PhotoHashDto[];
 }
 
 export class MilestoneReviewResponseDto {
@@ -71,4 +86,9 @@ export class EvidenceLogRequestDto {
   /** Exactly the milestone's required_evidences keys: numbers within min/max, booleans, http(s) photo URLs */
   @ApiProperty(EVIDENCE_PAYLOAD_SCHEMA)
   evidence_payload: EvidencePayload;
+  /** RF-19/RF-35, optional: latitude ±90, longitude ±180 */
+  location?: EvidenceLocationDto;
+  /** RF-19/RF-35, optional: one sha256 hex per photo URL of evidence_payload */
+  @ApiProperty({ required: false, type: () => [PhotoHashDto] })
+  photo_hashes?: PhotoHashDto[];
 }

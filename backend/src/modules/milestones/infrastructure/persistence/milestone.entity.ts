@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
-import type { EvidencePayload, Requirement } from "../../application/milestone";
+import type { EvidenceAttestation, EvidencePayload, Requirement } from "../../application/milestone";
 import { minorUnits } from "./minor-units.transformer";
 
 // Rows, not domain objects: TypeOrmMilestoneAdapter maps them. Schema lives in the migrations (no synchronize).
@@ -62,6 +62,9 @@ export class MilestoneEvidenceLogEntity {
   notes: string;
   @Column({ type: "jsonb", name: "evidence_payload" })
   evidencePayload: EvidencePayload;
+  /** RF-19/RF-35; null on logs recorded without location or photo hashes. */
+  @Column({ type: "jsonb", nullable: true })
+  attestation: EvidenceAttestation | null;
   @Column({ type: "timestamptz", name: "created_at" })
   createdAt: Date;
 }

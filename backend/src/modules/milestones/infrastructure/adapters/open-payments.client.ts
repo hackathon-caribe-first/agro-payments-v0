@@ -7,6 +7,8 @@ import {
   OpenPaymentsClientError,
 } from "@interledger/open-payments";
 import type { OpenPaymentsEnv } from "../../../../shared/config/env";
+import { traceOpenPaymentsClient } from "../../../support/infrastructure/traced-open-payments.client";
+import type { OpTraceRepository } from "../../../support/ports/op-trace.repository";
 import { DomainError } from "../../../../shared/domain-errors";
 import type { FundingCallback } from "../../ports/milestone-funding";
 import type { GrantScope } from "../../ports/payment-gateway";
@@ -23,12 +25,14 @@ export type OpenPayments = {
   custodyWalletAddress: string;
 };
 
-export async function createOpenPayments(env: OpenPaymentsEnv, grants: GrantStore): Promise<OpenPayments> {
-  const client = await createAuthenticatedClient({
+/** With `traces`, every request the client makes is recorded for support (RF-28). */
+export async function createOpenPayments(env: OpenPaymentsEnv, grants: GrantStore, traces?: OpTraceRepository): Promise<OpenPayments> {
+  const sdk = await createAuthenticatedClient({
     walletAddressUrl: env.clientWalletAddress,
     keyId: env.keyId,
     privateKey: env.privateKeyPath, // the SDK reads a file path
   });
+  const client = traces ? traceOpenPaymentsClient(sdk, traces) : sdk;
   return { client, grants, custodyWalletAddress: env.custodyWalletAddress };
 }
 

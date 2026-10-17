@@ -69,10 +69,21 @@ export function parseCreateProjectRequest(body: unknown): NewProjectInput {
     startDate: body.start_date as string,
     estimatedEndDate: body.estimated_end_date as string,
     milestones,
+    // RF-01, optional: checked in the domain (validateNewProject) and, for the wallet, by GET (ProducerWalletCheck).
+    ...(body.plot_polygon !== undefined && body.plot_polygon !== null && { plotPolygon: body.plot_polygon }),
+    ...(body.producer_wallet_address !== undefined && body.producer_wallet_address !== null && { producerWalletAddress: body.producer_wallet_address }),
   };
 }
 
 export function parseEvidenceLogRequest(body: unknown): EvidenceLogRequest {
   if (!isObject(body)) throw malformed();
-  return { logType: body.log_type, notes: body.notes, evidencePayload: body.evidence_payload };
+  const hasAttestation = (body.location !== undefined && body.location !== null) || body.photo_hashes !== undefined;
+  // RF-19/RF-35: location and photo hashes travel as `attestation`; shape and values are checked by validateEvidenceLog.
+  const photoHashes = Array.isArray(body.photo_hashes) ? body.photo_hashes : body.photo_hashes === undefined ? [] : body.photo_hashes;
+  return {
+    logType: body.log_type,
+    notes: body.notes,
+    evidencePayload: body.evidence_payload,
+    ...(hasAttestation && { attestation: { location: body.location ?? null, photoHashes } }),
+  };
 }

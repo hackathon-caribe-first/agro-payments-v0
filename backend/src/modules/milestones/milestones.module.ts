@@ -4,6 +4,8 @@ import { DataSource } from "typeorm";
 import { loadEnv } from "../../shared/config/env";
 import { SecretCipher } from "../../shared/crypto/secret-cipher";
 import { AuthModule } from "../auth/auth.module";
+import { OpTraceRepository } from "../support/ports/op-trace.repository";
+import { SupportModule } from "../support/support.module";
 import { CompleteFundingUseCase } from "./application/complete-funding.use-case";
 import { MilestoneStore } from "./application/milestone-store";
 import { PayLineUseCase } from "./application/pay-line.use-case";
@@ -33,7 +35,7 @@ import { PaymentGateway } from "./ports/payment-gateway";
 export const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature(MILESTONE_ENTITIES)],
+  imports: [AuthModule, SupportModule, TypeOrmModule.forFeature(MILESTONE_ENTITIES)],
   controllers: [MilestonesController, MilestoneFundingCallbackController],
   providers: [
     MilestoneStore,
@@ -65,10 +67,10 @@ export const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
     },
     {
       provide: OPEN_PAYMENTS,
-      inject: [GrantStore],
-      useFactory: (grants: GrantStore | null) => {
+      inject: [GrantStore, OpTraceRepository],
+      useFactory: (grants: GrantStore | null, traces: OpTraceRepository) => {
         const { openPayments } = loadEnv();
-        return openPayments && grants ? createOpenPayments(openPayments, grants) : null;
+        return openPayments && grants ? createOpenPayments(openPayments, grants, traces) : null;
       },
     },
     {

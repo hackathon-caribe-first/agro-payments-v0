@@ -2,6 +2,7 @@ import { Logger } from "@nestjs/common";
 import { DomainError } from "../../../../shared/domain-errors";
 import type { ReceiptAmount } from "../../application/milestone";
 import { type GrantScope, type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../../ports/payment-gateway";
+import { withOpTraceContext } from "../../../support/application/op-trace";
 import { activeOutgoingGrant, type OpenPayments, requestToken, withOutgoingToken } from "./open-payments.client";
 
 // Reference = grant key + incoming + outgoing payment URLs, so check() can read both and pick the right grant.
@@ -18,6 +19,15 @@ function fromReference(reference: string) {
 }
 
 type OpAmount = { value: string; assetCode: string; assetScale: number };
+
+/** RF-18 `hito:línea`: the metadata key every incoming and outgoing payment of a line carries. */
+export const lineMetadataKey = (milestoneId: string, lineId: string, scope: GrantScope) =>
+  `${scope === "liquidation" ? "liquidation:" : ""}${milestoneId}:${lineId}`;
+const LIST_PAGE = 100;
+// ponytail: at most 10 pages (1.000 payments) of the custody wallet are searched; past that the line is created again.
+const LIST_MAX_PAGES = 10;
+const traceContext = (request: { milestoneId: string; grantScope?: GrantScope }) =>
+  request.grantScope === "liquidation" ? { settlementId: request.milestoneId } : { milestoneId: request.milestoneId };
 
 // Open Payments amounts are decimal strings in minor units; anything that does not fit a safe integer is left out of the receipt.
 function minorUnits(amount: { value: string } | null | undefined): number | null {
@@ -47,7 +57,7 @@ export class OpenPaymentsGateway extends PaymentGateway {
     const key = `${request.milestoneId}:${request.lineId}`;
     const existing = this.paid.get(key);
     if (existing) return existing;
-    const result = await this.send(request);
+    const result = await withOpTraceContext(traceContext(request), () => this.send(request));
     if (result.reference) this.paid.set(key, result);
     return result;
   }
@@ -70,6 +80,10 @@ export class OpenPaymentsGateway extends PaymentGateway {
       return { status: "fallido", reference: null };
     }
     const payer = await client.walletAddress.get({ url: grant.payerWalletAddress });
+    const metadata = { line: lineMetadataKey(request.milestoneId, request.lineId, scope) };
+    // RF-18: a previous attempt may have paid without its reference being stored; find it before anything is created or capped.
+    const previous = await this.findPrevious(request.milestoneId, payer, metadata.line, scope);
+    if (previous) return previous;
     // RF-17: read what the grant already spent before creating or quoting anything; a line it cannot cover is refused (409, stays pendiente).
     // Unreadable (null): the wallet still enforces the debit limit on the outgoing payment.
     const spent = await this.grantSpent(request.milestoneId, payer.resourceServer, scope);
@@ -80,7 +94,7 @@ export class OpenPaymentsGateway extends PaymentGateway {
     const incomingToken = await requestToken(this.op, receiver.authServer, { type: "incoming-payment", actions: ["create", "read"] });
     const incoming = await client.incomingPayment.create(
       { url: receiver.resourceServer, accessToken: incomingToken },
-      { walletAddress: receiver.id, incomingAmount: { value: String(request.amount), assetCode: receiver.assetCode, assetScale: receiver.assetScale } },
+      { walletAddress: receiver.id, incomingAmount: { value: String(request.amount), assetCode: receiver.assetCode, assetScale: receiver.assetScale }, metadata },
     );
 
     const quoteToken = await requestToken(this.op, payer.authServer, { type: "quote", actions: ["create", "read"] });
@@ -92,7 +106,7 @@ export class OpenPaymentsGateway extends PaymentGateway {
     const outgoing = await withOutgoingToken(
       this.op,
       request.milestoneId,
-      (accessToken) => client.outgoingPayment.create({ url: payer.resourceServer, accessToken }, { walletAddress: payer.id, quoteId: quote.id }),
+      (accessToken) => client.outgoingPayment.create({ url: payer.resourceServer, accessToken }, { walletAddress: payer.id, quoteId: quote.id, metadata }),
       scope,
     );
     // Settlement is asynchronous: check() resolves it, adds the received amount and re-reads the grant total.
@@ -109,6 +123,45 @@ export class OpenPaymentsGateway extends PaymentGateway {
         grantSpentBefore: minorUnits(outgoing.grantSpentDebitAmount),
       },
     };
+  }
+
+  // RF-18: the non-failed outgoing payment on the payer wallet whose metadata carries this line's key, or null. A wallet that
+  // cannot list (no `list` action, error) falls back to reference-based idempotency: the line is created.
+  private async findPrevious(milestoneId: string, payer: { id: string; resourceServer: string }, line: string, scope: GrantScope): Promise<LinePaymentResult | null> {
+    try {
+      let cursor: string | undefined;
+      for (let page = 0; page < LIST_MAX_PAGES; page++) {
+        const { pagination, result } = await withOutgoingToken(
+          this.op,
+          milestoneId,
+          (accessToken) =>
+            this.op.client.outgoingPayment.list({ url: payer.resourceServer, accessToken, walletAddress: payer.id }, { first: LIST_PAGE, "wallet-address": payer.id, ...(cursor && { cursor }) }),
+          scope,
+        );
+        const found = result.find((p) => p.metadata?.line === line && !p.failed);
+        if (found) {
+          this.logger.log(`Line ${line} already has outgoing payment ${found.id}; not creating it again (RF-18)`);
+          return {
+            status: "en_cola",
+            reference: toReference(milestoneId, scope, String(found.receiver), found.id),
+            receipt: {
+              incomingPaymentId: String(found.receiver),
+              outgoingPaymentId: found.id,
+              quoteId: found.quoteId ?? null,
+              debitAmount: receiptAmount(found.debitAmount),
+              receiveAmount: receiptAmount(found.receiveAmount),
+            },
+          };
+        }
+        if (!pagination.hasNextPage || !pagination.endCursor) return null;
+        cursor = pagination.endCursor;
+      }
+      return null;
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      this.logger.warn(`Looking up line ${line} by metadata failed, creating it: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   // RF-23: the grant's debit total as the wallet reports it; null (not 0) when it cannot be read, so the receipt never invents a number.
@@ -129,6 +182,11 @@ export class OpenPaymentsGateway extends PaymentGateway {
   }
 
   async check(reference: string): Promise<LinePaymentResult> {
+    const { milestoneId, scope } = fromReference(reference);
+    return withOpTraceContext(traceContext({ milestoneId, grantScope: scope }), () => this.read(reference));
+  }
+
+  private async read(reference: string): Promise<LinePaymentResult> {
     const { client } = this.op;
     const { milestoneId, scope, incomingId, outgoingId } = fromReference(reference);
     const grant = await activeOutgoingGrant(this.op.grants, milestoneId, scope);

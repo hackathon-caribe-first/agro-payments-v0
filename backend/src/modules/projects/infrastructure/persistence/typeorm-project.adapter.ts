@@ -5,7 +5,13 @@ import { formatProjectCode, type NewProject, type Project, type ProjectStatus } 
 import { ProjectRepository } from "../../ports/project.repository";
 import { ProjectEntity } from "./project.entity";
 
-export const toProject = ({ seq: _, ...r }: ProjectEntity): Project => ({ ...r, currentStatus: r.currentStatus as ProjectStatus });
+// The RF-01 columns are omitted (not null) when empty, so a project without them reads back exactly as it was built.
+export const toProject = ({ seq: _, plotPolygon, producerWalletAddress, ...r }: ProjectEntity): Project => ({
+  ...r,
+  currentStatus: r.currentStatus as ProjectStatus,
+  ...(plotPolygon && { plotPolygon }),
+  ...(producerWalletAddress && { producerWalletAddress }),
+});
 
 // RNF-04: the code, the project and every milestone with its lines commit together; a failure rolls the counter back too.
 export class TypeOrmProjectAdapter extends ProjectRepository {

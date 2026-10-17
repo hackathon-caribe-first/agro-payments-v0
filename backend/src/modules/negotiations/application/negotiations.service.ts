@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { FORM_LEVEL_KEY, type FieldErrors, NotFoundError, RejectedError, ValidationError } from "../../../shared/domain-errors";
+import { DomainEvents } from "../../../shared/events/domain-events";
 import type { AuthenticatedUser } from "../../auth/ports/session-resolver";
 import { UserDirectory } from "../../auth/ports/user-directory";
 import { MilestoneRepository } from "../../milestones/ports/milestone.repository";
@@ -120,6 +121,8 @@ export class NegotiationsService {
     private readonly directory: UserDirectory,
     private readonly custody: CustodyDeposit,
     @Inject(CLOCK) private readonly clock: Clock,
+    // RF-37: the deposit that activates the project is announced to its producer.
+    @Optional() private readonly events?: DomainEvents,
   ) {}
 
   private today = () => isoToday(this.clock.now());
@@ -590,17 +593,21 @@ export class NegotiationsService {
   }
 
   // Ledger CREDIT, negotiation DEPOSITED and custody balance + FUNDED_IN_CUSTODY commit together. Idempotent: a settled deposit is left as is.
-  private settleDeposit(found: NegotiationRecord, reference: string | null): Promise<NegotiationRecord> {
-    return this.store.transaction(found.project_id, async (tx) => {
+  private async settleDeposit(found: NegotiationRecord, reference: string | null): Promise<NegotiationRecord> {
+    let activated = false;
+    const settled = await this.store.transaction(found.project_id, async (tx) => {
       const request = await this.load(found.id, tx);
       if (request.deposit_status !== "PENDING") return request;
       const project = await this.project(request.project_id, tx);
+      activated = project.currentStatus !== PROJECT_STATUS.FUNDED_IN_CUSTODY;
       const entry = applyProjectDeposit(request, { ledgerId: `led-${randomUUID()}`, historyId: `h-${randomUUID()}`, at: this.stamp() });
       await tx.saveNegotiation(request);
       await tx.addLedgerEntry({ ...entry, payment_reference: reference });
       await tx.creditCustody(project.id, pesosToMinor(entry.amount, project.assetScale));
       return request;
     });
+    if (activated) this.events?.publish({ type: "project.funded", projectId: settled.project_id });
+    return settled;
   }
 
   /** The project's custody ledger: for its producer, the buyers negotiating on it, and staff. */

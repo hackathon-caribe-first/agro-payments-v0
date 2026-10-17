@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
+import { DomainEvents } from "../../../shared/events/domain-events";
 import type { Viewer } from "../../projects/application/project";
 import { AssistantModel, type ModelMessage, type ToolResult } from "../ports/assistant-model";
 import { AssistantStore } from "../ports/assistant-store";
@@ -16,7 +17,7 @@ import {
   requiresPin,
 } from "./assistant";
 import { PinUseCase } from "./pin";
-import { isNotUnderstood, NOT_UNDERSTOOD_REPLY, PIN_IN_CHAT_REPLY, PIN_NEEDED_REPLY, REFUSAL_REPLY, SYSTEM_PROMPT } from "./system-prompt";
+import { ESCALATED_REPLY, isNotUnderstood, NOT_UNDERSTOOD_REPLY, PIN_IN_CHAT_REPLY, PIN_NEEDED_REPLY, REFUSAL_REPLY, SYSTEM_PROMPT } from "./system-prompt";
 import { confirmationPrompt, decisionReply, summarize } from "./templates";
 import { AssistantTools, TOOL_DEFINITIONS } from "./tools";
 
@@ -81,6 +82,8 @@ export class ConverseUseCase {
     private readonly model: AssistantModel,
     private readonly tools: AssistantTools,
     private readonly decisions: IntentDecisionUseCase,
+    // RF-37: escalations reach a technician as a notice.
+    @Optional() private readonly events?: DomainEvents,
   ) {}
 
   async get(viewer: Viewer, conversationId: string) {
@@ -107,6 +110,9 @@ export class ConverseUseCase {
       const decided = isYes(text) ? await this.decisions.confirm(viewer, pending.id) : await this.decisions.reject(viewer, pending.id);
       return { conversation, reply: decided.reply, intent: decided.intent };
     }
+
+    // RF-37: «no entendí» (e.g. after a notice) goes to a technician; asking the model again would only repeat it.
+    if (isNotUnderstood(text)) return this.escalate(conversation, existing === null, [message(conversation.id, MESSAGE_ROLE.USER, text)], ESCALATED_REPLY);
 
     const history = existing ? await this.store.listMessages(existing.id) : [];
     return this.converse(viewer, conversation, existing === null, history, text);
@@ -171,6 +177,8 @@ export class ConverseUseCase {
     const flagged = { ...conversation, needsTechnician: true };
     const result = await this.finish(flagged, isNew, audit, reply, null);
     await this.store.flagTechnician(conversation.id);
+    const said = audit.findLast((m) => m.role === MESSAGE_ROLE.USER);
+    this.events?.publish({ type: "assistant.escalated", userId: conversation.userId, conversationId: conversation.id, lastUserMessage: said?.text ?? "" });
     return result;
   }
 

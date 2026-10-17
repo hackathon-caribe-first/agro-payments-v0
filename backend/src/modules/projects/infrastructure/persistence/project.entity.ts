@@ -1,4 +1,5 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
+import type { GeoPolygon } from "../../application/project";
 import { minorUnits } from "../../../milestones/infrastructure/persistence/minor-units.transformer";
 
 // Rows, not domain objects: TypeOrmProjectAdapter maps them. Schema lives in the migrations (no synchronize).
@@ -42,4 +43,10 @@ export class ProjectEntity {
   assetScale: number;
   @Column({ type: "timestamptz", name: "created_at" })
   createdAt: Date;
+  /** RF-01; null when not drawn. */
+  @Column({ type: "jsonb", name: "plot_polygon", nullable: true })
+  plotPolygon?: GeoPolygon | null;
+  /** RF-01; null when the productor line pays the platform fallback wallet. */
+  @Column({ type: "text", name: "producer_wallet_address", nullable: true })
+  producerWalletAddress?: string | null;
 }

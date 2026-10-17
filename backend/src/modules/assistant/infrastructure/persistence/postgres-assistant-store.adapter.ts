@@ -55,6 +55,11 @@ export class PostgresAssistantStore extends AssistantStore {
     return row ? toConversation(row) : null;
   }
 
+  async findLatestConversation(userId: string) {
+    const [row] = await this.dataSource.query("SELECT * FROM assistant_conversations WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1", [userId]);
+    return row ? toConversation(row) : null;
+  }
+
   async flagTechnician(id: string) {
     await this.dataSource.query("UPDATE assistant_conversations SET needs_technician = true WHERE id = $1", [id]);
   }

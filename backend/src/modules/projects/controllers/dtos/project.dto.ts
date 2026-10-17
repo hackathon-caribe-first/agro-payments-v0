@@ -23,6 +23,11 @@ export class ProjectResponseDto {
   start_date: string;
   estimated_end_date: string;
   currency: string;
+  /** RF-01: GeoJSON Polygon of the plot; omitted when not drawn */
+  @ApiProperty({ required: false, type: Object })
+  plot_polygon?: { type: "Polygon"; coordinates: [number, number][][] };
+  /** RF-01: the producer's COP wallet, paid by the productor line; omitted when not given */
+  producer_wallet_address?: string;
 }
 
 /** PRD required_evidences entry; min/max apply to number, min_items to photo_array */

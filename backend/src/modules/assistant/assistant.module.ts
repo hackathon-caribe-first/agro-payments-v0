@@ -5,6 +5,7 @@ import { loadEnv } from "../../shared/config/env";
 import { AuthModule } from "../auth/auth.module";
 import { ProjectsModule } from "../projects/projects.module";
 import { ConverseUseCase, IntentDecisionUseCase } from "./application/assistant.use-cases";
+import { ConversationInbox } from "./application/inbox";
 import { PinUseCase } from "./application/pin";
 import { AssistantTools } from "./application/tools";
 import { AssistantController } from "./controllers/assistant.controller";
@@ -12,6 +13,7 @@ import { AnthropicAssistantModel } from "./infrastructure/anthropic-assistant-mo
 import { PostgresAssistantStore, PostgresPinStore } from "./infrastructure/persistence/postgres-assistant-store.adapter";
 import { PostgresOrderIntents } from "./infrastructure/persistence/postgres-order-intents.adapter";
 import { UnavailableAssistantModel } from "./infrastructure/unavailable-assistant-model.adapter";
+import { AssistantInbox } from "./ports/assistant-inbox";
 import { AssistantModel } from "./ports/assistant-model";
 import { AssistantStore, PinStore } from "./ports/assistant-store";
 import { OrderIntents } from "./ports/order-intents";
@@ -25,6 +27,7 @@ import { OrderIntents } from "./ports/order-intents";
     PinUseCase,
     ConverseUseCase,
     IntentDecisionUseCase,
+    { provide: AssistantInbox, useClass: ConversationInbox },
     { provide: AssistantStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresAssistantStore(dataSource) },
     { provide: PinStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresPinStore(dataSource) },
     {
@@ -46,6 +49,7 @@ import { OrderIntents } from "./ports/order-intents";
     },
   ],
   // Confirmed order lines for the operator's approval (PayoutsModule); nothing else of the assistant leaves the module.
-  exports: [OrderIntents],
+  // AssistantInbox: RF-37 notices (NotificationsModule) reach the producer's conversation through it.
+  exports: [OrderIntents, AssistantInbox],
 })
 export class AssistantModule {}

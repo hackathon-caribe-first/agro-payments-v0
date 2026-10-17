@@ -52,7 +52,14 @@ export type LogType = (typeof LOG_TYPE)[keyof typeof LOG_TYPE];
 export type EvidenceValue = number | boolean | string[];
 export type EvidencePayload = Record<string, EvidenceValue>;
 
-export type EvidenceLog = { id: string; logType: LogType; notes: string; evidencePayload: EvidencePayload; createdAt: Date };
+/** RF-19/RF-35: where the evidence was taken and the sha256 (hex) of each photo, as the producer's device or the assistant reported them. */
+export type EvidenceAttestation = {
+  location: { latitude: number; longitude: number } | null;
+  photoHashes: { url: string; sha256: string }[];
+};
+
+/** `attestation` is absent on logs recorded without location or photo hashes. */
+export type EvidenceLog = { id: string; logType: LogType; notes: string; evidencePayload: EvidencePayload; attestation?: EvidenceAttestation; createdAt: Date };
 
 export const REQUIREMENT_TYPE = { NUMBER: "number", BOOLEAN_SYSTEM_CHECK: "boolean_system_check", PHOTO_ARRAY: "photo_array" } as const;
 

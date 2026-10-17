@@ -27,7 +27,7 @@ import { PostgresAssistantStore } from "../../../assistant/infrastructure/persis
 import { PostgresOrderIntents } from "../../../assistant/infrastructure/persistence/postgres-order-intents.adapter";
 import { orderIntent } from "../../../payouts/application/testing";
 import { PostgresSupplierRepository } from "../../../payouts/infrastructure/postgres-supplier.repository";
-import { simulate } from "../../../simulation/application/motor";
+import { ELIMINATION_FILTERS, simulate } from "../../../simulation/application/motor";
 import { PRESETS } from "../../../simulation/application/presets";
 import type { SimulationRun } from "../../../simulation/application/simulation-run";
 import { TypeOrmSimulationRunAdapter } from "../../../simulation/infrastructure/persistence/typeorm-simulation-run.adapter";
@@ -47,6 +47,12 @@ import { SettlementUseCases } from "../../../settlement/application/settlement.u
 import { sampleTerms } from "../../../settlement/application/testing";
 import { SimulatedLiquidationFunding } from "../../../settlement/infrastructure/adapters/simulated-liquidation-funding.adapter";
 import { FakeGateway } from "../../application/testing";
+import { buildTrace } from "../../../support/application/op-trace";
+import { PostgresOpTraceRepository } from "../../../support/infrastructure/postgres-op-trace.repository";
+import type { Notification } from "../../../notifications/application/notifications";
+import { PostgresNotificationRepository } from "../../../notifications/infrastructure/postgres-notification.repository";
+import { ADMISSION_BLOCKS, admissionOutcome, type ProjectAdmission } from "../../../simulation/application/admission";
+import { PostgresAdmissionRepository } from "../../../simulation/infrastructure/persistence/postgres-admission.repository";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -891,5 +897,158 @@ describe("PostgresContractsStore (RF-04, RF-05, RF-09, RF-14, RF-25)", () => {
     );
     const preview = await settlement.preview("p1", { id: "u-admin", role: "admin" }, { ...sampleTerms(), proceeds: null, days: 365 });
     expect(preview.terms.proceeds).toBe(statement.balance);
+  });
+});
+
+// ---- support branch: RF-28 trace, RF-37 notices, RF-01 intake, RF-02/RF-03 admission, RF-19/RF-35 attestation ----
+
+describe("support: PostgresOpTraceRepository (RF-28)", () => {
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE op_traces");
+  });
+  const trace = (id: string, milestoneId: string | undefined, at: Date) =>
+    buildTrace({
+      call: { method: "POST", url: "https://rs.test/outgoing-payments", accessToken: "outgoing-token-full", body: { walletAddress: "https://ilp.test/c", quoteId: "q" } },
+      status: 201,
+      durationMs: 42,
+      response: { id: "https://rs.test/outgoing-payments/1", access_token: { value: "secret-value-full" } },
+      error: null,
+      correlation: milestoneId ? { milestoneId } : {},
+      now: at,
+      id,
+    });
+
+  it("stores traces newest first, filters by project, and never holds a full token", async (ctx) => {
+    const repo = new PostgresOpTraceRepository(db(ctx));
+    await repo.record(trace("t1", "p-1-ms-1", new Date("2026-10-17T00:00:00Z")));
+    await repo.record(trace("t2", undefined, new Date("2026-10-17T00:00:01Z")));
+    expect((await repo.list({ limit: 10 })).map((t) => t.id)).toEqual(["t2", "t1"]);
+    const [only] = await repo.list({ projectId: "p-1", limit: 10 });
+    expect(only).toEqual(trace("t1", "p-1-ms-1", new Date("2026-10-17T00:00:00Z")));
+    const [raw] = await db(ctx).query("SELECT row_to_json(op_traces)::text AS json FROM op_traces WHERE id = 't1'");
+    expect(raw.json).not.toContain("outgoing-token-full");
+    expect(raw.json).not.toContain("secret-value-full");
+  });
+});
+
+describe("support: PostgresNotificationRepository (RF-37)", () => {
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE notifications");
+  });
+  const notification = (id: string, to: { userId?: string; role?: string }, at: Date): Notification => ({
+    id,
+    recipientUserId: to.userId ?? null,
+    recipientRole: to.role ?? null,
+    kind: "payment_done",
+    title: "Pago hecho",
+    body: "Le llegaron $540.000 de jornales.",
+    projectId: "p-1",
+    milestoneId: "p-1-ms-1",
+    payload: { lineId: "l" },
+    createdAt: at,
+    readAt: null,
+  });
+
+  it("lists own and role notices newest first and marks read only for the recipient, keeping the first read time", async (ctx) => {
+    const repo = new PostgresNotificationRepository(db(ctx));
+    await repo.save(notification("n1", { userId: "u-prod" }, new Date("2026-10-17T00:00:00Z")));
+    await repo.save(notification("n2", { role: "verifier" }, new Date("2026-10-17T00:00:01Z")));
+    await repo.save(notification("n3", { userId: "u-other" }, new Date("2026-10-17T00:00:02Z")));
+    expect((await repo.listFor({ id: "u-prod", role: "seller" }, 10)).map((n) => n.id)).toEqual(["n1"]);
+    expect((await repo.listFor({ id: "v-1", role: "verifier" }, 10)).map((n) => n.id)).toEqual(["n2"]);
+    expect(await repo.listFor({ id: "u-prod", role: "seller" }, 10)).toEqual([notification("n1", { userId: "u-prod" }, new Date("2026-10-17T00:00:00Z"))]);
+
+    expect(await repo.markRead("n1", { id: "u-other", role: "seller" }, now)).toBeNull();
+    const first = new Date("2026-10-17T01:00:00Z");
+    expect((await repo.markRead("n1", { id: "u-prod", role: "seller" }, first))?.readAt).toEqual(first);
+    expect((await repo.markRead("n1", { id: "u-prod", role: "seller" }, new Date("2026-10-18T00:00:00Z")))?.readAt).toEqual(first);
+  });
+});
+
+describe("support: project intake, admission and evidence attestation", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const square = { type: "Polygon" as const, coordinates: [[[-74.1, 4.6], [-74.0, 4.6], [-74.0, 4.7], [-74.1, 4.7], [-74.1, 4.6]]] as [number, number][][] };
+  const input = (extra: Partial<NewProjectInput> = {}): NewProjectInput => ({
+    title: "Maíz P1",
+    description: "Maíz en dos hectáreas",
+    productionType: "OTRO",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [
+      {
+        title: "Siembra",
+        description: "Siembra",
+        estimatedCompletionDate: "2026-12-01",
+        suppliesBudget: 100,
+        laborBudget: 200,
+        requirements: [{ fieldKey: "fotos", label: "Fotos", type: "photo_array", minItems: 1 }],
+      },
+    ],
+    ...extra,
+  });
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+  });
+
+  it("round-trips the plot polygon and producer wallet (RF-01) and leaves them out when absent", async (ctx) => {
+    const repo = new TypeOrmProjectAdapter(db(ctx));
+    const drawn = buildProject({ id: "p1", ownerUserId: "u1", input: input({ plotPolygon: square, producerWalletAddress: "https://ilp.test/productor" }), wallets, now });
+    const plain = buildProject({ id: "p2", ownerUserId: "u1", input: input(), wallets, now });
+    const created = await repo.create(drawn.project, drawn.milestones);
+    await repo.create(plain.project, plain.milestones);
+    expect(await repo.findById("p1")).toEqual(created);
+    expect(await repo.findById("p1")).toMatchObject({ plotPolygon: square, producerWalletAddress: "https://ilp.test/productor" });
+    const reread = await repo.findById("p2");
+    expect(reread).not.toHaveProperty("plotPolygon");
+    expect(reread).not.toHaveProperty("producerWalletAddress");
+    const [productor] = (await new TypeOrmMilestoneAdapter(db(ctx)).findById("p1-ms-1"))!.lines;
+    expect(productor.walletAddress).toBe("https://ilp.test/productor");
+  });
+
+  it("round-trips an evidence log's location and photo hashes (RF-19/RF-35)", async (ctx) => {
+    const { project, milestones } = buildProject({ id: "p1", ownerUserId: "u1", input: input(), wallets, now });
+    await new TypeOrmProjectAdapter(db(ctx)).create(project, milestones);
+    const adapter = new TypeOrmMilestoneAdapter(db(ctx));
+    const m = fund(milestones[0], now);
+    const attestation = { location: { latitude: 4.65, longitude: -74.05 }, photoHashes: [{ url: "https://img.test/1.jpg", sha256: "ab".repeat(32) }] };
+    let logged = addEvidenceLog(m, [m], { logType: "PHOTO_EVIDENCE", notes: "ok", evidencePayload: { fotos: ["https://img.test/1.jpg"] }, attestation }, now);
+    logged = addEvidenceLog(logged, [logged], { logType: "AGRONOMIC_NOTE", notes: "sin huellas", evidencePayload: { fotos: ["https://img.test/2.jpg"] } }, now);
+    await adapter.save(logged);
+    const [withAttestation, without] = (await adapter.findById(m.id))!.evidenceLogs;
+    expect(withAttestation.attestation).toEqual(attestation);
+    expect(without).not.toHaveProperty("attestation");
+  });
+
+  it("stores admissions and reads back the latest (RF-02/RF-03)", async (ctx) => {
+    const { project, milestones } = buildProject({ id: "p1", ownerUserId: "u1", input: input(), wallets, now });
+    await new TypeOrmProjectAdapter(db(ctx)).create(project, milestones);
+    const repo = new PostgresAdmissionRepository(db(ctx));
+    expect(await repo.findLatest("p1")).toBeNull();
+    const filters = ELIMINATION_FILTERS.map((name) => ({ name, passes: true, evidence: "ok" }));
+    const blocks = Object.fromEntries(ADMISSION_BLOCKS.map((b) => [b, 65])) as ProjectAdmission["blocks"];
+    const admission = (id: string, at: Date): ProjectAdmission => ({
+      id,
+      projectId: "p1",
+      filters,
+      blocks,
+      outcome: admissionOutcome({ filters, blocks }),
+      motorVersion: "surco-motor@1.0.0",
+      createdBy: "v1",
+      createdAt: at,
+    });
+    await repo.save(admission("a1", now));
+    await repo.save(admission("a2", new Date(now.getTime() + 1000)));
+    expect(await repo.findLatest("p1")).toEqual(admission("a2", new Date(now.getTime() + 1000)));
+  });
+
+  it("finds the producer's latest assistant conversation for notices (RF-37)", async (ctx) => {
+    await db(ctx).query("TRUNCATE assistant_conversations CASCADE");
+    const store = new PostgresAssistantStore(db(ctx));
+    expect(await store.findLatestConversation("u1")).toBeNull();
+    await store.createConversation({ id: "c1", userId: "u1", needsTechnician: false, createdAt: new Date("2026-10-17T00:00:00Z") });
+    await store.createConversation({ id: "c2", userId: "u1", needsTechnician: false, createdAt: new Date("2026-10-17T00:00:05Z") });
+    await store.createConversation({ id: "c3", userId: "u2", needsTechnician: false, createdAt: new Date("2026-10-17T00:00:09Z") });
+    expect((await store.findLatestConversation("u1"))?.id).toBe("c2");
   });
 });

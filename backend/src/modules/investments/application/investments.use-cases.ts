@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError, NotFoundError, RejectedError, ValidationError } from "../../../shared/domain-errors";
+import { DomainEvents } from "../../../shared/events/domain-events";
 import type { AuthenticatedUser } from "../../auth/ports/session-resolver";
 import type { FundingCallback } from "../../milestones/ports/milestone-funding";
-import { canView, minorToPesos, type Project, type Viewer } from "../../projects/application/project";
+import { canView, minorToPesos, PROJECT_STATUS, type Project, type Viewer } from "../../projects/application/project";
 import type { InvestorPosition } from "../../settlement/application/settlement";
 import {
   canInvest,
@@ -51,6 +52,8 @@ export class InvestmentUseCases {
     private readonly store: InvestmentStore,
     private readonly gateway: InvestmentCapture,
     @Inject(INVESTMENT_CLOCK) private readonly clock: Clock,
+    // RF-37: the capture that reaches the target activates the project; its producer is told.
+    @Optional() private readonly events?: DomainEvents,
   ) {}
 
   private async project(id: string, viewer: Viewer, store: InvestmentStore = this.store): Promise<Project> {
@@ -125,8 +128,9 @@ export class InvestmentUseCases {
   }
 
   // CAPTURED, the INVESTOR_CAPITAL credit and custody balance + status commit together. Idempotent: a settled one is left as is.
-  private settle(found: Investment, quote: CaptureQuote, outgoingPaymentId: string): Promise<Investment> {
-    return this.store.transaction(found.projectId, async (tx) => {
+  private async settle(found: Investment, quote: CaptureQuote, outgoingPaymentId: string): Promise<Investment> {
+    let activated = false;
+    const settled = await this.store.transaction(found.projectId, async (tx) => {
       const current = await tx.findById(found.id);
       if (current && current.status !== INVESTMENT_STATUS.PENDING_CONSENT) return current;
       const project = await tx.findProject(found.projectId);
@@ -135,6 +139,7 @@ export class InvestmentUseCases {
       const captured: Investment = { ...withQuote(found, quote), status: INVESTMENT_STATUS.CAPTURED, outgoingPaymentId, capturedAt: now };
       await tx.save(captured);
       const status = projectStatusAfterCapture(project.currentStatus, project.custodyBalance + captured.amount, project.targetAmount);
+      activated = status === PROJECT_STATUS.FUNDED_IN_CUSTODY && project.currentStatus !== PROJECT_STATUS.FUNDED_IN_CUSTODY;
       await tx.creditCapital(
         {
           id: `led-${randomUUID()}`,
@@ -150,6 +155,8 @@ export class InvestmentUseCases {
       );
       return captured;
     });
+    if (activated) this.events?.publish({ type: "project.funded", projectId: found.projectId });
+    return settled;
   }
 
   /** Where the wallet callback sends the browser back to; null for an unknown investment. */

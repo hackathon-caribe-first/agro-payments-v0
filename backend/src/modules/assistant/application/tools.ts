@@ -68,6 +68,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         notes: str("Lo que el productor contó, en sus palabras."),
         log_type: { type: "string", enum: Object.values(LOG_TYPE) },
         photo_urls: { type: "array", items: { type: "string" }, description: "URLs de las fotos que el productor compartió." },
+        photo_hashes: {
+          type: "array",
+          description: "Huella SHA-256 (hexadecimal) de cada foto, tal como la entrega el canal. Nunca la invente.",
+          items: obj({ url: str("URL de la foto, una de photo_urls."), sha256: str("SHA-256 en hexadecimal, 64 caracteres.") }, ["url", "sha256"]),
+        },
         latitude: { type: "number" },
         longitude: { type: "number" },
         readings: {
@@ -235,6 +240,9 @@ export class AssistantTools {
     }
     const location =
       typeof input.latitude === "number" && typeof input.longitude === "number" ? { latitude: input.latitude, longitude: input.longitude } : null;
+    const photoHashes = Array.isArray(input.photo_hashes)
+      ? input.photo_hashes.filter(isObject).map((h) => ({ url: asString(h.url), sha256: asString(h.sha256) }))
+      : [];
     const data: EvidencePayloadIntent = {
       milestoneId: milestone.id,
       milestoneTitle: milestone.title,
@@ -243,6 +251,7 @@ export class AssistantTools {
       evidencePayload,
       photoCount: photos.length,
       location,
+      ...(photoHashes.length > 0 && { photoHashes }),
     };
     // Dry run of the same rule the confirmation applies, so a missing reading is asked now and not after the "sí".
     addEvidenceLog(milestone, siblings, toLogRequest(data), now);
@@ -288,5 +297,12 @@ export const toProjectInput = (d: DraftProjectPayload): NewProjectInput => ({ ..
 
 export function toLogRequest(d: EvidencePayloadIntent): EvidenceLogRequest {
   const where = d.location ? ` [Ubicación: ${d.location.latitude}, ${d.location.longitude}]` : "";
-  return { logType: d.logType, notes: `${d.notes}${where}`, evidencePayload: d.evidencePayload };
+  // RF-35: location and hashes also go as the log's attestation, validated like the app's (validateEvidenceLog).
+  const attested = d.location !== null || (d.photoHashes?.length ?? 0) > 0;
+  return {
+    logType: d.logType,
+    notes: `${d.notes}${where}`,
+    evidencePayload: d.evidencePayload,
+    ...(attested && { attestation: { location: d.location, photoHashes: d.photoHashes ?? [] } }),
+  };
 }

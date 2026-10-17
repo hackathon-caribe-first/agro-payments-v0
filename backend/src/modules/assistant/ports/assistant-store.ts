@@ -4,6 +4,8 @@ import type { Conversation, Intent, Message } from "../application/assistant";
 export abstract class AssistantStore {
   abstract createConversation(conversation: Conversation): Promise<void>;
   abstract findConversation(id: string): Promise<Conversation | null>;
+  /** The user's most recently created conversation, or null (RF-37 notices). */
+  abstract findLatestConversation(userId: string): Promise<Conversation | null>;
   abstract flagTechnician(conversationId: string): Promise<void>;
   /** Appended in order; listMessages returns them in that order. */
   abstract appendMessages(messages: Message[]): Promise<void>;

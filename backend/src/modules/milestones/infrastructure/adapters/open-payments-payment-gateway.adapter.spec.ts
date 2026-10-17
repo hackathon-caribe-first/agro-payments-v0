@@ -29,9 +29,11 @@ describe("OpenPaymentsGateway.pay", () => {
     const result = await gateway.pay(request);
 
     // v3 RF-17: the grant's spent total is read before anything is created or quoted (new call after the wallet GETs).
+    // RF-18 (support branch): before that, the custody's outgoing payments are searched by the line's metadata key.
     expect(calls).toEqual([
       `wallet.get ${RECEIVER.id}`,
       `wallet.get ${CUSTODY.id}`,
+      `outgoingPayment.list ${CUSTODY.resourceServer}`,
       `outgoingPayment.getGrantSpentAmounts ${CUSTODY.resourceServer}`,
       `grant.request ${RECEIVER.authServer} incoming-payment`,
       `incomingPayment.create ${RECEIVER.resourceServer}`,
@@ -41,7 +43,7 @@ describe("OpenPaymentsGateway.pay", () => {
     ]);
     expect(client.incomingPayment.create).toHaveBeenCalledWith(
       { url: RECEIVER.resourceServer, accessToken: "incoming-payment-token" },
-      { walletAddress: RECEIVER.id, incomingAmount: { value: "3000", assetCode: "USD", assetScale: 2 } },
+      { walletAddress: RECEIVER.id, incomingAmount: { value: "3000", assetCode: "USD", assetScale: 2 }, metadata: { line: "m1:l-prov" } },
     );
     expect(client.quote.create).toHaveBeenCalledWith(
       { url: CUSTODY.resourceServer, accessToken: "quote-token" },
@@ -49,7 +51,7 @@ describe("OpenPaymentsGateway.pay", () => {
     );
     expect(client.outgoingPayment.create).toHaveBeenCalledWith(
       { url: CUSTODY.resourceServer, accessToken: "outgoing-token" },
-      { walletAddress: CUSTODY.id, quoteId: QUOTE },
+      { walletAddress: CUSTODY.id, quoteId: QUOTE, metadata: { line: "m1:l-prov" } },
     );
     expect(result.status).toBe("en_cola");
     expect(result.reference).toContain(INCOMING);
@@ -268,5 +270,74 @@ describe("OpenPaymentsGateway premium scope", () => {
     await mock.grants.save(activeGrant({ projectId: "p-1", milestoneId: "p-1" }));
     await expect(new OpenPaymentsGateway(mock.op).pay(premium)).rejects.toThrow(/Premium of project p-1 has no outgoing-payment grant/);
     expect(mock.calls).toEqual([]);
+  });
+});
+
+// RF-18: after a restart or a crash between create and save, the line has no stored reference; the payment that already left
+// custody is found by its `milestone:line` metadata instead of being created twice.
+describe("OpenPaymentsGateway idempotency by metadata (RF-18)", () => {
+  const previous = (overrides: Partial<{ failed: boolean; metadata: Record<string, unknown> }> = {}) => ({
+    id: `${CUSTODY.resourceServer}/outgoing-payments/out-0`,
+    receiver: `${RECEIVER.resourceServer}/incoming-payments/in-0`,
+    quoteId: `${CUSTODY.resourceServer}/quotes/q-0`,
+    failed: false,
+    debitAmount: amount("3010"),
+    receiveAmount: amount("3000"),
+    metadata: { line: "m1:l-prov" },
+    ...overrides,
+  });
+
+  it("searches the custody wallet's outgoing payments with the grant token and the payer wallet address", async () => {
+    const { gateway, client } = await funded();
+    await gateway.pay(request);
+    expect(client.outgoingPayment.list).toHaveBeenCalledWith({ url: CUSTODY.resourceServer, accessToken: "outgoing-token", walletAddress: CUSTODY.id }, { first: 100, "wallet-address": CUSTODY.id });
+  });
+
+  it("returns the payment a previous attempt made for the same milestone:line, without creating anything", async () => {
+    const { gateway, client } = await funded();
+    client.outgoingPayment.list.mockResolvedValueOnce({ pagination: { hasNextPage: false, hasPreviousPage: false }, result: [previous()] });
+
+    const result = await gateway.pay(request);
+
+    expect(result.status).toBe("en_cola");
+    expect(result.reference).toBe(`m1 ${RECEIVER.resourceServer}/incoming-payments/in-0 ${CUSTODY.resourceServer}/outgoing-payments/out-0`);
+    expect(result.receipt).toMatchObject({ outgoingPaymentId: `${CUSTODY.resourceServer}/outgoing-payments/out-0`, debitAmount: usd(3010) });
+    expect(client.incomingPayment.create).not.toHaveBeenCalled();
+    expect(client.outgoingPayment.create).not.toHaveBeenCalled();
+    expect(client.outgoingPayment.getGrantSpentAmounts).not.toHaveBeenCalled();
+  });
+
+  it("ignores another line's payment and a failed one for this line", async () => {
+    const { gateway, client } = await funded();
+    client.outgoingPayment.list.mockResolvedValueOnce({
+      pagination: { hasNextPage: false, hasPreviousPage: false },
+      result: [previous({ metadata: { line: "m1:other" } }), previous({ failed: true })],
+    });
+    await gateway.pay(request);
+    expect(client.outgoingPayment.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows the pages until it finds the line", async () => {
+    const { gateway, client } = await funded();
+    client.outgoingPayment.list
+      .mockResolvedValueOnce({ pagination: { hasNextPage: true, hasPreviousPage: false, endCursor: "c1" }, result: [previous({ metadata: { line: "m1:x" } })] })
+      .mockResolvedValueOnce({ pagination: { hasNextPage: false, hasPreviousPage: true }, result: [previous()] });
+    await gateway.pay(request);
+    expect(client.outgoingPayment.list).toHaveBeenLastCalledWith(expect.anything(), { first: 100, "wallet-address": CUSTODY.id, cursor: "c1" });
+    expect(client.outgoingPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("falls back to creating the payment when the wallet cannot list (reference-based idempotency still holds)", async () => {
+    const { gateway, client } = await funded();
+    client.outgoingPayment.list.mockRejectedValueOnce(new Error("list not supported"));
+    expect((await gateway.pay(request)).status).toBe("en_cola");
+    expect(client.outgoingPayment.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("keys liquidation payouts apart from milestone lines", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(activeGrant({ id: "g-liq", purpose: "liquidation", milestoneId: null, settlementId: "s-1" }));
+    await new OpenPaymentsGateway(mock.op).pay({ ...request, milestoneId: "s-1", lineId: "p-1", grantScope: "liquidation" });
+    expect(mock.client.outgoingPayment.create.mock.calls[0][1]).toMatchObject({ metadata: { line: "liquidation:s-1:p-1" } });
   });
 });

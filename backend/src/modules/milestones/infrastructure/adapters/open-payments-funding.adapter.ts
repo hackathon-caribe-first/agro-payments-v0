@@ -3,6 +3,7 @@ import { DomainError } from "../../../../shared/domain-errors";
 import type { Milestone } from "../../application/milestone";
 import { type FundingCallback, MilestoneFunding } from "../../ports/milestone-funding";
 import { GRANT_PURPOSE, GRANT_STATUS } from "../../ports/grant-store";
+import { withOpTraceContext } from "../../../support/application/op-trace";
 import { finalizeInteractiveGrant, type OpenPayments, requestInteractiveOutgoingGrant } from "./open-payments.client";
 
 // v3: the fiduciaria approves one interactive outgoing-payment grant per milestone on the custody wallet,
@@ -15,7 +16,20 @@ export class OpenPaymentsFunding extends MilestoneFunding {
     super();
   }
 
-  async start(milestone: Milestone) {
+  // RF-28: every request below is traced under its milestone.
+  start(milestone: Milestone) {
+    return withOpTraceContext({ milestoneId: milestone.id }, () => this.request(milestone));
+  }
+
+  complete(milestoneId: string, callback: FundingCallback) {
+    return withOpTraceContext({ milestoneId }, () => this.finalize(milestoneId, callback));
+  }
+
+  revoke(milestoneId: string) {
+    return withOpTraceContext({ milestoneId }, () => this.cancel(milestoneId));
+  }
+
+  private async request(milestone: Milestone) {
     const { client, grants, custodyWalletAddress } = this.op;
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
     if (custody.assetCode !== milestone.currency || custody.assetScale !== milestone.assetScale) {
@@ -44,14 +58,14 @@ export class OpenPaymentsFunding extends MilestoneFunding {
     return { redirectUrl };
   }
 
-  async complete(milestoneId: string, callback: FundingCallback) {
+  private async finalize(milestoneId: string, callback: FundingCallback) {
     const grant = await this.op.grants.findLatestForMilestone(milestoneId);
     // ponytail: the grant and fundedAt are saved separately; a crash in between leaves an active grant on an unfunded milestone, funding again supersedes it.
     await finalizeInteractiveGrant(this.op, grant, callback, `Milestone ${milestoneId}`);
   }
 
   // RF-22: the continue URI and token cancel the whole grant at the custody wallet's auth server.
-  async revoke(milestoneId: string) {
+  private async cancel(milestoneId: string) {
     const { client, grants } = this.op;
     const grant = await grants.findLatestForMilestone(milestoneId);
     if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) return;

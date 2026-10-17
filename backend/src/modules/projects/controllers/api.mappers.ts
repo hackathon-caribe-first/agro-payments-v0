@@ -43,6 +43,8 @@ export const toProjectResponse = (p: Project): ProjectResponseDto => ({
   start_date: p.startDate,
   estimated_end_date: p.estimatedEndDate,
   currency: p.currency,
+  ...(p.plotPolygon && { plot_polygon: p.plotPolygon }),
+  ...(p.producerWalletAddress && { producer_wallet_address: p.producerWalletAddress }),
 });
 
 const isSupply = (l: Line) => l.kind === LINE_KIND.PROVEEDOR;
@@ -87,6 +89,7 @@ export const toEvidenceLogResponse = (milestoneId: string, l: EvidenceLog): Evid
   notes: l.notes,
   evidence_payload: l.evidencePayload,
   created_at: l.createdAt.toISOString(),
+  ...(l.attestation && { location: l.attestation.location, photo_hashes: l.attestation.photoHashes }),
 });
 
 const toReviewDto = (r: ReviewEntry): MilestoneReviewResponseDto => ({

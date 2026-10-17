@@ -22,6 +22,8 @@ Reglas que no se rompen:
 
 /** The reply that marks a conversation for a technician (RF-37). */
 export const NOT_UNDERSTOOD_REPLY = "No entendí bien. Un técnico lo va a llamar para ayudarle.";
+/** When the producer answers «no entendí» (RF-37): no second try by the model, a person calls. */
+export const ESCALATED_REPLY = "Entendido. Un técnico lo va a llamar para explicarle mejor.";
 export const REFUSAL_REPLY = "No puedo ayudarle con eso por este medio. Un técnico lo va a llamar para ayudarle.";
 export const PIN_IN_CHAT_REPLY = "Por seguridad no escriba su PIN en el chat. Escríbalo solo en la casilla de PIN de la pantalla.";
 export const PIN_NEEDED_REPLY = "Para confirmar, escriba su PIN de 4 dígitos en la casilla de la pantalla.";

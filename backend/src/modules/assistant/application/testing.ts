@@ -24,6 +24,9 @@ export class FakeAssistantStore extends AssistantStore {
   async findConversation(id: string) {
     return this.conversations.get(id) ?? null;
   }
+  async findLatestConversation(userId: string) {
+    return [...this.conversations.values()].filter((c) => c.userId === userId).at(-1) ?? null;
+  }
   async flagTechnician(id: string) {
     const c = this.conversations.get(id);
     if (c) c.needsTechnician = true;

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError, NotFoundError, ValidationError } from "../../../shared/domain-errors";
+import { DomainEvents } from "../../../shared/events/domain-events";
 import { type LineResult, spentFromCustody } from "../../milestones/application/milestone";
 import { MilestoneRepository } from "../../milestones/ports/milestone.repository";
 import { PaymentGateway } from "../../milestones/ports/payment-gateway";
@@ -54,6 +55,8 @@ export class SettlementUseCases {
     private readonly liquidation: LiquidationFunding,
     @Optional() private readonly captured?: CapturedInvestors,
     @Optional() private readonly milestones?: MilestoneRepository,
+    // RF-37: the producer hears that the harvest was settled.
+    @Optional() private readonly events?: DomainEvents,
   ) {}
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
@@ -165,6 +168,7 @@ export class SettlementUseCases {
 
     if (settlement.status === SETTLEMENT_STATUS.EXECUTED) {
       await this.projects.updateStatus(settlement.projectId, PROJECT_STATUS.SETTLED_AND_CLOSED);
+      if (current.status !== SETTLEMENT_STATUS.EXECUTED) this.events?.publish({ type: "settlement.executed", projectId: settlement.projectId, settlementId: settlement.id });
       // Like RF-22 for milestones: the grant is cancelled once its last payout settled. A failed revoke never undoes the payouts.
       await this.liquidation.revoke(id).catch(() => undefined);
     }

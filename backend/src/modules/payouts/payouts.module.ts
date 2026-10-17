@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AssistantModule } from "../assistant/assistant.module";
 import { AuthModule } from "../auth/auth.module";
+import { DomainEvents } from "../../shared/events/domain-events";
 import { MilestoneStore } from "../milestones/application/milestone-store";
 import type { OpenPayments } from "../milestones/infrastructure/adapters/open-payments.client";
 import { OPEN_PAYMENTS, MilestonesModule } from "../milestones/milestones.module";
@@ -22,7 +23,12 @@ import { WalletDirectory } from "./ports/wallet-directory";
   providers: [
     SuppliersUseCases,
     OrderApprovalUseCases,
-    { provide: MilestoneStore, inject: [MilestoneRepository], useFactory: (milestones: MilestoneRepository) => new MilestoneStore(milestones) },
+    {
+      provide: MilestoneStore,
+      // RF-37: supplier lines paid from here also publish line.paid (DomainEvents is global, EventsModule).
+      inject: [MilestoneRepository, { token: DomainEvents, optional: true }],
+      useFactory: (milestones: MilestoneRepository, events?: DomainEvents) => new MilestoneStore(milestones, events),
+    },
     { provide: SupplierRepository, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresSupplierRepository(dataSource) },
     {
       provide: WalletDirectory,

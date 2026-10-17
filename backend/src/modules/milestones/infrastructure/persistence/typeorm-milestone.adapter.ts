@@ -38,10 +38,14 @@ const toRow = (m: Milestone): MilestoneRow => ({
   requiredEvidences: m.requirements,
 });
 
-const toLogRow = (milestoneId: string, l: EvidenceLog, position: number): MilestoneEvidenceLogEntity => ({ milestoneId, position, ...l });
+const toLogRow = (milestoneId: string, l: EvidenceLog, position: number): MilestoneEvidenceLogEntity => ({ milestoneId, position, ...l, attestation: l.attestation ?? null });
 const toReviewRow = (milestoneId: string, r: ReviewEntry, position: number): MilestoneReviewEntity => ({ milestoneId, position, ...r });
 
-const toLog = ({ milestoneId: _, position: __, ...r }: MilestoneEvidenceLogEntity): EvidenceLog => ({ ...r, logType: r.logType as LogType });
+const toLog = ({ milestoneId: _, position: __, attestation, ...r }: MilestoneEvidenceLogEntity): EvidenceLog => ({
+  ...r,
+  logType: r.logType as LogType,
+  ...(attestation && { attestation }),
+});
 const toReview = ({ milestoneId: _, position: __, ...r }: MilestoneReviewEntity): ReviewEntry => ({ ...r, verdict: r.verdict as ReviewVerdict });
 
 const toLineRow = (milestoneId: string, l: Line, position: number): MilestoneLineEntity => ({

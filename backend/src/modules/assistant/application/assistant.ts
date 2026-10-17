@@ -36,6 +36,8 @@ export type EvidencePayloadIntent = {
   evidencePayload: Record<string, number | boolean | string[]>;
   photoCount: number;
   location: { latitude: number; longitude: number } | null;
+  /** RF-35: sha256 (hex) of each photo, as the channel computed it; absent on intents from before it existed. */
+  photoHashes?: { url: string; sha256: string }[];
 };
 
 /** Pesos are whole COP, like the /api project budgets. */
