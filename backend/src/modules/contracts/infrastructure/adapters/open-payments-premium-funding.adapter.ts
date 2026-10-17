@@ -3,6 +3,7 @@ import { DomainError } from "../../../../shared/domain-errors";
 import { finalizeInteractiveGrant, type OpenPayments, requestInteractiveOutgoingGrant } from "../../../milestones/infrastructure/adapters/open-payments.client";
 import type { FundingCallback } from "../../../milestones/ports/milestone-funding";
 import { GRANT_PURPOSE, GRANT_STATUS } from "../../../milestones/ports/grant-store";
+import { withOpTraceContext } from "../../../support/application/op-trace";
 import { PremiumFunding, type PremiumOrder } from "../../ports/premium-funding";
 
 // PRD v3 Fase 1 paso 6 (request #13): the fiduciaria approves one interactive outgoing grant on the custody wallet capped at the
@@ -17,7 +18,20 @@ export class OpenPaymentsPremiumFunding extends PremiumFunding {
     super();
   }
 
-  async start(order: PremiumOrder) {
+  // RF-28: the grant's requests are traced under the project.
+  start(order: PremiumOrder) {
+    return withOpTraceContext({ projectId: order.projectId }, () => this.request(order));
+  }
+
+  complete(projectId: string, callback: FundingCallback) {
+    return withOpTraceContext({ projectId }, () => this.finalize(projectId, callback));
+  }
+
+  revoke(projectId: string) {
+    return withOpTraceContext({ projectId }, () => this.cancel(projectId));
+  }
+
+  private async request(order: PremiumOrder) {
     const { client, grants, custodyWalletAddress } = this.op;
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
     if (custody.assetCode !== order.currency || custody.assetScale !== order.assetScale) {
@@ -44,7 +58,7 @@ export class OpenPaymentsPremiumFunding extends PremiumFunding {
     return { redirectUrl };
   }
 
-  async complete(projectId: string, callback: FundingCallback) {
+  private async finalize(projectId: string, callback: FundingCallback) {
     const grant = await this.op.grants.findLatestForPremium(projectId);
     await finalizeInteractiveGrant(this.op, grant, callback, `Premium of project ${projectId}`);
   }
@@ -54,7 +68,7 @@ export class OpenPaymentsPremiumFunding extends PremiumFunding {
     return grant?.status === GRANT_STATUS.ACTIVE && grant.access !== null;
   }
 
-  async revoke(projectId: string) {
+  private async cancel(projectId: string) {
     const { client, grants } = this.op;
     const grant = await grants.findLatestForPremium(projectId);
     if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) return;

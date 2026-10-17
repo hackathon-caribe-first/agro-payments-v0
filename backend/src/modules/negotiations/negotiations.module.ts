@@ -5,6 +5,8 @@ import { AuthModule } from "../auth/auth.module";
 import { ContractsModule } from "../contracts/contracts.module";
 import type { OpenPayments } from "../milestones/infrastructure/adapters/open-payments.client";
 import { MilestonesModule, OPEN_PAYMENTS } from "../milestones/milestones.module";
+import { PaymentStepRepository } from "../support/ports/payment-step.repository";
+import { SupportModule } from "../support/support.module";
 import { CLOCK, type Clock, NegotiationsService } from "./application/negotiations.service";
 import { DEPOSIT_WEB_APP_URL, DepositCallbackController } from "./controllers/deposit-callback.controller";
 import { NegotiationsController } from "./controllers/negotiations.controller";
@@ -17,7 +19,7 @@ import { NegotiationStore } from "./ports/negotiation-store";
 // Block 3: the buyer side of the web app — catalog, project and open-request negotiations, and the custody deposit.
 // The deposit adapter follows PAYMENT_GATEWAY: simulated (synchronous, like the mock) or open-payments (buyer wallet → custody wallet).
 @Module({
-  imports: [AuthModule, MilestonesModule, ContractsModule],
+  imports: [AuthModule, MilestonesModule, ContractsModule, SupportModule],
   controllers: [NegotiationsController, DepositCallbackController],
   providers: [
     NegotiationsService,
@@ -26,10 +28,10 @@ import { NegotiationStore } from "./ports/negotiation-store";
     { provide: NegotiationStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new TypeOrmNegotiationStore(dataSource) },
     {
       provide: CustodyDeposit,
-      inject: [OPEN_PAYMENTS],
-      useFactory: (op: OpenPayments | null) => {
+      inject: [OPEN_PAYMENTS, PaymentStepRepository],
+      useFactory: (op: OpenPayments | null, steps: PaymentStepRepository) => {
         const { openPayments, apiUrl } = loadEnv();
-        return op && openPayments ? new OpenPaymentsCustodyDeposit(op, openPayments.buyerWalletAddress, apiUrl) : new SimulatedCustodyDeposit();
+        return op && openPayments ? new OpenPaymentsCustodyDeposit(op, openPayments.buyerWalletAddress, apiUrl, steps) : new SimulatedCustodyDeposit();
       },
     },
   ],

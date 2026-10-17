@@ -4,6 +4,8 @@ import { loadEnv } from "../../shared/config/env";
 import { AuthModule } from "../auth/auth.module";
 import type { OpenPayments } from "../milestones/infrastructure/adapters/open-payments.client";
 import { MilestonesModule, OPEN_PAYMENTS } from "../milestones/milestones.module";
+import { PaymentStepRepository } from "../support/ports/payment-step.repository";
+import { SupportModule } from "../support/support.module";
 import { type Clock, HARVEST_CLOCK, HarvestUseCases } from "./application/harvest.use-cases";
 import { InvestorPanelUseCases } from "./application/investor-panel.use-cases";
 import { HARVEST_WEB_APP_URL, HarvestPaymentCallbackController } from "./controllers/harvest-payment-callback.controller";
@@ -20,7 +22,7 @@ import { PanelSources } from "./ports/panel-sources";
 // PAYMENT_GATEWAY like the buyer's deposit: simulated (synchronous) or open-payments (buyer wallet → custody wallet).
 // PurchaseContractPrice is not provided yet (another branch adds purchase contracts): certification takes the request's price.
 @Module({
-  imports: [AuthModule, MilestonesModule],
+  imports: [AuthModule, MilestonesModule, SupportModule],
   controllers: [HarvestController, HarvestPaymentCallbackController],
   providers: [
     HarvestUseCases,
@@ -31,10 +33,10 @@ import { PanelSources } from "./ports/panel-sources";
     { provide: PanelSources, inject: [DataSource], useFactory: (dataSource: DataSource) => new TypeOrmPanelSources(dataSource) },
     {
       provide: HarvestPayment,
-      inject: [OPEN_PAYMENTS],
-      useFactory: (op: OpenPayments | null) => {
+      inject: [OPEN_PAYMENTS, PaymentStepRepository],
+      useFactory: (op: OpenPayments | null, steps: PaymentStepRepository) => {
         const { openPayments, apiUrl } = loadEnv();
-        return op && openPayments ? new OpenPaymentsHarvestPayment(op, openPayments.buyerWalletAddress, apiUrl) : new SimulatedHarvestPayment();
+        return op && openPayments ? new OpenPaymentsHarvestPayment(op, openPayments.buyerWalletAddress, apiUrl, steps) : new SimulatedHarvestPayment();
       },
     },
   ],

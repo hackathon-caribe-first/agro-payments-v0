@@ -17,6 +17,7 @@ const route = (controller: Controller, handler: string) => [
 
 const READERS = ["seller", "admin", "fidu", "investor"];
 const PRODUCERS = ["seller", "admin"];
+const OPERATORS = ["admin", "fidu"];
 
 describe.each([ProjectsController, ProducerMilestonesController])("%o access control", (controller) => {
   it("uses ApiAuthGuard (session or DEMO_IDENTITY) then RolesGuard, and the /api error body", () => {
@@ -38,6 +39,7 @@ describe.each([ProjectsController, ProducerMilestonesController])("%o access con
 describe("ProjectsController routes", () => {
   it("serves the web app's project paths under /api", () => {
     expect(route(ProjectsController, "listProducerProjects")).toEqual(["GET", "api/producer/projects"]);
+    expect(route(ProjectsController, "listProjects")).toEqual(["GET", "api/projects"]);
     expect(route(ProjectsController, "getProject")).toEqual(["GET", "api/projects/:projectId"]);
     expect(route(ProjectsController, "createProject")).toEqual(["POST", "api/projects"]);
     expect(route(ProjectsController, "listMilestones")).toEqual(["GET", "api/projects/:projectId/milestones"]);
@@ -48,6 +50,10 @@ describe("ProjectsController routes", () => {
     expect(meta(ROLES_KEY, ProjectsController, "createProject")).toEqual(PRODUCERS);
     expect(meta(ROLES_KEY, ProjectsController, "getProject")).toBeUndefined();
     expect(meta(ROLES_KEY, ProjectsController, "listMilestones")).toBeUndefined();
+  });
+
+  it("lists every project only to admin and fidu (not seller, buyer or investor)", () => {
+    expect(meta(ROLES_KEY, ProjectsController, "listProjects")).toEqual(OPERATORS);
   });
 
   it("answers 201 on create", () => {

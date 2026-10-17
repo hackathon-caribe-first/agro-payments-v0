@@ -83,7 +83,7 @@ const summarize = (response: unknown) => {
 };
 
 // Project milestones are `${projectId}-ms-${n}` (projects/application/project.ts buildProject).
-const projectOfMilestone = (milestoneId: string | undefined) => milestoneId?.match(/^(.+)-ms-\d+$/)?.[1] ?? null;
+export const projectOfMilestone = (milestoneId: string | undefined) => milestoneId?.match(/^(.+)-ms-\d+$/)?.[1] ?? null;
 
 export type TraceInput = {
   call: OpCall;

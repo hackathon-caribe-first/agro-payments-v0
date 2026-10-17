@@ -14,5 +14,4 @@ export const milestones = producer.milestones;
 // Photos a producer can attach to a field log (no upload in this slice).
 export const PHOTO_OPTIONS = FIXTURE_PHOTO_URLS;
 
-// Currency used for the dashboard totals.
 export const DASHBOARD_CURRENCY = "COP";

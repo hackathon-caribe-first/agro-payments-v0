@@ -5,7 +5,8 @@ import type { Milestone } from "../../milestones/application/milestone";
 import { FakeRepository } from "../../milestones/application/testing";
 import type { FundingCallback } from "../../milestones/ports/milestone-funding";
 import { buildProject, type Project, PROJECT_STATUS } from "../../projects/application/project";
-import { CustodyDeposit, type DepositOrder } from "../ports/custody-deposit";
+import { InMemoryPaymentSteps } from "../../support/application/testing";
+import { CustodyDeposit, type DepositOrder, type DepositResult } from "../ports/custody-deposit";
 import { type LedgerRecord, type NegotiationFilter, type NegotiationRecord, NegotiationStore, type OpenRequestFilter, type OpenRequestRecord } from "../ports/negotiation-store";
 import { type Clock, NegotiationsService } from "./negotiations.service";
 
@@ -82,15 +83,22 @@ export class InstantCustody extends CustodyDeposit {
     this.orders.push(order);
     return null;
   }
-  async complete(): Promise<{ reference: string }> {
+  async complete(): Promise<DepositResult> {
     throw new Error("nothing to complete in simulated mode");
+  }
+  async confirm() {
+    return null;
   }
 }
 
-/** Open Payments mode: the buyer approves at the wallet, then the callback completes. */
+/** Open Payments mode: the buyer approves at the wallet, then the callback completes (or leaves it unconfirmed until confirm()). */
 export class RedirectCustody extends CustodyDeposit {
   readonly orders: DepositOrder[] = [];
   readonly callbacks: FundingCallback[] = [];
+  /** What complete() reports once the hash checks out. */
+  sent: DepositResult["status"] = "completed";
+  /** What confirm() reports: null while nothing is in flight. */
+  inFlight: DepositResult | null = null;
   async start(order: DepositOrder) {
     this.orders.push(order);
     return { redirectUrl: `https://wallet.test/consent/${order.negotiationId}` };
@@ -98,7 +106,12 @@ export class RedirectCustody extends CustodyDeposit {
   async complete(_order: DepositOrder, callback: FundingCallback) {
     this.callbacks.push(callback);
     if (callback.hash !== "good") throw new Error("hash mismatch");
-    return { reference: "https://rs.test/outgoing-payments/out-1" };
+    const result = { status: this.sent, reference: "https://rs.test/outgoing-payments/out-1" };
+    if (result.status === "unconfirmed") this.inFlight = result;
+    return result;
+  }
+  async confirm() {
+    return this.inFlight;
   }
 }
 
@@ -145,7 +158,8 @@ export function setup(custody: CustodyDeposit = new InstantCustody(), now = `${T
       this.current = new Date(iso);
     },
   } as Clock & { current: Date; set(iso: string): void };
-  const service = new NegotiationsService(store, milestones, new FakeDirectory([PRODUCER, BUYER, OTHER_BUYER]), custody, clock);
+  const steps = new InMemoryPaymentSteps();
+  const service = new NegotiationsService(store, milestones, new FakeDirectory([PRODUCER, BUYER, OTHER_BUYER]), custody, clock, undefined, steps);
   const built = seedProject(store, milestones);
-  return { store, milestones, service, clock, custody, built };
+  return { store, milestones, service, clock, custody, built, steps };
 }

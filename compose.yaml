@@ -1,0 +1,51 @@
+# Full stack: docker compose up --build  →  web http://localhost:5180 (proxies the API), API http://localhost:3080 (Swagger /docs)
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agro
+      POSTGRES_PASSWORD: agro
+      POSTGRES_DB: agro
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agro -d agro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Secrets and gateway config come from backend/.env; only the wiring is overridden here.
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://agro:agro@postgres:5432/agro
+      API_URL: http://localhost:5180
+      WEB_ORIGIN: http://localhost:5180
+      OP_PRIVATE_KEY_PATH: /app/keys/private.key
+    volumes:
+      - ./backend/keys:/app/keys:ro # Open Payments private key, never baked into the image
+    ports:
+      - "3080:3000" # 3000/3001/3010 are taken by local dev servers
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_MILESTONES_BASE_URL: /api
+        VITE_API_URL: http://localhost:5180
+    depends_on:
+      - backend
+    ports:
+      - "5180:80" # 5175 is the local Vite dev server
+
+volumes:
+  postgres-data:

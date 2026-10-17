@@ -4,6 +4,8 @@ import { loadEnv } from "../../shared/config/env";
 import { AuthModule } from "../auth/auth.module";
 import type { OpenPayments } from "../milestones/infrastructure/adapters/open-payments.client";
 import { MilestonesModule, OPEN_PAYMENTS } from "../milestones/milestones.module";
+import { PaymentStepRepository } from "../support/ports/payment-step.repository";
+import { SupportModule } from "../support/support.module";
 import { CapturedInvestors } from "../settlement/ports/captured-investors";
 import { type Clock, INVESTMENT_CLOCK, InvestmentUseCases } from "./application/investments.use-cases";
 import { INVESTMENT_WEB_APP_URL, InvestmentCallbackController } from "./controllers/investment-callback.controller";
@@ -18,7 +20,7 @@ import { InvestmentStore } from "./ports/investment-store";
 // fixed demo rates) or open-payments (investor wallet → custody wallet, quote with the COP receive side fixed).
 // Exports CapturedInvestors so the settlement cascade reads its capital tier from the captured investments.
 @Module({
-  imports: [AuthModule, MilestonesModule],
+  imports: [AuthModule, MilestonesModule, SupportModule],
   controllers: [InvestmentsController, InvestmentCallbackController],
   providers: [
     InvestmentUseCases,
@@ -27,8 +29,9 @@ import { InvestmentStore } from "./ports/investment-store";
     { provide: InvestmentStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new TypeOrmInvestmentStore(dataSource) },
     {
       provide: InvestmentCapture,
-      inject: [OPEN_PAYMENTS],
-      useFactory: (op: OpenPayments | null) => (op ? new OpenPaymentsInvestmentCapture(op, loadEnv().apiUrl) : new SimulatedInvestmentCapture()),
+      inject: [OPEN_PAYMENTS, PaymentStepRepository],
+      useFactory: (op: OpenPayments | null, steps: PaymentStepRepository) =>
+        op ? new OpenPaymentsInvestmentCapture(op, loadEnv().apiUrl, undefined, steps) : new SimulatedInvestmentCapture(),
     },
     {
       provide: CapturedInvestors,

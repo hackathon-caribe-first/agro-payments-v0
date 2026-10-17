@@ -14,6 +14,8 @@ import { ProjectsModule } from "../projects/projects.module";
 import { ProjectRepository } from "../projects/ports/project.repository";
 import { TypeOrmSimulationRunAdapter } from "../simulation/infrastructure/persistence/typeorm-simulation-run.adapter";
 import { SimulationRunRepository } from "../simulation/ports/simulation-run.repository";
+import { PaymentStepRepository } from "../support/ports/payment-step.repository";
+import { SupportModule } from "../support/support.module";
 import { ContractsUseCases } from "./application/contracts.use-cases";
 import { ContractsController } from "./controllers/contracts.controller";
 import { PremiumGrantCallbackController } from "./controllers/premium-grant-callback.controller";
@@ -31,11 +33,15 @@ import { PurchaseContracts } from "./ports/purchase-contracts";
 // PAYMENT_GATEWAY) from the fiduciaria's premium grant on custody. Reads simulation runs with its own adapter instance (the
 // simulation module imports this one for the publish gate, so importing it back would be circular).
 // Exports PurchaseContracts for the RF-07 publish gate.
+// Only so ContractsUseCases' constructor parameters stay positional up to the payment step repository.
+const CONTRACTS_CLOCK = Symbol("CONTRACTS_CLOCK");
+
 @Module({
-  imports: [AuthModule, MilestonesModule, ProjectsModule],
+  imports: [AuthModule, MilestonesModule, ProjectsModule, SupportModule],
   controllers: [ContractsController, PremiumGrantCallbackController],
   providers: [
     { provide: WEB_APP_URL, useFactory: () => loadEnv().webOrigins[0] },
+    { provide: CONTRACTS_CLOCK, useValue: { now: () => new Date() } },
     { provide: ContractsStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresContractsStore(dataSource) },
     { provide: SimulationRunRepository, inject: [DataSource], useFactory: (dataSource: DataSource) => new TypeOrmSimulationRunAdapter(dataSource) },
     {
@@ -51,7 +57,7 @@ import { PurchaseContracts } from "./ports/purchase-contracts";
     { provide: IndemnityInflow, inject: [OPEN_PAYMENTS], useFactory: (op: OpenPayments | null) => (op ? new OpenPaymentsIndemnityInflow(op) : new SimulatedIndemnityInflow()) },
     {
       provide: ContractsUseCases,
-      inject: [ProjectRepository, MilestoneRepository, ContractsStore, SimulationRunRepository, UserDirectory, WalletDirectory, PaymentGateway, PremiumFunding, IndemnityInflow],
+      inject: [ProjectRepository, MilestoneRepository, ContractsStore, SimulationRunRepository, UserDirectory, WalletDirectory, PaymentGateway, PremiumFunding, IndemnityInflow, CONTRACTS_CLOCK, PaymentStepRepository],
       useFactory: (...deps: ConstructorParameters<typeof ContractsUseCases>) => new ContractsUseCases(...deps),
     },
     {

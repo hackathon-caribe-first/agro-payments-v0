@@ -66,13 +66,12 @@ export async function requestToken({ client }: OpenPayments, authServer: string,
 const isAuthError = (error: unknown) => error instanceof OpenPaymentsClientError && (error.status === 401 || error.status === 403);
 
 // Calls `use` with the grant's outgoing token; on 401/403 rotates it once through the manage URL and retries once.
-export async function withOutgoingToken<T>(
-  { client, grants }: OpenPayments,
-  id: string,
-  use: (accessToken: string) => Promise<T>,
-  scope: GrantScope = "milestone",
-) {
-  const grant = await activeOutgoingGrant(grants, id, scope);
+export async function withOutgoingToken<T>(op: OpenPayments, id: string, use: (accessToken: string) => Promise<T>, scope: GrantScope = "milestone") {
+  return withGrantToken(op, await activeOutgoingGrant(op.grants, id, scope), use);
+}
+
+/** withOutgoingToken for a grant the caller already loaded (e.g. a buyer_deposit grant, keyed by negotiation). */
+export async function withGrantToken<T>({ client, grants }: OpenPayments, grant: Grant & { access: GrantAccess }, use: (accessToken: string) => Promise<T>) {
   try {
     return await use(grant.access.accessToken);
   } catch (error) {

@@ -37,7 +37,7 @@ const traceContext = (request: { milestoneId: string; grantScope?: GrantScope })
       : { milestoneId: request.milestoneId };
 
 // Open Payments amounts are decimal strings in minor units; anything that does not fit a safe integer is left out of the receipt.
-function minorUnits(amount: { value: string } | null | undefined): number | null {
+export function minorUnits(amount: { value: string } | null | undefined): number | null {
   if (!amount || !/^\d+$/.test(amount.value)) return null;
   const value = Number(amount.value);
   return Number.isSafeInteger(value) ? value : null;

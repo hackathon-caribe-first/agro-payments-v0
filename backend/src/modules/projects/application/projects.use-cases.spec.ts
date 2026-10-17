@@ -74,6 +74,13 @@ describe("ProjectQueries", () => {
     expect((await queries.listOwned(producer)).map((p) => p.id)).toEqual([mine.id]);
   });
 
+  it("lists every project, oldest first, for the operator screens (fidu and admin)", async () => {
+    const { create, queries } = setup();
+    const first = await create.execute(producer, input());
+    const second = await create.execute(otherProducer, input());
+    expect((await queries.listAll()).map((p) => p.id)).toEqual([first.id, second.id]);
+  });
+
   it("hides another producer's project as not found, and shows it to fidu and admin", async () => {
     const { create, queries } = setup();
     const project = await create.execute(producer, input());

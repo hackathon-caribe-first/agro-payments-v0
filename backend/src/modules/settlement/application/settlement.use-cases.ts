@@ -8,6 +8,8 @@ import { PaymentGateway } from "../../milestones/ports/payment-gateway";
 import { canView, PROJECT_STATUS, type Project, type ProjectStatus, type ProjectWallets, type Viewer } from "../../projects/application/project";
 import { PROJECT_WALLETS } from "../../projects/application/project-wallets";
 import { ProjectRepository } from "../../projects/ports/project.repository";
+import { PAYMENT_KIND, recordGatewayResult } from "../../support/application/payment-step";
+import { PaymentStepRepository } from "../../support/ports/payment-step.repository";
 import { CapturedInvestors } from "../ports/captured-investors";
 import type { FundingCallback } from "../../milestones/ports/milestone-funding";
 import { LiquidationFunding } from "../ports/liquidation-funding";
@@ -58,7 +60,12 @@ export class SettlementUseCases {
     @Optional() private readonly milestones?: MilestoneRepository,
     // RF-37: the producer hears that the harvest was settled.
     @Optional() private readonly events?: DomainEvents,
+    @Optional() private readonly steps?: PaymentStepRepository,
   ) {}
+
+  private recordPayout(settlement: Settlement, payoutId: string, result: LineResult) {
+    return recordGatewayResult(this.steps, { kind: PAYMENT_KIND.SETTLEMENT_PAYOUT, paymentId: `${settlement.id}:${payoutId}`, projectId: settlement.projectId }, result);
+  }
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
     const project = await this.projects.findById(id);
@@ -157,6 +164,7 @@ export class SettlementUseCases {
         });
       settlement = applyPayoutResult(settlement, payout.id, result, new Date());
       await this.settlements.save(settlement);
+      await this.recordPayout(settlement, payout.id, result);
     }
 
     for (const payout of settlement.payouts.filter((p) => p.status === PAYOUT_STATUS.EXECUTING && p.reference)) {
@@ -165,6 +173,7 @@ export class SettlementUseCases {
       if (!result) continue;
       settlement = applyPayoutResult(settlement, payout.id, result, new Date());
       await this.settlements.save(settlement);
+      await this.recordPayout(settlement, payout.id, result);
     }
 
     if (settlement.status === SETTLEMENT_STATUS.EXECUTED) {

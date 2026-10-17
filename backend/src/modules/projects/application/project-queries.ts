@@ -28,6 +28,11 @@ export class ProjectQueries {
     return this.projects.findByOwner(viewer.id);
   }
 
+  /** Every project, oldest first. Only the operator route (admin, fidu) calls it: canView already lets both read any project. */
+  listAll() {
+    return this.projects.findAll();
+  }
+
   async get(id: string, viewer: Viewer): Promise<Project> {
     const project = await this.projects.findById(id);
     if (!project || !canRead(project, viewer)) throw new NotFoundError(`Project ${id} not found`);
