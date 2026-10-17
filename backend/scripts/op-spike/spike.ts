@@ -1,4 +1,5 @@
 // Manual Open Payments testnet spike. Run: pnpm install && pnpm spike (loads env from shell).
+import { createHash, randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import {
   createAuthenticatedClient,
@@ -32,6 +33,17 @@ const attempt = async <T>(label: string, fn: () => Promise<T>) => {
 
 const CAP = 1000n; // minor units (debit cap X)
 const PAY = 400n;
+const FINISH_URI = "http://localhost:3344/callback";
+const nonce = randomUUID();
+
+// GNAP §4.2.3: base64(sha256(clientNonce \n asFinishNonce \n interactRef \n grantEndpoint)).
+// Checks the grant endpoint with and without a trailing slash to settle the PRD question.
+const verifyHash = (received: string | null, asNonce: string, interactRef: string, authServer: string) => {
+  const hashFor = (url: string) =>
+    createHash("sha256").update(`${nonce}\n${asNonce}\n${interactRef}\n${url}`).digest("base64");
+  const bare = authServer.replace(/\/$/, "");
+  return { received, matchesWithoutSlash: received === hashFor(bare), matchesWithSlash: received === hashFor(`${bare}/`) };
+};
 
 async function main() {
   const client: AuthenticatedClient = await createAuthenticatedClient({
@@ -74,11 +86,16 @@ async function main() {
       type: "outgoing-payment", actions: ["create", "read"], identifier: sender.id,
       limits: { debitAmount: { value: CAP.toString(), assetCode: sender.assetCode, assetScale: sender.assetScale } },
     }] },
-    interact: { start: ["redirect"] },
+    // Without `finish` the AS never redirects back with an interact_ref.
+    interact: { start: ["redirect"], finish: { method: "redirect", uri: FINISH_URI, nonce } },
   });
   if (!isPendingGrant(outGrant)) throw new Error("Expected pending (interactive) grant");
   console.log(`\nOpen this URL and approve the grant:\n${outGrant.interact.redirect}`);
-  const interactRef = await ask("Paste interact_ref from the redirect URL: ");
+  console.log(`\nThe browser then lands on ${FINISH_URI}?... (the page won't load, that's expected).`);
+  const callback = new URL(await ask("Paste the full callback URL from the address bar: "));
+  const interactRef = callback.searchParams.get("interact_ref");
+  if (!interactRef) throw new Error("Callback URL has no interact_ref");
+  log("interaction hash", verifyHash(callback.searchParams.get("hash"), outGrant.interact.finish, interactRef, sender.authServer));
   const finalized = await client.grant.continue(
     { url: outGrant.continue.uri, accessToken: outGrant.continue.access_token.value },
     { interact_ref: interactRef },
