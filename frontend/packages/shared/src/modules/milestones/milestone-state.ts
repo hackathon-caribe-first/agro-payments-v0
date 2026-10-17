@@ -5,22 +5,31 @@ export type MilestoneState = { label: string; tone: Tone; symbol: string };
 
 // Visible state per DESIGN.md §6: text + color + symbol, and approval is never shown as payment.
 export function milestoneState(m: Milestone): MilestoneState {
-  if (m.payment?.status === "confirmed") return { label: "Pago simulado confirmado", tone: "success", symbol: "✓" };
-  if (m.payment?.status === "processing") return { label: "Pago en proceso", tone: "warning", symbol: "◷" };
+  if (m.closedAt) {
+    return m.lines.some((l) => l.status === "fallido")
+      ? { label: "Cerrado con pagos fallidos", tone: "danger", symbol: "✕" }
+      : { label: "Hito cerrado", tone: "success", symbol: "✓" };
+  }
+  if (m.lines.some((l) => l.status === "en_cola")) return { label: "Pago en cola", tone: "warning", symbol: "◷" };
   switch (m.status) {
     case "evidence_submitted":
       return { label: "Pendiente de verificación", tone: "warning", symbol: "◷" };
     case "approved":
       return { label: "Hito aprobado", tone: "success", symbol: "✓" };
-    case "rejected":
-      return { label: "Requiere corrección", tone: "danger", symbol: "✕" };
+    case "observado":
+      return { label: "Observado: requiere corrección", tone: "danger", symbol: "✕" };
     default:
       return { label: "Sin enviar", tone: "neutral", symbol: "○" };
   }
 }
 
-const pesos = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
-
-export function formatMoney(amount: number, currency: string) {
-  return `${currency} ${pesos.format(amount)}`;
+// Amounts are integer minor units: split them as digits so large values never go through floating point.
+export function formatMoney(amount: number, currency: string, scale: number) {
+  const digits = String(amount).padStart(scale + 1, "0");
+  const whole = digits.slice(0, digits.length - scale);
+  const fraction = digits.slice(digits.length - scale);
+  const hasFraction = /[1-9]/.test(fraction);
+  // ponytail: es-CO decimal comma hardcoded, use formatToParts if other locales appear
+  const grouped = new Intl.NumberFormat("es-CO").format(BigInt(whole));
+  return `${currency} ${hasFraction ? `${grouped},${fraction}` : grouped}`;
 }

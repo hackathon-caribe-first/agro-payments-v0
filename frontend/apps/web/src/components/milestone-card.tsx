@@ -9,7 +9,7 @@ export function MilestoneCard({ milestone, children }: { milestone: Milestone; c
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg text-primary">{milestone.title}</h2>
-          <p className="text-muted-foreground tabular-nums">{formatMoney(milestone.amount, milestone.currency)}</p>
+          <p className="text-muted-foreground tabular-nums">{formatMoney(milestone.amount, milestone.currency, milestone.assetScale)}</p>
         </div>
         <StatusBadge {...milestoneState(milestone)} />
       </div>

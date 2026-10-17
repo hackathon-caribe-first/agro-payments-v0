@@ -1,5 +1,6 @@
 import { ActionForm, TextField } from "~/components/action-form";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
+import { Lines } from "~/components/shares";
 import { loadMilestones, milestoneAction } from "~/milestones";
 import type { Route } from "./+types/productor";
 
@@ -15,12 +16,12 @@ export default function Productor({ loaderData }: Route.ComponentProps) {
       <MilestoneList>
         {loaderData.map((m) => (
           <MilestoneCard key={m.id} milestone={m}>
-            {m.status === "rejected" && (
+            {m.status === "observado" && (
               <p className="mb-3 text-destructive">
                 <span className="font-semibold">Motivo:</span> {m.review?.reason}
               </p>
             )}
-            {(m.status === "draft" || m.status === "rejected") && (
+            {(m.status === "draft" || m.status === "observado") && (
               <ActionForm id={m.id} intent="evidence" label="Enviar a revisión">
                 <TextField name="description" label="Describe tu evidencia" hint="Qué hiciste y qué muestra la foto o el documento." />
               </ActionForm>
@@ -28,6 +29,9 @@ export default function Productor({ loaderData }: Route.ComponentProps) {
             {m.status === "evidence_submitted" && (
               <p className="text-muted-foreground">Tu evidencia quedó guardada. Falta revisión técnica.</p>
             )}
+            <div className="mt-4">
+              <Lines milestone={m} />
+            </div>
           </MilestoneCard>
         ))}
       </MilestoneList>
