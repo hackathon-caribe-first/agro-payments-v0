@@ -8,5 +8,5 @@ export const auth = createAuthModule({ source: API_SOURCE, baseUrl: API_BASE_URL
 // The sign-in form asks for a password only against the backend.
 export const ASKS_PASSWORD = IS_HTTP;
 
-// ponytail: demo only. The password the seeded demo accounts share, prefilled in the sign-in form in http mode; never in production.
-export const DEMO_PASSWORD = "Agro-demo-2026";
+// Keep the legacy mock password only in mock mode; HTTP sign-in never pre-fills credentials.
+export const DEMO_PASSWORD = IS_HTTP ? "" : "Agro-demo-2026";
