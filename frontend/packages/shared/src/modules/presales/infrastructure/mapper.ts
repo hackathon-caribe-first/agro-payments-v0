@@ -148,6 +148,7 @@ const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => {
         ledgerEntryId: dto.ledger_entry_id ?? null,
       }
     : null,
+  ...(dto.deposit_redirect_url ? { depositRedirectUrl: dto.deposit_redirect_url } : {}),
   };
 };
 

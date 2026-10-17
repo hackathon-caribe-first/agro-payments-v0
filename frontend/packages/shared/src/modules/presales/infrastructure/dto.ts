@@ -57,6 +57,8 @@ export const quoteRequestDtoSchema = z.object({
   deposit_status: z.string().optional(),
   deposited_at: z.string().nullable().optional(),
   ledger_entry_id: z.string().nullable().optional(),
+  // Open Payments: a deposit that waits for the buyer's wallet approval comes back PENDING with the consent URL to follow.
+  deposit_redirect_url: z.string().optional(),
 });
 
 export const openRequestDtoSchema = z.object({

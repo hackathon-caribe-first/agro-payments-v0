@@ -1,4 +1,6 @@
-import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
+import { Link, data, isRouteErrorResponse, redirectDocument, useRouteError, useSearchParams } from "react-router";
+import type { PresaleResult } from "@agro/shared/modules/presales/domain/errors";
+import type { QuoteRequest } from "@agro/shared/modules/presales/domain/presale";
 import { runNegotiationAction } from "~/components/negotiation/actions";
 import { NegotiationDetail } from "~/components/negotiation/detail";
 import { presaleErrorMessage, type PresaleActionData } from "~/components/presale/error-copy";
@@ -16,29 +18,62 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return result.value;
 }
 
-export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData> {
+export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData | Response> {
   const id = params.negotiationId;
-  return runNegotiationAction(
+  // Open Payments: a deposit that needs the buyer's wallet approval answers with its consent URL, and the app leaves for it.
+  let walletUrl: string | undefined;
+  const followWallet = async (pending: Promise<PresaleResult<QuoteRequest>>) => {
+    const result = await pending;
+    if (result.ok) walletUrl = result.value.depositRedirectUrl;
+    return result;
+  };
+  const outcome = await runNegotiationAction(
     {
-      accept: (revision, raw) => buyer.acceptSaleQuote(id, revision, raw),
+      accept: (revision, raw) => followWallet(buyer.acceptSaleQuote(id, revision, raw)),
       reject: (revision) => buyer.rejectSaleQuote(id, revision),
       counter: (raw) => buyer.counterOffer(id, raw),
       withdraw: () => buyer.withdrawNegotiation(id),
-      deposit: (raw) => buyer.depositProjectAgreement(id, raw),
+      deposit: (raw) => followWallet(buyer.depositProjectAgreement(id, raw)),
     },
     await request.formData(),
   );
+  // redirectDocument + absolute URL: a full page load to the wallet, never a client-side navigation.
+  return walletUrl ? redirectDocument(walletUrl) : outcome;
+}
+
+// The wallet sends the browser back here with ?deposit=ok or ?deposit=error.
+function DepositResult() {
+  const [params] = useSearchParams();
+  const result = params.get("deposit");
+  if (result === "ok") {
+    return (
+      <p role="status" className="mb-6 rounded-md bg-secondary px-4 py-3 font-semibold text-primary">
+        ✓ Aprobaste el depósito en tu billetera. El total quedó registrado en la custodia del proyecto.
+      </p>
+    );
+  }
+  if (result === "error") {
+    return (
+      <p role="alert" className="mb-6 rounded-md border border-destructive bg-card px-4 py-3 font-semibold text-destructive">
+        ✕ No se completó el depósito: no aprobaste el permiso en tu billetera o el pago falló. Puedes intentarlo de nuevo.
+      </p>
+    );
+  }
+  return null;
 }
 
 export default function BuyerNegotiation({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <NegotiationDetail
-      viewer="BUYER"
-      detail={loaderData}
-      actionData={actionData}
-      back={{ to: "/buyer/negotiations", label: "Volver a mis negociaciones" }}
-      openRequestTo={loaderData.request.openRequestId ? `/buyer/open-requests/${loaderData.request.openRequestId}` : undefined}
-    />
+    <>
+      <DepositResult />
+      <NegotiationDetail
+        viewer="BUYER"
+        detail={loaderData}
+        actionData={actionData}
+        back={{ to: "/buyer/negotiations", label: "Volver a mis negociaciones" }}
+        openRequestTo={loaderData.request.openRequestId ? `/buyer/open-requests/${loaderData.request.openRequestId}` : undefined}
+      />
+    </>
   );
 }
 

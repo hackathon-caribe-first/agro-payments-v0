@@ -128,6 +128,8 @@ export interface QuoteRequest {
   history: HistoryEntry[];
   // Present on an agreed PROJECT negotiation: the frozen total and its deposit state.
   deposit: DepositState | null;
+  // Set only on the answer to a deposit (or buyer accept) that needs the buyer's wallet approval first.
+  depositRedirectUrl?: string;
 }
 
 // A project as the buyer sees it in the catalog: the project plus its producer and server-derived locks.
