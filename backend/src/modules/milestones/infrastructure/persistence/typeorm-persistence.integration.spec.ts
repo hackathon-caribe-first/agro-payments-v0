@@ -27,6 +27,10 @@ import { PostgresAssistantStore } from "../../../assistant/infrastructure/persis
 import { PostgresOrderIntents } from "../../../assistant/infrastructure/persistence/postgres-order-intents.adapter";
 import { orderIntent } from "../../../payouts/application/testing";
 import { PostgresSupplierRepository } from "../../../payouts/infrastructure/postgres-supplier.repository";
+import { simulate } from "../../../simulation/application/motor";
+import { PRESETS } from "../../../simulation/application/presets";
+import type { SimulationRun } from "../../../simulation/application/simulation-run";
+import { TypeOrmSimulationRunAdapter } from "../../../simulation/infrastructure/persistence/typeorm-simulation-run.adapter";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -621,5 +625,45 @@ describe("custody payouts persistence", () => {
     expect(await orders.find("i-1")).toEqual(decided);
     await expect(orders.decide("i-1", { approval: "rejected", lineId: null, reason: "x", by: "u", at: now })).rejects.toThrow(/already approved/);
     expect(await orders.find("i-3")).toBeNull();
+  });
+});
+
+describe("TypeOrmSimulationRunAdapter", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const input: NewProjectInput = {
+    title: "Tomate bajo invernadero",
+    description: "Ciclo de 120 días",
+    productionType: "OTRO",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100, laborBudget: 200, requirements: [] }],
+  };
+  const inputs = { ...PRESETS.P2.inputs, runs: 300, seed: 4_294_967_295 };
+  const run = (id: string, at: Date): SimulationRun => {
+    const sheet = simulate(inputs);
+    return { id, projectId: "p1", preset: "P2", inputs, seed: inputs.seed, motorVersion: sheet.motorVersion, sheet, createdBy: "u1", createdAt: at };
+  };
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+    if (!dataSource) return;
+    const { project, milestones } = buildProject({ id: "p1", ownerUserId: "u1", input, wallets, now });
+    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+  });
+
+  it("round-trips a run with its inputs, a full-range seed, the motor version and the sheet", async (ctx) => {
+    const repo = new TypeOrmSimulationRunAdapter(db(ctx));
+    expect(await repo.findLatest("p1")).toBeNull();
+    const first = run("r1", now);
+    await repo.save(first);
+    expect(await repo.findLatest("p1")).toEqual(first);
+  });
+
+  it("returns the newest run of the project and refuses runs for unknown projects", async (ctx) => {
+    const repo = new TypeOrmSimulationRunAdapter(db(ctx));
+    await repo.save(run("r2", new Date(now.getTime() + 1000)));
+    await repo.save(run("r1", now));
+    expect((await repo.findLatest("p1"))?.id).toBe("r2");
+    await expect(repo.save({ ...run("r3", now), projectId: "nope" })).rejects.toThrow();
   });
 });
