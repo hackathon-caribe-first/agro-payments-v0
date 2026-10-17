@@ -14,7 +14,7 @@ const rejected = (message: string) => json({ error: "Request rejected", errors: 
 const RATES: Record<string, number> = { COP: 1, USD: 4_000, EUR: 4_400 };
 const CAP_PCT = 10;
 const FUNDABLE = ["DRAFT", "CONTRACT_SIGNED", "FUNDING_IN_PROGRESS"];
-const INVESTOR_ID = "investor-demo";
+const INVESTOR_ID = "investor-capital-verde";
 
 const currencyOf = (wallet: string) => {
   const suffix = /[-_]([a-z]{3})\/?$/i.exec(new URL(wallet).pathname)?.[1]?.toUpperCase();

@@ -95,7 +95,7 @@ describe("ResolveApiUserUseCase by side", () => {
     expect(DEMO_PARTIES).toEqual({
       producer: { email: "productor@agro.dev", role: "seller", publicId: "producer-main" },
       buyer: { email: "comprador@agro.dev", role: "buyer", publicId: "buyer-andina" },
-      investor: { email: "inversionista@agro.dev", role: "investor", publicId: "investor-demo" },
+      investor: { email: "inversionista@agro.dev", role: "investor", publicId: "investor-capital-verde" },
     });
   });
 

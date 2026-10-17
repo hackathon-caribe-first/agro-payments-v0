@@ -18,7 +18,7 @@ type DemoParty = { email: string; role: Role; publicId: string };
 export const DEMO_PARTIES = {
   producer: { email: "productor@agro.dev", role: "seller", publicId: "producer-main" },
   buyer: { email: "comprador@agro.dev", role: "buyer", publicId: "buyer-andina" },
-  investor: { email: "inversionista@agro.dev", role: "investor", publicId: "investor-demo" },
+  investor: { email: "inversionista@agro.dev", role: "investor", publicId: "investor-capital-verde" },
 } as const satisfies Record<PartySide, DemoParty>;
 
 export type IdAliases = { toPublic(userId: string): string; toUser(publicId: string): string };

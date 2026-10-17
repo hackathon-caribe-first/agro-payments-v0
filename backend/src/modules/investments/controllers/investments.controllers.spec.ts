@@ -29,7 +29,7 @@ describe("parseInvestRequest", () => {
 });
 
 describe("investment wire shapes", () => {
-  const ids = { toPublic: (id: string) => (id === INVESTOR.id ? "investor-demo" : id), toUser: (id: string) => id };
+  const ids = { toPublic: (id: string) => (id === INVESTOR.id ? "investor-capital-verde" : id), toUser: (id: string) => id };
 
   it("an investment: pesos for COP, the debit as a minor-unit string with its asset, the exact rate, the public investor id", async () => {
     const store = new InMemoryInvestmentStore();
@@ -38,7 +38,7 @@ describe("investment wire shapes", () => {
     expect(toInvestmentResponse({ ...done, consentRedirectUrl: "https://wallet.test/consent" }, ids)).toEqual({
       id: done.id,
       project_id: "p1",
-      investor_id: "investor-demo",
+      investor_id: "investor-capital-verde",
       wallet_address: EUR_WALLET.id,
       status: "CAPTURED",
       failure_reason: null,

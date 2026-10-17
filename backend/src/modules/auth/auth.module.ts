@@ -5,6 +5,7 @@ import { GetCurrentUserUseCase } from "./application/get-current-user.use-case";
 import { DEMO_PARTIES, PublicIds } from "./application/demo-parties";
 import { DEMO_IDENTITY, ResolveApiUserUseCase } from "./application/resolve-api-user.use-case";
 import { ApiAuthGuard } from "./controllers/api-auth.guard";
+import { ApiCurrentUserController } from "./controllers/api-current-user.controller";
 import { AuthController } from "./controllers/auth.controller";
 import { AuthGuard } from "./controllers/auth.guard";
 import { CurrentUserController } from "./controllers/current-user.controller";
@@ -21,7 +22,7 @@ import { UserDirectory } from "./ports/user-directory";
 import { UserRoleWriter } from "./ports/user-role-writer";
 
 @Module({
-  controllers: [AuthController, CurrentUserController, UserRolesController],
+  controllers: [AuthController, CurrentUserController, ApiCurrentUserController, UserRolesController],
   providers: [
     GetCurrentUserUseCase,
     AssignRoleUseCase,
