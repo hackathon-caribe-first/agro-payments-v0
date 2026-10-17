@@ -5,9 +5,9 @@ import type { Env } from "../../../shared/config/env";
 import { isSelfSelectableRole } from "../ports/role";
 
 // Kept free of Nest decorators so the Better Auth CLI can load it (see better-auth.cli.ts).
-export function createBetterAuth(env: Env, database: Pool = new Pool({ connectionString: env.databaseUrl })) {
+export function createBetterAuth(env: Env) {
   return betterAuth({
-    database,
+    database: new Pool({ connectionString: env.databaseUrl }),
     secret: env.betterAuthSecret,
     baseURL: env.apiUrl,
     trustedOrigins: env.webOrigins,
