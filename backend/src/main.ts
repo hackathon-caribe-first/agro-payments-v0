@@ -21,7 +21,6 @@ async function bootstrap() {
   app.enableCors({ origin: env.webOrigins, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new DomainErrorFilter());
-  app.enableCors({ origin: process.env.CORS_ORIGIN?.split(",") ?? true });
   SwaggerModule.setup("docs", app, buildOpenApiDocument(app));
   await app.listen(env.port);
 }
