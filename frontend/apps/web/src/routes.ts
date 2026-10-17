@@ -5,6 +5,7 @@ export default [
     index("routes/index.tsx"),
     route("producer", "routes/producer.tsx"),
     route("producer/projects/new", "routes/producer.projects.new.tsx"),
+    route("producer/assistant", "routes/producer.assistant.tsx"),
     route("producer/projects/:projectId", "routes/producer.project.tsx"),
     route("producer/projects/:projectId/publication", "routes/producer.project.publication.tsx"),
     route("producer/negotiations", "routes/producer.negotiations.tsx"),

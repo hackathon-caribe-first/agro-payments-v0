@@ -1,4 +1,4 @@
-import { Handshake, Megaphone, Plus } from "lucide-react";
+import { Handshake, Megaphone, MessageCircle, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@agro/shared/ui/button";
@@ -64,6 +64,12 @@ export default function Producer({ loaderData }: Route.ComponentProps) {
           <p className="mt-2 text-muted-foreground">Sigue la cotización y el avance de cada proyecto.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="compact">
+            <Link to="/producer/assistant">
+              <MessageCircle aria-hidden="true" />
+              Asistente
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="compact">
             <Link to="/producer/negotiations">
               <Handshake aria-hidden="true" />
