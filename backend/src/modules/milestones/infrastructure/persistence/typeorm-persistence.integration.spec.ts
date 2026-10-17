@@ -6,6 +6,9 @@ import { MIGRATIONS } from "../../../../shared/database/migrations";
 import { buildProject, type NewProjectInput } from "../../../projects/application/project";
 import { PROJECT_ENTITIES } from "../../../projects/infrastructure/persistence/entities";
 import { TypeOrmProjectAdapter } from "../../../projects/infrastructure/persistence/typeorm-project.adapter";
+import { applyPayoutResult, approveSettlement, startExecution } from "../../../settlement/application/settlement";
+import { sampleSettlement } from "../../../settlement/application/testing";
+import { TypeOrmSettlementAdapter } from "../../../settlement/infrastructure/persistence/typeorm-settlement.adapter";
 import { addEvidenceLog, submitForReview } from "../../application/milestone-progress";
 import { applyLineResult, fund, type Milestone, review, submitEvidence } from "../../application/milestone";
 import { sampleMilestone, unfundedMilestone } from "../../application/testing";
@@ -19,8 +22,8 @@ import { BUYER, FakeDirectory, InstantCustody, PRODUCER } from "../../../negotia
 import { TypeOrmNegotiationStore } from "../../../negotiations/infrastructure/persistence/typeorm-negotiation-store.adapter";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
-// dropSchema wipes the database: refuse anything that is not a *_test database.
-if (!new URL(url).pathname.endsWith("_test")) throw new Error(`Refusing to run persistence specs against ${new URL(url).pathname}`);
+// dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
+if (!/_test(_\w+)?$/.test(new URL(url).pathname)) throw new Error(`Refusing to run persistence specs against ${new URL(url).pathname}`);
 
 let dataSource: DataSource | null = null;
 const db = (ctx: { skip: (note?: string) => never }) => dataSource ?? ctx.skip("agro_test database unreachable");
@@ -400,5 +403,54 @@ describe("TypeOrmNegotiationStore", () => {
     await grants.save(grant);
     expect(await grants.findLatestForNegotiation(started.id)).toEqual(grant);
     expect(await grants.findLatestForNegotiation("other")).toBeNull();
+  });
+});
+
+describe("TypeOrmSettlementAdapter", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const input: NewProjectInput = {
+    title: "Tomate bajo invernadero",
+    description: "Ciclo de 120 días",
+    productionType: "OTRO",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100, laborBudget: 200, requirements: [] }],
+  };
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+    if (!dataSource) return;
+    const { project, milestones } = buildProject({ id: "p1", ownerUserId: "u1", input, wallets, now });
+    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+  });
+
+  it("round-trips a settlement with its plan snapshot, payout states and RF-23 receipts", async (ctx) => {
+    const repo = new TypeOrmSettlementAdapter(db(ctx));
+    await repo.save(sampleSettlement());
+    expect(await repo.findById("s1")).toEqual(sampleSettlement());
+
+    let s = startExecution(approveSettlement(sampleSettlement(), "u-fidu", now));
+    s = applyPayoutResult(s, "producer", { status: "completado", reference: "SIM-1", receipt: { debitAmount: cop(37_400_000), receiveAmount: cop(37_300_000) } }, now);
+    s = applyPayoutResult(s, "investor-inv-eur", { status: "en_cola", reference: "SIM-2", receipt: { debitAmount: cop(56_400_000) } }, now);
+    s = applyPayoutResult(s, "platform", { status: "fallido", reference: null }, now);
+    await repo.save(s);
+    expect(await repo.findById("s1")).toEqual(s);
+    expect((await repo.findByProject("p1")).map((x) => x.id)).toEqual(["s1"]);
+    expect(await repo.findById("nope")).toBeNull();
+  });
+
+  it("moves the project status", async (ctx) => {
+    const projects = new TypeOrmProjectAdapter(db(ctx));
+    await projects.updateStatus("p1", "SETTLEMENT_PROCESSING");
+    expect((await projects.findById("p1"))?.currentStatus).toBe("SETTLEMENT_PROCESSING");
+  });
+
+  it("allows at most one approved, executing or executed settlement per project", async (ctx) => {
+    const repo = new TypeOrmSettlementAdapter(db(ctx));
+    await repo.save(approveSettlement(sampleSettlement(), "u-fidu", now));
+    const other = { ...approveSettlement(sampleSettlement(), "u-fidu", now), id: "s2" };
+    await expect(repo.save(other)).rejects.toThrow();
+    await repo.save({ ...sampleSettlement(), id: "s3" });
+    expect((await repo.findByProject("p1")).map((x) => x.id)).toEqual(["s1", "s3"]);
   });
 });

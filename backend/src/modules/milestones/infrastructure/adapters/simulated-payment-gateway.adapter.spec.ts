@@ -33,4 +33,10 @@ describe("SimulatedPaymentGateway", () => {
   it("resolves any queued reference as completado", async () => {
     expect(await gateway.check("SIM-ABCDEF12")).toEqual({ status: "completado", reference: "SIM-ABCDEF12" });
   });
+
+  it("reports the fixed debit on the receipt when the custody debit is fixed (foreign-currency wallet)", async () => {
+    const result = await gateway.pay({ ...request, walletAddress: "https://wallet.test/inversionista-eur", fixedDebitAmount: true });
+    expect(result.status).toBe("en_cola");
+    expect(result.receipt).toEqual({ debitAmount: { value: 300_000, assetCode: "COP", assetScale: 2 } });
+  });
 });

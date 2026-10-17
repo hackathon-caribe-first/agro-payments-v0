@@ -40,5 +40,6 @@ import { ProjectRepository } from "./ports/project.repository";
       },
     },
   ],
+  exports: [ProjectRepository, PROJECT_WALLETS],
 })
 export class ProjectsModule {}

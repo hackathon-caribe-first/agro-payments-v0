@@ -1,5 +1,5 @@
 import type { Milestone } from "../../milestones/application/milestone";
-import type { NewProject, Project } from "../application/project";
+import type { NewProject, Project, ProjectStatus } from "../application/project";
 
 // Abstract class (not interface) so it doubles as the Nest DI token.
 export abstract class ProjectRepository {
@@ -8,4 +8,6 @@ export abstract class ProjectRepository {
   abstract findById(id: string): Promise<Project | null>;
   /** Oldest first. */
   abstract findByOwner(ownerUserId: string): Promise<Project[]>;
+  /** Moves the project to a lifecycle status (settlement: SETTLEMENT_PROCESSING, SETTLED_AND_CLOSED). */
+  abstract updateStatus(id: string, status: ProjectStatus): Promise<void>;
 }

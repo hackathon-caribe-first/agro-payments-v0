@@ -39,4 +39,8 @@ export class TypeOrmProjectAdapter extends ProjectRepository {
     const rows = await this.dataSource.getRepository(ProjectEntity).find({ where: { ownerUserId }, order: { seq: "ASC" } });
     return rows.map(toProject);
   }
+
+  async updateStatus(id: string, status: ProjectStatus) {
+    await this.dataSource.getRepository(ProjectEntity).update({ id }, { currentStatus: status });
+  }
 }

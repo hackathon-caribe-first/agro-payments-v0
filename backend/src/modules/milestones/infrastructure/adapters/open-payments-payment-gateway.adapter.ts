@@ -1,4 +1,5 @@
 import { Logger } from "@nestjs/common";
+import { DomainError } from "../../../../shared/domain-errors";
 import type { ReceiptAmount } from "../../application/milestone";
 import { type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../../ports/payment-gateway";
 import { activeOutgoingGrant, type OpenPayments, requestToken, withOutgoingToken } from "./open-payments.client";
@@ -48,6 +49,10 @@ export class OpenPaymentsGateway extends PaymentGateway {
   }
 
   private async send(request: LinePaymentRequest): Promise<LinePaymentResult> {
+    // ponytail: a fixed debit needs an incoming payment without incomingAmount, a quote with debitAmount, a check() that
+    // settles on the outgoing payment's sentAmount (such an incoming payment never completes on its own) and the liquidation
+    // grant on custody (PRD v3 Fase 3 paso 5), none of which exist yet. Refused (409) until then; the simulated gateway supports it.
+    if (request.fixedDebitAmount) throw new DomainError("Fixed-debit (cross-currency) payouts are not supported in open-payments mode yet");
     const { client } = this.op;
     const grant = await activeOutgoingGrant(this.op.grants, request.milestoneId);
 

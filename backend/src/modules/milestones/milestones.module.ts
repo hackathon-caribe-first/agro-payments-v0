@@ -85,6 +85,6 @@ export const OPEN_PAYMENTS = Symbol("OPEN_PAYMENTS");
       },
     },
   ],
-  exports: [MilestoneRepository, OPEN_PAYMENTS],
+  exports: [MilestoneRepository, OPEN_PAYMENTS, PaymentGateway],
 })
 export class MilestonesModule {}

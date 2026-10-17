@@ -8,6 +8,11 @@ export type LinePaymentRequest = {
   amount: number;
   currency: string;
   assetScale: number;
+  /**
+   * Settlement payouts to a wallet in another currency (PRD v3 RF-26): `amount` is a fixed debit from custody in
+   * `currency`, and the receiver gets whatever the quote converts it to, fees included. Absent: `amount` is what the receiver gets.
+   */
+  fixedDebitAmount?: boolean;
 };
 
 /** Status, reference and what the gateway knows of the receipt so far (RF-23). */

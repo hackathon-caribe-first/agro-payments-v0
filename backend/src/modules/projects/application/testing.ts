@@ -2,7 +2,7 @@
 import type { Milestone } from "../../milestones/application/milestone";
 import type { MilestoneRepository } from "../../milestones/ports/milestone.repository";
 import { ProjectRepository } from "../ports/project.repository";
-import { formatProjectCode, type NewProject, type Project } from "./project";
+import { formatProjectCode, type NewProject, type Project, type ProjectStatus } from "./project";
 
 export class FakeProjectRepository extends ProjectRepository {
   private readonly projects: Project[] = [];
@@ -28,5 +28,10 @@ export class FakeProjectRepository extends ProjectRepository {
 
   async findByOwner(ownerUserId: string) {
     return this.projects.filter((p) => p.ownerUserId === ownerUserId);
+  }
+
+  async updateStatus(id: string, status: ProjectStatus) {
+    const project = this.projects.find((p) => p.id === id);
+    if (project) project.currentStatus = status;
   }
 }

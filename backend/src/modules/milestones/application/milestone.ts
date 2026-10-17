@@ -241,7 +241,7 @@ export function impliedRate(debit: ReceiptAmount, receive: ReceiptAmount): strin
 const sameAsset = (a: ReceiptAmount, b: ReceiptAmount) => a.assetCode === b.assetCode && a.assetScale === b.assetScale;
 
 // Later answers fill what earlier ones left null; rate and fee are recomputed from the merged amounts.
-function mergeReceipt(previous: LineReceipt | null, update: LineReceiptUpdate | undefined): LineReceipt | null {
+export function mergeReceipt(previous: LineReceipt | null, update: LineReceiptUpdate | undefined): LineReceipt | null {
   if (!update) return previous;
   const pick = <K extends keyof LineReceiptUpdate>(key: K): LineReceipt[K] => update[key] ?? previous?.[key] ?? null;
   const debitAmount = pick("debitAmount");

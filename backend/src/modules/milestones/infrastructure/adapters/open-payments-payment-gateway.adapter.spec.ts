@@ -127,6 +127,12 @@ describe("OpenPaymentsGateway.pay", () => {
     expect((await gateway.pay(request)).receipt?.grantSpentBefore).toBeNull();
   });
 
+  it("refuses a fixed-debit (cross-currency) payment with a DomainError before any network call: not supported yet", async () => {
+    const { gateway, calls } = await funded();
+    await expect(gateway.pay({ ...request, fixedDebitAmount: true })).rejects.toThrow(DomainError);
+    expect(calls).toEqual([]);
+  });
+
   it("refuses a revoked grant with a DomainError before any network call", async () => {
     const { op, grants, calls } = mockOpenPayments();
     await grants.save(activeGrant({ status: "revoked", revokedAt: new Date() }));
