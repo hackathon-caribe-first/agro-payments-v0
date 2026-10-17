@@ -4,7 +4,7 @@ import { CompleteFundingUseCase } from "../application/complete-funding.use-case
 
 export const WEB_APP_URL = Symbol("WEB_APP_URL");
 
-// No auth guard on purpose: the investor's wallet redirects the browser here, often without our session cookie.
+// No auth guard on purpose: the custody wallet's consent page redirects the browser here, often without our session cookie.
 // What protects it is the pending grant: only the nonce we sent plus a matching GNAP hash finalize it.
 @ApiExcludeController()
 @Controller("milestones")

@@ -2,6 +2,41 @@ import { ApiProperty } from "@nestjs/swagger";
 import { LINE_KIND, LINE_STATUS, MILESTONE_STATUS } from "../../application/milestone";
 import type { LineKind, LineStatus, MilestoneStatus } from "../../application/milestone";
 
+export class ReceiptAmountDto {
+  /** Integer minor units of assetCode */
+  value: number;
+  assetCode: string;
+  assetScale: number;
+}
+
+/** RF-23 payment receipt of one line; every field is null until the wallet reports it */
+export class LineReceiptDto {
+  @ApiProperty({ type: String, nullable: true })
+  incomingPaymentId: string | null;
+  @ApiProperty({ type: String, nullable: true })
+  outgoingPaymentId: string | null;
+  @ApiProperty({ type: String, nullable: true })
+  quoteId: string | null;
+  /** Charged to the milestone grant on the custody wallet */
+  @ApiProperty({ type: ReceiptAmountDto, nullable: true })
+  debitAmount: ReceiptAmountDto | null;
+  /** Credited to the beneficiary: quoted while en_cola, settled once completado */
+  @ApiProperty({ type: ReceiptAmountDto, nullable: true })
+  receiveAmount: ReceiptAmountDto | null;
+  /** Implied receive/debit rate in major units, as a reduced "numerator/denominator" string */
+  @ApiProperty({ type: String, nullable: true, example: "300/301" })
+  rate: string | null;
+  /** debit − receive in debit minor units; null when the assets differ */
+  @ApiProperty({ type: Number, nullable: true })
+  fee: number | null;
+  /** Grant debit total before this payment, minor units */
+  @ApiProperty({ type: Number, nullable: true })
+  grantSpentBefore: number | null;
+  /** Grant debit total re-read after settlement, minor units */
+  @ApiProperty({ type: Number, nullable: true })
+  grantSpentAfter: number | null;
+}
+
 export class LineDto {
   id: string;
   @ApiProperty({ enum: Object.values(LINE_KIND), enumName: "LineKind" })
@@ -17,6 +52,9 @@ export class LineDto {
   reference: string | null;
   @ApiProperty({ type: Date, nullable: true })
   settledAt: Date | null;
+  /** Null until the gateway reports the payment (simulated payments have none) */
+  @ApiProperty({ type: LineReceiptDto, nullable: true })
+  receipt: LineReceiptDto | null;
 }
 
 export class EvidenceDto {
@@ -49,7 +87,7 @@ export class MilestoneDto {
   review: ReviewDto | null;
   @ApiProperty({ type: [LineDto] })
   lines: LineDto[];
-  /** Set when the investor approved the grant that funds the lines; no line is paid before */
+  /** Set when the custody grant that funds the lines was approved; no line is paid before */
   @ApiProperty({ type: Date, nullable: true })
   fundedAt: Date | null;
   /** Set once every line is completado or fallido */

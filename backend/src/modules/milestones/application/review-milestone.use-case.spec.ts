@@ -3,12 +3,12 @@ import type { PaymentGateway } from "../ports/payment-gateway";
 import { submitEvidence } from "./milestone";
 import { PayLineUseCase } from "./pay-line.use-case";
 import { ReviewMilestoneUseCase } from "./review-milestone.use-case";
-import { FakeGateway, sampleMilestone, storeWith, ThrowingGateway, unfundedMilestone } from "./testing";
+import { FakeFunding, FakeGateway, sampleMilestone, storeWith, ThrowingGateway, unfundedMilestone } from "./testing";
 
 const submitted = () => submitEvidence(sampleMilestone(), "Foto", new Date());
 const setup = <G extends PaymentGateway = FakeGateway>(gateway: G = new FakeGateway() as unknown as G) => {
   const store = storeWith(submitted());
-  return { gateway, useCase: new ReviewMilestoneUseCase(store, new PayLineUseCase(store, gateway)) };
+  return { gateway, useCase: new ReviewMilestoneUseCase(store, new PayLineUseCase(store, gateway, new FakeFunding())) };
 };
 const line = (m: { lines: { id: string }[] }, id: string) => m.lines.find((l) => l.id === id);
 
@@ -35,7 +35,7 @@ describe("ReviewMilestoneUseCase", () => {
     const gateway = new FakeGateway();
     const store = storeWith(submitEvidence(unfundedMilestone(), "Foto", new Date()));
 
-    const m = await new ReviewMilestoneUseCase(store, new PayLineUseCase(store, gateway)).execute("m1", "approved", null);
+    const m = await new ReviewMilestoneUseCase(store, new PayLineUseCase(store, gateway, new FakeFunding())).execute("m1", "approved", null);
 
     expect(m.status).toBe("approved");
     expect(line(m, "l-prod")).toMatchObject({ status: "pendiente" });

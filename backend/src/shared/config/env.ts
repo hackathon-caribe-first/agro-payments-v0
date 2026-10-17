@@ -9,12 +9,14 @@ export type OpenPaymentsEnv = {
   clientWalletAddress: string;
   keyId: string;
   privateKeyPath: string;
-  /** Wallet debited by the funding grant. */
-  investorWalletAddress: string;
+  /** v3 payer: the custody wallet debited by every milestone grant. */
+  custodyWalletAddress: string;
   /** Wallet every seeded line pays to. */
   receiverWalletAddress: string;
   assetCode: string;
   assetScale: number;
+  /** Base64 AES-256 key (32 bytes) that encrypts grant tokens at rest. */
+  grantEncryptionKey: string;
 };
 
 export type Env = {
@@ -49,10 +51,13 @@ function openPaymentsEnv(): OpenPaymentsEnv {
     clientWalletAddress: required("OP_CLIENT_WALLET_ADDRESS"),
     keyId: required("OP_KEY_ID"),
     privateKeyPath: required("OP_PRIVATE_KEY_PATH"),
-    investorWalletAddress: required("OP_INVESTOR_WALLET_ADDRESS"),
+    // ponytail: one custody wallet per deployment; per-project custody wallets when projects exist.
+    // Falls back to the pre-v3 investor wallet so existing .env files keep working.
+    custodyWalletAddress: process.env.OP_CUSTODY_WALLET_ADDRESS || required("OP_INVESTOR_WALLET_ADDRESS"),
     receiverWalletAddress: required("OP_RECEIVER_WALLET_ADDRESS"),
     assetCode: required("OP_ASSET_CODE"),
     assetScale,
+    grantEncryptionKey: required("GRANT_ENCRYPTION_KEY"),
   };
 }
 

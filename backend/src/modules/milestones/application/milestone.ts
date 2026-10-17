@@ -29,6 +29,36 @@ export type LineKind = (typeof LINE_KIND)[keyof typeof LINE_KIND];
 
 export type Decision = "approved" | "observado";
 
+/** An amount in integer minor units of its own asset. */
+export interface ReceiptAmount {
+  value: number;
+  assetCode: string;
+  assetScale: number;
+}
+
+/** RF-23: what the gateway reports for one line payment; every field is null until known. */
+export type LineReceipt = {
+  incomingPaymentId: string | null;
+  outgoingPaymentId: string | null;
+  quoteId: string | null;
+  /** Charged to the custody grant for this line. */
+  debitAmount: ReceiptAmount | null;
+  /** Credited to the beneficiary (quoted first, settled later). */
+  receiveAmount: ReceiptAmount | null;
+  /** Implied rate receive/debit in major units, as a reduced "numerator/denominator" string (never a float). */
+  rate: string | null;
+  /** debit − receive in debit minor units; only when both are in the same asset. */
+  fee: number | null;
+  /** Grant debit total right before and after this payment, as the wallet reports it. */
+  grantSpentBefore: number | null;
+  grantSpentAfter: number | null;
+};
+
+/** What one gateway answer adds to the receipt; the rate and fee are always derived, never reported. */
+export type LineReceiptUpdate = Partial<Omit<LineReceipt, "rate" | "fee">>;
+
+export type LineResult = { status: Exclude<LineStatus, "pendiente">; reference: string | null; receipt?: LineReceiptUpdate };
+
 export type Line = {
   id: string;
   kind: LineKind;
@@ -39,6 +69,7 @@ export type Line = {
   status: LineStatus;
   reference: string | null;
   settledAt: Date | null;
+  receipt: LineReceipt | null;
 };
 
 export type Milestone = {
@@ -52,7 +83,7 @@ export type Milestone = {
   evidence: { description: string; submittedAt: Date } | null;
   review: { decision: Decision; reason: string | null; reviewedAt: Date } | null;
   lines: Line[];
-  /** Set when the investor approves the outgoing-payment grant that funds every line. */
+  /** Set when the custody wallet's outgoing-payment grant that funds every line is approved. */
   fundedAt: Date | null;
   /** Set once every line is final (completado or fallido). */
   closedAt: Date | null;
@@ -88,7 +119,7 @@ export function createMilestone(input: MilestoneInput): Milestone {
     status: MILESTONE_STATUS.DRAFT,
     evidence: null,
     review: null,
-    lines: lines.map((l) => ({ ...l, status: LINE_STATUS.PENDIENTE, reference: null, settledAt: null })),
+    lines: lines.map((l) => ({ ...l, status: LINE_STATUS.PENDIENTE, reference: null, settledAt: null, receipt: null })),
     fundedAt: null,
     closedAt: null,
   };
@@ -126,11 +157,44 @@ export function assertLinePayable(m: Milestone, lineId: string): Line {
   return line;
 }
 
+const gcd = (a: bigint, b: bigint): bigint => (b === 0n ? a : gcd(b, a % b));
+
+// receive/debit in major units: (receive / 10^rs) / (debit / 10^ds) = receive·10^ds / (debit·10^rs), in BigInt.
+export function impliedRate(debit: ReceiptAmount, receive: ReceiptAmount): string | null {
+  if (debit.value <= 0) return null;
+  const numerator = BigInt(receive.value) * 10n ** BigInt(debit.assetScale);
+  const denominator = BigInt(debit.value) * 10n ** BigInt(receive.assetScale);
+  const divisor = gcd(numerator, denominator) || 1n;
+  return `${numerator / divisor}/${denominator / divisor}`;
+}
+
+const sameAsset = (a: ReceiptAmount, b: ReceiptAmount) => a.assetCode === b.assetCode && a.assetScale === b.assetScale;
+
+// Later answers fill what earlier ones left null; rate and fee are recomputed from the merged amounts.
+function mergeReceipt(previous: LineReceipt | null, update: LineReceiptUpdate | undefined): LineReceipt | null {
+  if (!update) return previous;
+  const pick = <K extends keyof LineReceiptUpdate>(key: K): LineReceipt[K] => update[key] ?? previous?.[key] ?? null;
+  const debitAmount = pick("debitAmount");
+  const receiveAmount = pick("receiveAmount");
+  const both = debitAmount && receiveAmount ? { debitAmount, receiveAmount } : null;
+  return {
+    incomingPaymentId: pick("incomingPaymentId"),
+    outgoingPaymentId: pick("outgoingPaymentId"),
+    quoteId: pick("quoteId"),
+    debitAmount,
+    receiveAmount,
+    rate: both ? impliedRate(both.debitAmount, both.receiveAmount) : null,
+    fee: both && sameAsset(both.debitAmount, both.receiveAmount) ? both.debitAmount.value - both.receiveAmount.value : null,
+    grantSpentBefore: pick("grantSpentBefore"),
+    grantSpentAfter: pick("grantSpentAfter"),
+  };
+}
+
 // Applies a gateway result to a line that is still open (pendiente or en_cola) and closes the milestone when all lines are final.
 export function applyLineResult(
   m: Milestone,
   lineId: string,
-  result: { status: Exclude<LineStatus, "pendiente">; reference: string | null },
+  result: LineResult,
   now: Date,
 ): Milestone {
   const line = m.lines.find((l) => l.id === lineId);
@@ -141,7 +205,12 @@ export function applyLineResult(
     status: result.status,
     reference: result.reference,
     settledAt: result.status === LINE_STATUS.EN_COLA ? null : now,
+    receipt: mergeReceipt(line.receipt, result.receipt),
   };
   const lines = m.lines.map((l) => (l.id === lineId ? updated : l));
   return { ...m, lines, closedAt: lines.every(isFinal) ? now : null };
 }
+
+// RF-22: a milestone's grant is revoked once it closed after approval (every line final).
+// ponytail: "milestone cancelled" is the other v3 trigger; add it here when cancellation exists.
+export const grantRevocable = (m: Milestone) => m.closedAt !== null && m.status === MILESTONE_STATUS.APPROVED;

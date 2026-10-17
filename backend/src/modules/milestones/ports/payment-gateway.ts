@@ -1,4 +1,4 @@
-import type { LineStatus } from "../application/milestone";
+import type { LineResult } from "../application/milestone";
 
 export type LinePaymentRequest = {
   milestoneId: string;
@@ -10,7 +10,8 @@ export type LinePaymentRequest = {
   assetScale: number;
 };
 
-export type LinePaymentResult = { status: Exclude<LineStatus, "pendiente">; reference: string | null };
+/** Status, reference and what the gateway knows of the receipt so far (RF-23). */
+export type LinePaymentResult = LineResult;
 
 // Abstract class (not interface) so it doubles as the Nest DI token.
 // Hides grant timing: pay() may answer en_cola and check() resolves it later (no webhooks to rely on).

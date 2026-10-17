@@ -32,4 +32,8 @@ describe("SimulatedMilestoneFunding", () => {
       new SimulatedMilestoneFunding("http://api.test").complete("siembra", { interactRef: "SIM-12345678", hash: "simulated" }),
     ).rejects.toThrow(DomainError);
   });
+
+  it("revokes nothing: there is no wallet grant to cancel", async () => {
+    await expect(new SimulatedMilestoneFunding("http://api.test").revoke("siembra")).resolves.toBeUndefined();
+  });
 });

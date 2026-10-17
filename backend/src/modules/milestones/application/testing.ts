@@ -67,11 +67,15 @@ export class ThrowingGateway extends PaymentGateway {
   }
 }
 
-// Records the funding calls; `fail` makes complete() reject like a bad hash would.
+// Records the funding calls; `fail` makes complete() reject like a bad hash would, `failRevoke` makes revoke() reject like a down wallet.
 export class FakeFunding extends MilestoneFunding {
   readonly started: string[] = [];
   readonly completed: { milestoneId: string; params: FundingCallback }[] = [];
-  constructor(private readonly fail = false) {
+  readonly revoked: string[] = [];
+  constructor(
+    private readonly fail = false,
+    private readonly failRevoke = false,
+  ) {
     super();
   }
   async start(milestone: Milestone) {
@@ -81,5 +85,9 @@ export class FakeFunding extends MilestoneFunding {
   async complete(milestoneId: string, params: FundingCallback) {
     if (this.fail) throw new Error("hash mismatch");
     this.completed.push({ milestoneId, params });
+  }
+  async revoke(milestoneId: string) {
+    if (this.failRevoke) throw new Error("auth server down");
+    this.revoked.push(milestoneId);
   }
 }

@@ -141,8 +141,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FundingStartDto"
-      summary: "Starts funding: send the browser to redirectUrl so the investor
-        approves one grant capped at the milestone amount"
+      summary: "Starts funding: send the browser to redirectUrl so the custody wallet
+        holder approves one grant capped at the milestone amount"
       tags:
         - milestones
   /milestones/{id}/lines/{lineId}/payment:
@@ -306,6 +306,73 @@ components:
         - en_cola
         - completado
         - fallido
+    ReceiptAmountDto:
+      type: object
+      properties:
+        value:
+          type: number
+          description: Integer minor units of assetCode
+        assetCode:
+          type: string
+        assetScale:
+          type: number
+      required:
+        - value
+        - assetCode
+        - assetScale
+    LineReceiptDto:
+      type: object
+      properties:
+        incomingPaymentId:
+          type: string
+          nullable: true
+        outgoingPaymentId:
+          type: string
+          nullable: true
+        quoteId:
+          type: string
+          nullable: true
+        debitAmount:
+          nullable: true
+          description: Charged to the milestone grant on the custody wallet
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/ReceiptAmountDto"
+        receiveAmount:
+          nullable: true
+          description: "Credited to the beneficiary: quoted while en_cola, settled once
+            completado"
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/ReceiptAmountDto"
+        rate:
+          type: string
+          nullable: true
+          description: Implied receive/debit rate in major units, as a reduced
+            "numerator/denominator" string
+          example: 300/301
+        fee:
+          type: number
+          nullable: true
+          description: debit − receive in debit minor units; null when the assets differ
+        grantSpentBefore:
+          type: number
+          nullable: true
+          description: Grant debit total before this payment, minor units
+        grantSpentAfter:
+          type: number
+          nullable: true
+          description: Grant debit total re-read after settlement, minor units
+      required:
+        - incomingPaymentId
+        - outgoingPaymentId
+        - quoteId
+        - debitAmount
+        - receiveAmount
+        - rate
+        - fee
+        - grantSpentBefore
+        - grantSpentAfter
     LineDto:
       type: object
       properties:
@@ -324,6 +391,13 @@ components:
           format: date-time
           type: string
           nullable: true
+        receipt:
+          nullable: true
+          description: Null until the gateway reports the payment (simulated payments have
+            none)
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/LineReceiptDto"
         id:
           type: string
         beneficiary:
@@ -338,6 +412,7 @@ components:
         - status
         - reference
         - settledAt
+        - receipt
         - id
         - beneficiary
         - walletAddress
@@ -366,7 +441,7 @@ components:
           format: date-time
           type: string
           nullable: true
-          description: Set when the investor approved the grant that funds the lines; no
+          description: Set when the custody grant that funds the lines was approved; no
             line is paid before
         closedAt:
           format: date-time

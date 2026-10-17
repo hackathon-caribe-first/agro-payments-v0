@@ -1,7 +1,6 @@
-import { createMilestone, LINE_KIND, type LineInput } from "../../application/milestone";
-import type { Milestone } from "../../application/milestone";
-import { MilestoneRepository } from "../../ports/milestone.repository";
-import type { OpenPaymentsEnv } from "../../../../shared/config/env";
+import { createMilestone, LINE_KIND, type LineInput } from "../application/milestone";
+import type { Milestone } from "../application/milestone";
+import type { OpenPaymentsEnv } from "../../../shared/config/env";
 
 /** Real testnet wallet and asset; without it the seed uses COP on placeholder wallets for the simulated gateway. */
 export type TestnetSeed = Pick<OpenPaymentsEnv, "receiverWalletAddress" | "assetCode" | "assetScale">;
@@ -24,7 +23,8 @@ const seed = (wallet: (name: string) => string, currency: string, assetScale: nu
       ] satisfies LineInput[],
     });
 
-function demoMilestones(testnet: TestnetSeed | null): Milestone[] {
+// Seeded into an empty milestones table at startup (TypeOrmMilestoneAdapter.seedIfEmpty).
+export function demoMilestones(testnet: TestnetSeed | null = null): Milestone[] {
   if (!testnet) {
     // Amounts are COP minor units (scale 2): 450_000_000 is COP 4.500.000.
     const cop = seed(placeholder, "COP", 2);
@@ -43,26 +43,4 @@ function demoMilestones(testnet: TestnetSeed | null): Milestone[] {
     real("siembra", "Siembra", units(75), units(45), units(22.5), units(7.5)),
     real("primera-fertilizacion", "Primera fertilización", units(40), units(24), units(12), units(4)),
   ];
-}
-
-// ponytail: in-memory demo data, resets on restart; swap for a DB adapter in milestones.module.ts
-export class InMemoryMilestoneAdapter extends MilestoneRepository {
-  private readonly milestones: Map<string, Milestone>;
-
-  constructor(testnet: TestnetSeed | null = null) {
-    super();
-    this.milestones = new Map(demoMilestones(testnet).map((m) => [m.id, m]));
-  }
-
-  async findAll() {
-    return [...this.milestones.values()];
-  }
-
-  async findById(id: string) {
-    return this.milestones.get(id) ?? null;
-  }
-
-  async save(milestone: Milestone) {
-    this.milestones.set(milestone.id, milestone);
-  }
 }

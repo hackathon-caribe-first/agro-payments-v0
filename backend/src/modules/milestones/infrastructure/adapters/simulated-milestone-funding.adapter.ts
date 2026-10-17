@@ -22,4 +22,7 @@ export class SimulatedMilestoneFunding extends MilestoneFunding {
     if (this.pending.get(milestoneId) !== interactRef) throw new DomainError(`No pending funding for ${milestoneId} with that interact_ref`);
     this.pending.delete(milestoneId);
   }
+
+  // RF-22 no-op: a simulated milestone has no grant to cancel.
+  async revoke(_milestoneId: string) {}
 }

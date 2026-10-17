@@ -8,6 +8,7 @@ import {
   MILESTONE_STATUS,
   review,
   submitEvidence,
+  grantRevocable,
   type LineInput,
   type Milestone,
 } from "./milestone";
@@ -173,9 +174,87 @@ describe("line payments", () => {
     expect(m.closedAt).toBeNull();
   });
 
+  it("makes the grant revocable (RF-22) only once closed after approval", () => {
+    const closeAll = (m: Milestone) => ["l-prod", "l-prov", "l-fee"].reduce((acc, id) => done(acc, id), m);
+    expect(grantRevocable(approved())).toBe(false);
+    expect(grantRevocable(closeAll(approved()))).toBe(true);
+    expect(grantRevocable(closeAll(draft()))).toBe(false);
+  });
+
   it("refuses payments on a closed milestone", () => {
     const closed = ["l-prod", "l-prov", "l-fee"].reduce((m, id) => done(m, id), approved());
     expect(closed.closedAt).toEqual(now);
     expect(() => assertLinePayable(closed, "l-fee")).toThrow(DomainError);
+  });
+});
+
+describe("line receipt (RF-23)", () => {
+  const usd = (value: number) => ({ value, assetCode: "USD", assetScale: 2 });
+  const receiptOf = (m: Milestone) => m.lines.find((l) => l.id === "l-prov")?.receipt;
+  const queued = () =>
+    applyLineResult(
+      draft(),
+      "l-prov",
+      {
+        status: "en_cola",
+        reference: "OP-1",
+        receipt: {
+          incomingPaymentId: "https://rs/in-1",
+          outgoingPaymentId: "https://rs/out-1",
+          quoteId: "https://rs/q-1",
+          debitAmount: usd(3_010),
+          receiveAmount: usd(3_000),
+          grantSpentBefore: 0,
+        },
+      },
+      now,
+    );
+
+  it("starts empty on every line", () => {
+    expect(draft().lines.every((l) => l.receipt === null)).toBe(true);
+  });
+
+  it("records what the payment reported and derives rate and same-asset fee in integer minor units", () => {
+    expect(receiptOf(queued())).toEqual({
+      incomingPaymentId: "https://rs/in-1",
+      outgoingPaymentId: "https://rs/out-1",
+      quoteId: "https://rs/q-1",
+      debitAmount: usd(3_010),
+      receiveAmount: usd(3_000),
+      rate: "300/301",
+      fee: 10,
+      grantSpentBefore: 0,
+      grantSpentAfter: null,
+    });
+  });
+
+  it("merges the settlement over the queued receipt and recomputes rate and fee", () => {
+    const settled = applyLineResult(
+      queued(),
+      "l-prov",
+      { status: "completado", reference: "OP-1", receipt: { receiveAmount: usd(2_990), grantSpentAfter: 3_010 } },
+      now,
+    );
+    expect(receiptOf(settled)).toMatchObject({ receiveAmount: usd(2_990), rate: "299/301", fee: 20, grantSpentBefore: 0, grantSpentAfter: 3_010 });
+  });
+
+  it("gives no fee across assets, only the implied rate in major units", () => {
+    const fx = applyLineResult(
+      draft(),
+      "l-prov",
+      {
+        status: "en_cola",
+        reference: "OP-1",
+        receipt: { debitAmount: { value: 100, assetCode: "USD", assetScale: 2 }, receiveAmount: { value: 410_000, assetCode: "COP", assetScale: 2 } },
+      },
+      now,
+    );
+    expect(receiptOf(fx)).toMatchObject({ rate: "4100/1", fee: null });
+  });
+
+  it("keeps the previous receipt when a result brings none", () => {
+    const settled = applyLineResult(queued(), "l-prov", { status: "completado", reference: "OP-1" }, now);
+    expect(receiptOf(settled)).toEqual(receiptOf(queued()));
+    expect(receiptOf(done(draft(), "l-prov"))).toBeNull();
   });
 });

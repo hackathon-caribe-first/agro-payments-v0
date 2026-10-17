@@ -59,7 +59,7 @@ export class MilestonesController {
     return this.reviewMilestone.execute(id, dto.decision, dto.reason ?? null);
   }
 
-  /** Starts funding: send the browser to redirectUrl so the investor approves one grant capped at the milestone amount */
+  /** Starts funding: send the browser to redirectUrl so the custody wallet holder approves one grant capped at the milestone amount */
   @Post(":id/funding")
   @Roles(operator, investor)
   @HttpCode(200)

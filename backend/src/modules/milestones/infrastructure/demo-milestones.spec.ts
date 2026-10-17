@@ -1,15 +1,15 @@
-import { InMemoryMilestoneAdapter } from "./in-memory-milestone.adapter";
+import { demoMilestones } from "./demo-milestones";
 
-describe("InMemoryMilestoneAdapter seed", () => {
-  it("seeds unfunded COP milestones on placeholder wallets for the simulated gateway", async () => {
-    const milestones = await new InMemoryMilestoneAdapter().findAll();
+describe("demoMilestones seed", () => {
+  it("seeds unfunded COP milestones on placeholder wallets for the simulated gateway", () => {
+    const milestones = demoMilestones();
     expect(milestones).toHaveLength(3);
     expect(milestones.every((m) => m.currency === "COP" && m.assetScale === 2 && m.fundedAt === null)).toBe(true);
   });
 
-  it("seeds testnet-sized milestones paying the one receiver wallet in the testnet asset", async () => {
+  it("seeds testnet-sized milestones paying the one receiver wallet in the testnet asset", () => {
     const receiver = "https://ilp.interledger-test.dev/surco-receiver";
-    const milestones = await new InMemoryMilestoneAdapter({ receiverWalletAddress: receiver, assetCode: "USD", assetScale: 2 }).findAll();
+    const milestones = demoMilestones({ receiverWalletAddress: receiver, assetCode: "USD", assetScale: 2 });
 
     expect(milestones.map((m) => m.amount)).toEqual([10_000, 15_000, 8_000]);
     for (const m of milestones) {
