@@ -43,5 +43,5 @@ export async function decide(page: Page, verdict: "Aprobado" | "Observado") {
   await page.getByRole("button", { name: "Firmar y emitir dictamen", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.getByRole("alertdialog").getByRole("button", { name: "Firmar y emitir" }).click();
-  await expect(page.getByText("Dictamen emitido.")).toBeVisible();
+  await expect(page.locator("header").getByText(verdict === "Aprobado" ? "Pago de mano de obra pendiente" : "Requiere correcciones", { exact: true })).toBeVisible();
 }
