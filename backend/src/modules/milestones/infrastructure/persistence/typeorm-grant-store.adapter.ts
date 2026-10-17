@@ -37,6 +37,13 @@ export class TypeOrmGrantStore extends GrantStore {
     return row ? this.toGrant(row) : null;
   }
 
+  async findLatestForSettlement(settlementId: string) {
+    const row = await this.dataSource
+      .getRepository(GrantEntity)
+      .findOne({ where: { settlementId, purpose: GRANT_PURPOSE.LIQUIDATION }, order: { createdAt: "DESC" } });
+    return row ? this.toGrant(row) : null;
+  }
+
   private seal = (value: string | undefined) => (value === undefined ? null : this.cipher.encrypt(value));
   private open = (value: string | null) => (value === null ? null : this.cipher.decrypt(value));
 
@@ -48,6 +55,7 @@ export class TypeOrmGrantStore extends GrantStore {
       milestoneId: g.milestoneId,
       negotiationId: g.negotiationId ?? null,
       investmentId: g.investmentId ?? null,
+      settlementId: g.settlementId ?? null,
       payerWalletAddress: g.payerWalletAddress,
       assetCode: g.assetCode,
       assetScale: g.assetScale,
@@ -80,6 +88,7 @@ export class TypeOrmGrantStore extends GrantStore {
       milestoneId: r.milestoneId,
       ...(r.negotiationId !== null && { negotiationId: r.negotiationId }),
       ...(r.investmentId !== null && { investmentId: r.investmentId }),
+      ...(r.settlementId !== null && { settlementId: r.settlementId }),
       payerWalletAddress: r.payerWalletAddress,
       assetCode: r.assetCode,
       assetScale: r.assetScale,

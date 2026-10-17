@@ -1,6 +1,6 @@
 // Contract: the zod DTO schemas on origin/feat/producer-milestones (frontend/packages/shared/src/modules/{projects,milestones}/infrastructure/dto.ts).
 // The web app rejects any other key set, so these assert exact keys, types and enums.
-import { applyLineResult, fund, review } from "../../milestones/application/milestone";
+import { addSupplierLine, applyLineResult, fund, review } from "../../milestones/application/milestone";
 import { addEvidenceLog } from "../../milestones/application/milestone-progress";
 import { buildProject, type Project } from "../application/project";
 import { viewsOf } from "../application/project-queries";
@@ -101,11 +101,13 @@ describe("milestone responses", () => {
     });
   });
 
-  it("executed amounts count settled lines only", () => {
+  // v3: supplier lines come from approved orders (addSupplierLine), not a placeholder created with the project.
+  it("executed amounts count settled lines only; the supplies budget is the cap left after labor and fee", () => {
     let m = fund(built.milestones[0], now);
-    m = applyLineResult(m, "p1-ms-1-proveedor", { status: "completado", reference: "SIM-1" }, now);
+    m = addSupplierLine(m, { id: "p1-ms-1-order-1", beneficiary: "Almacén", walletAddress: "https://w.test/pedro", amount: 100_000_000 });
+    m = applyLineResult(m, "p1-ms-1-order-1", { status: "completado", reference: "SIM-1" }, now);
     const dto = toMilestoneSummaryResponse({ milestone: m, status: "SUPPLIES_PAID" });
-    expect(dto).toMatchObject({ supplies_executed: 3_200_000, labor_executed: 0, status: "SUPPLIES_PAID" });
+    expect(dto).toMatchObject({ supplies_budget: 3_200_000, supplies_executed: 1_000_000, labor_executed: 0, status: "SUPPLIES_PAID" });
   });
 
   it("detail: exact keys, snake_case requirements (min/max only when set), logs and PRD verdicts", () => {

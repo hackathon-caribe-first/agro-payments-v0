@@ -28,9 +28,11 @@ describe("OpenPaymentsGateway.pay", () => {
 
     const result = await gateway.pay(request);
 
+    // v3 RF-17: the grant's spent total is read before anything is created or quoted (new call after the wallet GETs).
     expect(calls).toEqual([
       `wallet.get ${RECEIVER.id}`,
       `wallet.get ${CUSTODY.id}`,
+      `outgoingPayment.getGrantSpentAmounts ${CUSTODY.resourceServer}`,
       `grant.request ${RECEIVER.authServer} incoming-payment`,
       `incomingPayment.create ${RECEIVER.resourceServer}`,
       `grant.request ${CUSTODY.authServer} quote`,
@@ -202,5 +204,46 @@ describe("OpenPaymentsGateway.check", () => {
   it("keeps the line en_cola while money is still moving", async () => {
     const { gateway, reference } = await paid();
     expect(await gateway.check(reference)).toEqual({ status: "en_cola", reference });
+  });
+});
+
+describe("OpenPaymentsGateway grant cap (RF-17)", () => {
+  it("refuses (409) a line the grant cannot cover anymore, before creating any payment", async () => {
+    const { gateway, client, calls } = await funded();
+    client.outgoingPayment.getGrantSpentAmounts.mockResolvedValueOnce({ spentDebitAmount: amount("8000"), spentReceiveAmount: amount("8000") });
+    await expect(gateway.pay(request)).rejects.toThrow(DomainError);
+    expect(calls.some((c) => c.startsWith("incomingPayment.create") || c.startsWith("quote.create"))).toBe(false);
+  });
+
+  it("still pays when the spent total cannot be read: the wallet enforces the limit anyway", async () => {
+    const { gateway, client } = await funded();
+    client.outgoingPayment.getGrantSpentAmounts.mockRejectedValueOnce(new Error("down"));
+    expect((await gateway.pay(request)).status).toBe("en_cola");
+  });
+});
+
+// PRD v3 Fase 3 paso 5 / RF-26: settlement payouts are paid from the liquidation grant the fiduciaria approved, keyed by the settlement.
+describe("OpenPaymentsGateway liquidation scope", () => {
+  const payout: LinePaymentRequest = { ...request, milestoneId: "s-1", lineId: "p-1", grantScope: "liquidation" };
+  const liquidationGrant = activeGrant({ id: "g-liq", purpose: "liquidation", milestoneId: null, settlementId: "s-1" });
+
+  it("pays a payout with the settlement's liquidation grant and settles it through the same grant", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(liquidationGrant);
+    const gateway = new OpenPaymentsGateway(mock.op);
+
+    const result = await gateway.pay(payout);
+    expect(result.status).toBe("en_cola");
+    expect(mock.client.outgoingPayment.create).toHaveBeenCalledWith({ url: CUSTODY.resourceServer, accessToken: "outgoing-token" }, expect.anything());
+
+    mock.client.incomingPayment.get.mockResolvedValueOnce({ id: INCOMING, completed: true, receivedAmount: amount("3000") });
+    expect((await gateway.check(result.reference as string)).status).toBe("completado");
+  });
+
+  it("never pays a payout from a milestone grant that happens to share the id", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(activeGrant({ milestoneId: "s-1" }));
+    await expect(new OpenPaymentsGateway(mock.op).pay(payout)).rejects.toThrow(/Settlement s-1 has no outgoing-payment grant/);
+    expect(mock.calls).toEqual([]);
   });
 });

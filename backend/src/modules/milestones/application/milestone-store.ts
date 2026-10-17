@@ -23,4 +23,9 @@ export class MilestoneStore {
   list() {
     return this.milestones.findAll();
   }
+
+  /** Ordered by sequenceOrder. */
+  listProject(projectId: string) {
+    return this.milestones.findByProject(projectId);
+  }
 }

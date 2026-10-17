@@ -1,16 +1,20 @@
 import { Logger } from "@nestjs/common";
 import { DomainError } from "../../../../shared/domain-errors";
 import type { ReceiptAmount } from "../../application/milestone";
-import { type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../../ports/payment-gateway";
+import { type GrantScope, type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../../ports/payment-gateway";
 import { activeOutgoingGrant, type OpenPayments, requestToken, withOutgoingToken } from "./open-payments.client";
 
-// Reference = milestone + incoming + outgoing payment URLs, so check() can read both and pick the right grant.
+// Reference = grant key + incoming + outgoing payment URLs, so check() can read both and pick the right grant.
+// The key is the milestone id, or `liquidation:<settlementId>` for settlement payouts.
 const SEPARATOR = " ";
-const toReference = (milestoneId: string, incomingId: string, outgoingId: string) => [milestoneId, incomingId, outgoingId].join(SEPARATOR);
+const LIQUIDATION_PREFIX = "liquidation:";
+const toReference = (milestoneId: string, scope: GrantScope, incomingId: string, outgoingId: string) =>
+  [scope === "liquidation" ? `${LIQUIDATION_PREFIX}${milestoneId}` : milestoneId, incomingId, outgoingId].join(SEPARATOR);
 function fromReference(reference: string) {
-  const [milestoneId, incomingId, outgoingId] = reference.split(SEPARATOR);
-  if (!milestoneId || !incomingId || !outgoingId) throw new Error(`Not an Open Payments reference: ${reference}`);
-  return { milestoneId, incomingId, outgoingId };
+  const [key, incomingId, outgoingId] = reference.split(SEPARATOR);
+  if (!key || !incomingId || !outgoingId) throw new Error(`Not an Open Payments reference: ${reference}`);
+  const scope: GrantScope = key.startsWith(LIQUIDATION_PREFIX) ? "liquidation" : "milestone";
+  return { milestoneId: scope === "liquidation" ? key.slice(LIQUIDATION_PREFIX.length) : key, scope, incomingId, outgoingId };
 }
 
 type OpAmount = { value: string; assetCode: string; assetScale: number };
@@ -49,12 +53,13 @@ export class OpenPaymentsGateway extends PaymentGateway {
   }
 
   private async send(request: LinePaymentRequest): Promise<LinePaymentResult> {
-    // ponytail: a fixed debit needs an incoming payment without incomingAmount, a quote with debitAmount, a check() that
-    // settles on the outgoing payment's sentAmount (such an incoming payment never completes on its own) and the liquidation
-    // grant on custody (PRD v3 Fase 3 paso 5), none of which exist yet. Refused (409) until then; the simulated gateway supports it.
+    // ponytail: a fixed debit needs an incoming payment without incomingAmount, a quote with debitAmount and a check() that
+    // settles on the outgoing payment's sentAmount (such an incoming payment never completes on its own), none of which exist yet;
+    // the liquidation grant on custody (PRD v3 Fase 3 paso 5) does (grantScope "liquidation"). Refused (409) until then; the simulated gateway supports it.
     if (request.fixedDebitAmount) throw new DomainError("Fixed-debit (cross-currency) payouts are not supported in open-payments mode yet");
     const { client } = this.op;
-    const grant = await activeOutgoingGrant(this.op.grants, request.milestoneId);
+    const scope = request.grantScope ?? "milestone";
+    const grant = await activeOutgoingGrant(this.op.grants, request.milestoneId, scope);
 
     const receiver = await client.walletAddress.get({ url: request.walletAddress });
     // ponytail: no FX. A beneficiary wallet in another asset fails its line.
@@ -65,6 +70,12 @@ export class OpenPaymentsGateway extends PaymentGateway {
       return { status: "fallido", reference: null };
     }
     const payer = await client.walletAddress.get({ url: grant.payerWalletAddress });
+    // RF-17: read what the grant already spent before creating or quoting anything; a line it cannot cover is refused (409, stays pendiente).
+    // Unreadable (null): the wallet still enforces the debit limit on the outgoing payment.
+    const spent = await this.grantSpent(request.milestoneId, payer.resourceServer, scope);
+    if (spent !== null && spent + request.amount > grant.debitLimit) {
+      throw new DomainError(`Line ${request.lineId} (${request.amount}) exceeds what the grant has left (${grant.debitLimit - spent} of ${grant.debitLimit})`);
+    }
 
     const incomingToken = await requestToken(this.op, receiver.authServer, { type: "incoming-payment", actions: ["create", "read"] });
     const incoming = await client.incomingPayment.create(
@@ -78,13 +89,16 @@ export class OpenPaymentsGateway extends PaymentGateway {
       { walletAddress: payer.id, receiver: incoming.id, method: "ilp" },
     );
 
-    const outgoing = await withOutgoingToken(this.op, request.milestoneId, (accessToken) =>
-      client.outgoingPayment.create({ url: payer.resourceServer, accessToken }, { walletAddress: payer.id, quoteId: quote.id }),
+    const outgoing = await withOutgoingToken(
+      this.op,
+      request.milestoneId,
+      (accessToken) => client.outgoingPayment.create({ url: payer.resourceServer, accessToken }, { walletAddress: payer.id, quoteId: quote.id }),
+      scope,
     );
     // Settlement is asynchronous: check() resolves it, adds the received amount and re-reads the grant total.
     return {
       status: "en_cola",
-      reference: toReference(request.milestoneId, incoming.id, outgoing.id),
+      reference: toReference(request.milestoneId, scope, incoming.id, outgoing.id),
       receipt: {
         incomingPaymentId: incoming.id,
         outgoingPaymentId: outgoing.id,
@@ -98,10 +112,13 @@ export class OpenPaymentsGateway extends PaymentGateway {
   }
 
   // RF-23: the grant's debit total as the wallet reports it; null (not 0) when it cannot be read, so the receipt never invents a number.
-  private async grantSpent(milestoneId: string, resourceServer: string): Promise<number | null> {
+  private async grantSpent(milestoneId: string, resourceServer: string, scope: GrantScope): Promise<number | null> {
     try {
-      const spent = await withOutgoingToken(this.op, milestoneId, (accessToken) =>
-        this.op.client.outgoingPayment.getGrantSpentAmounts({ url: resourceServer, accessToken }),
+      const spent = await withOutgoingToken(
+        this.op,
+        milestoneId,
+        (accessToken) => this.op.client.outgoingPayment.getGrantSpentAmounts({ url: resourceServer, accessToken }),
+        scope,
       );
       // The wallet answers null while nothing was spent.
       return spent.spentDebitAmount ? minorUnits(spent.spentDebitAmount) : 0;
@@ -113,13 +130,13 @@ export class OpenPaymentsGateway extends PaymentGateway {
 
   async check(reference: string): Promise<LinePaymentResult> {
     const { client } = this.op;
-    const { milestoneId, incomingId, outgoingId } = fromReference(reference);
-    const grant = await activeOutgoingGrant(this.op.grants, milestoneId);
+    const { milestoneId, scope, incomingId, outgoingId } = fromReference(reference);
+    const grant = await activeOutgoingGrant(this.op.grants, milestoneId, scope);
 
     const { authServer } = await client.incomingPayment.getPublic({ url: incomingId });
     const accessToken = await requestToken(this.op, authServer, { type: "incoming-payment", actions: ["read"] });
     const incoming = await client.incomingPayment.get({ url: incomingId, accessToken });
-    const outgoing = await withOutgoingToken(this.op, milestoneId, (token) => client.outgoingPayment.get({ url: outgoingId, accessToken: token }));
+    const outgoing = await withOutgoingToken(this.op, milestoneId, (token) => client.outgoingPayment.get({ url: outgoingId, accessToken: token }), scope);
     if (!incoming.completed) return { status: outgoing.failed ? "fallido" : "en_cola", reference };
 
     const payer = await client.walletAddress.get({ url: grant.payerWalletAddress });
@@ -132,7 +149,7 @@ export class OpenPaymentsGateway extends PaymentGateway {
         quoteId: outgoing.quoteId ?? null,
         debitAmount: receiptAmount(outgoing.debitAmount),
         receiveAmount: receiptAmount(incoming.receivedAmount),
-        grantSpentAfter: await this.grantSpent(milestoneId, payer.resourceServer),
+        grantSpentAfter: await this.grantSpent(milestoneId, payer.resourceServer, scope),
       },
     };
   }

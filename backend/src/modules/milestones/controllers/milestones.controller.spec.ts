@@ -16,7 +16,8 @@ describe("MilestonesController access control", () => {
   });
 
   it("lets every milestone role read, and nobody else (a buyer gets 403)", () => {
-    expect(classRoles).toEqual([MILESTONE_ROLES.verifier, MILESTONE_ROLES.producer, MILESTONE_ROLES.operator]);
+    // v3: the fiduciaria reads the milestones whose grants it approves (custodian screen).
+    expect(classRoles).toEqual([MILESTONE_ROLES.verifier, MILESTONE_ROLES.fiduciaria, MILESTONE_ROLES.producer, MILESTONE_ROLES.operator]);
     expect(classRoles).not.toContain("buyer");
     expect(handlerRoles("list")).toBeUndefined();
     expect(handlerRoles("get")).toBeUndefined();
@@ -26,8 +27,10 @@ describe("MilestonesController access control", () => {
     expect(handlerRoles("addEvidence")).toEqual([MILESTONE_ROLES.producer]);
   });
 
-  it("restricts review to the verifier", () => {
+  // PRD v3 actors and principle 4: the technical verifier issues the verdict and is not the fiduciaria, which only approves grants.
+  it("restricts review to the verifier, never the fiduciaria", () => {
     expect(handlerRoles("review")).toEqual([MILESTONE_ROLES.verifier]);
+    expect(handlerRoles("review")).not.toContain("fidu");
   });
 
   it("restricts line payment and sync to the operator", () => {
@@ -40,12 +43,15 @@ describe("MilestonesController access control", () => {
     expect(path("sync")).toBe(":id/lines/sync");
   });
 
-  it("lets the operator and the investor start funding a milestone", () => {
-    expect(handlerRoles("startFunding")).toEqual([MILESTONE_ROLES.operator, MILESTONE_ROLES.investor]);
+  // v3 (RF-13): the fiduciaria approves the milestone grant on custody (operator as demo fallback); investors no longer fund milestones.
+  it("lets the fiduciaria and the operator start a milestone grant, not the investor", () => {
+    expect(handlerRoles("startFunding")).toEqual([MILESTONE_ROLES.fiduciaria, MILESTONE_ROLES.operator]);
+    expect(handlerRoles("startFunding")).not.toContain("investor");
     expect(path("startFunding")).toBe(":id/funding");
   });
 
-  it("maps the roles to fidu, seller, admin and investor", () => {
-    expect(MILESTONE_ROLES).toEqual({ verifier: "fidu", producer: "seller", operator: "admin", investor: "investor" });
+  // v3: the verifier gets its own role (was fidu); fidu is the fiduciaria.
+  it("maps the roles to verifier, fidu, seller, admin and investor", () => {
+    expect(MILESTONE_ROLES).toEqual({ verifier: "verifier", fiduciaria: "fidu", producer: "seller", operator: "admin", investor: "investor" });
   });
 });

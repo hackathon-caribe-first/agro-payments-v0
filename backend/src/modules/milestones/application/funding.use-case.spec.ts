@@ -22,6 +22,24 @@ describe("StartFundingUseCase", () => {
   });
 });
 
+describe("StartFundingUseCase grant sequence (RF-13)", () => {
+  const inProject = (order: number) => ({ ...unfundedMilestone(), id: `p1-ms-${order}`, projectId: "p1", sequenceOrder: order });
+
+  it("refuses milestone N+1 while milestone N still has its live grant, before reaching the wallet", async () => {
+    const funding = new FakeFunding();
+    const useCase = new StartFundingUseCase(storeWith(fund(inProject(1), new Date()), inProject(2)), funding);
+    await expect(useCase.execute("p1-ms-2")).rejects.toThrow(/live grant/);
+    expect(funding.started).toHaveLength(0);
+  });
+
+  it("starts milestone N+1 once milestone N closed", async () => {
+    const funding = new FakeFunding();
+    const closed = { ...fund(inProject(1), new Date()), status: "approved" as const, closedAt: new Date() };
+    await new StartFundingUseCase(storeWith(closed, inProject(2)), funding).execute("p1-ms-2");
+    expect(funding.started).toEqual(["p1-ms-2"]);
+  });
+});
+
 describe("CompleteFundingUseCase", () => {
   it("finalizes the grant and marks the milestone funded", async () => {
     const funding = new FakeFunding();

@@ -7,6 +7,8 @@ import { canView, PROJECT_STATUS, type Project, type ProjectWallets, type Viewer
 import { PROJECT_WALLETS } from "../../projects/application/project-wallets";
 import { ProjectRepository } from "../../projects/ports/project.repository";
 import { CapturedInvestors } from "../ports/captured-investors";
+import type { FundingCallback } from "../../milestones/ports/milestone-funding";
+import { LiquidationFunding } from "../ports/liquidation-funding";
 import { SettlementRepository } from "../ports/settlement.repository";
 import { PREFERRED_RATE_BPS } from "./liquidation";
 import {
@@ -39,6 +41,7 @@ export class SettlementUseCases {
     private readonly settlements: SettlementRepository,
     private readonly gateway: PaymentGateway,
     @Inject(PROJECT_WALLETS) private readonly wallets: ProjectWallets,
+    private readonly liquidation: LiquidationFunding,
     @Optional() private readonly captured?: CapturedInvestors,
   ) {}
 
@@ -103,7 +106,10 @@ export class SettlementUseCases {
    * leaves that payout pending. Calling it again pays what is pending and syncs what is in flight.
    */
   async execute(id: string): Promise<Settlement> {
-    let settlement = startExecution(await this.settlement(id));
+    const current = await this.settlement(id);
+    // RF-26: payouts leave custody only through the liquidation grant the fiduciaria approved (open-payments mode).
+    if (!(await this.liquidation.ready(id))) throw new DomainError(`Settlement ${id} needs the fiduciaria's liquidation grant before executing`);
+    let settlement = startExecution(current);
     await this.settlements.save(settlement);
     await this.projects.updateStatus(settlement.projectId, PROJECT_STATUS.SETTLEMENT_PROCESSING);
 
@@ -117,6 +123,7 @@ export class SettlementUseCases {
           currency: settlement.currency,
           assetScale: settlement.assetScale,
           fixedDebitAmount: payout.fixedDebitAmount,
+          grantScope: "liquidation",
         })
         .catch((error: unknown) => {
           if (error instanceof DomainError) throw error;
@@ -134,8 +141,27 @@ export class SettlementUseCases {
       await this.settlements.save(settlement);
     }
 
-    if (settlement.status === SETTLEMENT_STATUS.EXECUTED) await this.projects.updateStatus(settlement.projectId, PROJECT_STATUS.SETTLED_AND_CLOSED);
+    if (settlement.status === SETTLEMENT_STATUS.EXECUTED) {
+      await this.projects.updateStatus(settlement.projectId, PROJECT_STATUS.SETTLED_AND_CLOSED);
+      // Like RF-22 for milestones: the grant is cancelled once its last payout settled. A failed revoke never undoes the payouts.
+      await this.liquidation.revoke(id).catch(() => undefined);
+    }
     return settlement;
+  }
+
+  /** RF-26: the fiduciaria approves the liquidation grant (Σ COP payouts) on custody. Null in simulated mode: nothing to approve. */
+  async startLiquidationGrant(id: string): Promise<{ redirectUrl: string } | null> {
+    const settlement = await this.settlement(id);
+    if (settlement.status !== SETTLEMENT_STATUS.APPROVED) throw new DomainError(`Settlement ${id} is ${settlement.status}; the liquidation grant follows its approval`);
+    if (!this.liquidation.interactive) return null;
+    if (await this.liquidation.ready(id)) throw new DomainError(`Settlement ${id} already has an active liquidation grant`);
+    return this.liquidation.start(settlement);
+  }
+
+  /** Unauthenticated wallet callback: only the pending grant's nonce plus a matching GNAP hash finalize it. */
+  async completeLiquidationGrant(id: string, params: FundingCallback): Promise<void> {
+    await this.settlement(id);
+    await this.liquidation.complete(id, params);
   }
 
   /** The owner producer, investors, operator and fiduciaria read it; anyone else gets 404, so ids never leak. */

@@ -56,10 +56,11 @@ describe("PayLineUseCase", () => {
     expect(line(m, "l-prod")).toMatchObject({ status: "pendiente" });
   });
 
+  // v3 (RF-20): the fee line is paid on approval, so the pre-approval failure case now uses the supplier line (was l-fee).
   it("marks the line fallido when the gateway reports a failure", async () => {
     const gateway = new FakeGateway(() => ({ status: "fallido", reference: null }));
-    const m = await new PayLineUseCase(storeWith(sampleMilestone()), gateway, new FakeFunding()).execute("m1", "l-fee");
-    expect(line(m, "l-fee")).toMatchObject({ status: "fallido" });
+    const m = await new PayLineUseCase(storeWith(sampleMilestone()), gateway, new FakeFunding()).execute("m1", "l-prov");
+    expect(line(m, "l-prov")).toMatchObject({ status: "fallido" });
   });
 
   it("stores the receipt the gateway reported on the line", async () => {

@@ -1,5 +1,8 @@
 import type { LineResult } from "../application/milestone";
 
+/** Which custody grant pays: the milestone's (RF-13) or, for settlement payouts, the settlement's liquidation grant (RF-26). */
+export type GrantScope = "milestone" | "liquidation";
+
 export type LinePaymentRequest = {
   milestoneId: string;
   lineId: string;
@@ -13,6 +16,8 @@ export type LinePaymentRequest = {
    * `currency`, and the receiver gets whatever the quote converts it to, fees included. Absent: `amount` is what the receiver gets.
    */
   fixedDebitAmount?: boolean;
+  /** Absent: "milestone". With "liquidation", milestoneId carries the settlement id. */
+  grantScope?: GrantScope;
 };
 
 /** Status, reference and what the gateway knows of the receipt so far (RF-23). */

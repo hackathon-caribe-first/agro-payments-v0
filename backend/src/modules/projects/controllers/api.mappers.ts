@@ -1,5 +1,15 @@
 // Domain → /api wire shapes. The only place minor units become whole pesos and verdicts become PRD enums.
-import { type EvidenceLog, LINE_KIND, LINE_STATUS, type Line, type Requirement, REQUIREMENT_TYPE, type ReviewEntry, type ReviewVerdict } from "../../milestones/application/milestone";
+import {
+  type EvidenceLog,
+  LINE_KIND,
+  LINE_STATUS,
+  type Line,
+  type Requirement,
+  REQUIREMENT_TYPE,
+  remainingCap,
+  type ReviewEntry,
+  type ReviewVerdict,
+} from "../../milestones/application/milestone";
 import { minorToPesos, type Project } from "../application/project";
 import type { MilestoneView } from "../application/project-queries";
 import type { ProjectResponseDto, RequirementDto } from "./dtos/project.dto";
@@ -50,7 +60,8 @@ export function toMilestoneSummaryResponse({ milestone: m, status }: MilestoneVi
     sequence_order: m.sequenceOrder ?? 0,
     title: m.title,
     status,
-    supplies_budget: pesos(sum(supplies)),
+    // v3: supplier lines join during execution, so the unallocated cap is supplies budget too (labor and fee exist from the start).
+    supplies_budget: pesos(sum(supplies) + remainingCap(m)),
     labor_budget: pesos(sum(labor)),
     supplies_executed: pesos(sum(settled(supplies))),
     labor_executed: pesos(sum(settled(labor))),

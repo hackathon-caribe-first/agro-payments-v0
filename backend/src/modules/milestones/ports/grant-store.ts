@@ -7,7 +7,8 @@ export const GRANT_PURPOSE = {
   BUYER_DEPOSIT: "buyer_deposit",
   /** An investor's one-off grant on their own wallet that moves one investment into custody (investmentId set). */
   INVESTOR_CAPTURE: "investor_capture",
-  // Planned in v3, not issued yet: "liquidation".
+  /** RF-26 / Fase 3 paso 5: the fiduciaria's grant on custody for one settlement's cascade (settlementId set). */
+  LIQUIDATION: "liquidation",
 } as const;
 export type GrantPurpose = (typeof GRANT_PURPOSE)[keyof typeof GRANT_PURPOSE];
 
@@ -42,6 +43,8 @@ export interface Grant {
   negotiationId?: string;
   /** investor_capture grants only; absent on the others. */
   investmentId?: string;
+  /** liquidation grants only; absent on the others. */
+  settlementId?: string;
   payerWalletAddress: string;
   assetCode: string;
   assetScale: number;
@@ -67,4 +70,6 @@ export abstract class GrantStore {
   abstract findLatestForNegotiation(negotiationId: string): Promise<Grant | null>;
   /** The newest investor_capture grant of that investment, whatever its status. */
   abstract findLatestForInvestment(investmentId: string): Promise<Grant | null>;
+  /** The newest liquidation grant of that settlement, whatever its status. */
+  abstract findLatestForSettlement(settlementId: string): Promise<Grant | null>;
 }

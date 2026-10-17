@@ -1,5 +1,5 @@
 import { DomainError, ValidationError } from "../../../shared/domain-errors";
-import { LINE_KIND } from "../../milestones/application/milestone";
+import { LINE_KIND, remainingCap } from "../../milestones/application/milestone";
 import {
   buildProject,
   canView,
@@ -122,12 +122,13 @@ describe("validateNewProject", () => {
     });
   });
 
-  it("requires labor above zero: every milestone pays exactly one productor line (server-only rule)", () => {
+  // v3 ("en nivel C y primer ciclo no existe la línea de jornales"): labor 0 is valid when supplies are above zero (was a server-only 400).
+  it("accepts a milestone without labor when it has supplies: no jornales line", () => {
     const input = validInput();
     const milestones = [{ ...input.milestones[0], laborBudget: 0 }];
-    expect(errorsOf({ ...input, milestones })).toEqual({
-      "milestones.0.laborBudget": ["Mano de obra: debe ser mayor a cero para pagar al productor."],
-    });
+    expect(errorsOf({ ...input, milestones })).toEqual({});
+    const [m] = buildProject({ id: "p1", ownerUserId: "u1", input: { ...input, milestones }, wallets, now }).milestones;
+    expect(m.lines.map((l) => l.kind)).toEqual([LINE_KIND.PLATAFORMA]);
   });
 });
 
@@ -156,15 +157,16 @@ describe("buildProject", () => {
     });
   });
 
-  it("creates payable milestones: proveedor = supplies, productor = labor, plataforma = 3 % of both, in sequence", () => {
+  // v3 (RF-13, RF-15/RF-16): the amount is the grant cap (supplies + labor + 3 % fee); supplier lines come from approved orders
+  // during execution, so the supplies budget stays unallocated cap instead of a placeholder proveedor line (was proveedor = supplies).
+  it("creates payable milestones capped at supplies + labor + 3 % fee: productor = labor, plataforma = fee, supplies left as cap", () => {
     const [first, second] = built().milestones;
     expect(first).toMatchObject({ id: "p1-ms-1", projectId: "p1", sequenceOrder: 1, amount: 515_000_000, currency: "COP", assetScale: 2 });
     expect(first.lines.map((l) => [l.kind, l.amount, l.walletAddress])).toEqual([
-      [LINE_KIND.PROVEEDOR, 320_000_000, wallets.supplier],
       [LINE_KIND.PRODUCTOR, 180_000_000, wallets.producer],
       [LINE_KIND.PLATAFORMA, 15_000_000, wallets.platform],
     ]);
-    // No supplies: no proveedor line (line amounts must be positive).
+    expect(remainingCap(first)).toBe(320_000_000);
     expect(second.lines.map((l) => [l.kind, l.amount])).toEqual([
       [LINE_KIND.PRODUCTOR, 100_000_100],
       [LINE_KIND.PLATAFORMA, 3_000_003],

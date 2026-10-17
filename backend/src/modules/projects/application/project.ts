@@ -167,9 +167,8 @@ export function validateNewProject(input: NewProjectInput): NewProjectInput {
         if (m.estimatedCompletionDate < input.startDate || m.estimatedCompletionDate > input.estimatedEndDate) {
           addFieldError(errors, `milestones.${i}.estimatedCompletionDate`, "La fecha debe estar dentro del periodo del proyecto.");
         }
+        // Labor 0 is a milestone without jornales (levels C and primer ciclo, PRD v3), like the client allows.
         if (m.suppliesBudget + m.laborBudget <= 0) addFieldError(errors, `milestones.${i}.laborBudget`, "La cotización del hito debe ser mayor a cero.");
-        // Server-only: the aggregate needs exactly one positive productor line (the client allows labor 0 when supplies > 0).
-        else if (m.laborBudget <= 0) addFieldError(errors, `milestones.${i}.laborBudget`, "Mano de obra: debe ser mayor a cero para pagar al productor.");
       });
     }
   }
@@ -187,7 +186,8 @@ export function validateNewProject(input: NewProjectInput): NewProjectInput {
 
 type BuildProject = { id: string; ownerUserId: string; input: NewProjectInput; wallets: ProjectWallets; now: Date };
 
-// Each milestone pays proveedor = supplies, productor = labor and plataforma = the fee on both, so the existing funding and payment flow pays it as is.
+// Each milestone's amount (its grant cap, RF-13) is supplies + labor + the 3 % fee. Productor = labor and plataforma = fee exist from
+// the start and are paid on approval; supplies stay unallocated cap that approved orders turn into proveedor lines (RF-15/RF-16).
 export function buildProject({ id, ownerUserId, input, wallets, now }: BuildProject): { project: NewProject; milestones: Milestone[] } {
   const valid = validateNewProject(input);
   const scale = PROJECT_ASSET_SCALE;
@@ -197,14 +197,13 @@ export function buildProject({ id, ownerUserId, input, wallets, now }: BuildProj
     const labor = pesosToMinor(m.laborBudget, scale);
     const fee = platformFee(supplies + labor, PLATFORM_FEE_PCT);
     const lines: LineInput[] = [
-      { id: `${milestoneId}-proveedor`, kind: LINE_KIND.PROVEEDOR, beneficiary: "Proveedor de insumos", walletAddress: wallets.supplier, amount: supplies },
       { id: `${milestoneId}-productor`, kind: LINE_KIND.PRODUCTOR, beneficiary: "Productor", walletAddress: wallets.producer, amount: labor },
       { id: `${milestoneId}-plataforma`, kind: LINE_KIND.PLATAFORMA, beneficiary: "Plataforma Surco", walletAddress: wallets.platform, amount: fee },
     ].filter((l) => l.amount > 0);
     return createMilestone({
       id: milestoneId,
       title: m.title,
-      amount: lines.reduce((sum, l) => sum + l.amount, 0),
+      amount: supplies + labor + fee,
       currency: PROJECT_CURRENCY,
       assetScale: scale,
       lines,

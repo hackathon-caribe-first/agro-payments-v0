@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { DomainError } from "../../../shared/domain-errors";
 import { MilestoneFunding } from "../ports/milestone-funding";
 import { PaymentGateway, type LinePaymentResult } from "../ports/payment-gateway";
-import { applyLineResult, assertLinePayable } from "./milestone";
+import { applyLineResult, assertLinePayable, type Milestone } from "./milestone";
 import { MilestoneStore } from "./milestone-store";
 import { revokeIfClosed } from "./revoke-grant";
 
@@ -35,7 +35,12 @@ export class PayLineUseCase {
       });
 
     const updated = await this.store.update(id, (m) => applyLineResult(m, lineId, result, new Date()));
-    await revokeIfClosed(this.funding, updated);
-    return updated;
+    return this.closeOut(updated);
+  }
+
+  /** RF-22 after any transition that may have closed the milestone (a payment or an approval). */
+  async closeOut(milestone: Milestone): Promise<Milestone> {
+    await revokeIfClosed(this.funding, milestone);
+    return milestone;
   }
 }

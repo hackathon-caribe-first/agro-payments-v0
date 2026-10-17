@@ -33,6 +33,13 @@ describe("SettlementController", () => {
     expect(meta(ROLES_KEY, "get")).toBeUndefined();
   });
 
+  // PRD v3 Fase 3 paso 5: the fiduciaria approves the liquidation grant before the cascade pays (RF-26).
+  it("lets the operator and the fiduciaria start the liquidation grant", () => {
+    expect(route("startLiquidationGrant")).toEqual(["POST", "api/settlements/:id/liquidation-grant"]);
+    expect(meta(ROLES_KEY, "startLiquidationGrant")).toEqual(["admin", "fidu"]);
+    expect(meta(HTTP_CODE_METADATA, "startLiquidationGrant")).toBe(200);
+  });
+
   it("answers 200 except 201 on create", () => {
     expect(meta(HTTP_CODE_METADATA, "preview")).toBe(200);
     expect(meta(HTTP_CODE_METADATA, "create")).toBe(201);

@@ -9,6 +9,7 @@ import {
 import type { OpenPaymentsEnv } from "../../../../shared/config/env";
 import { DomainError } from "../../../../shared/domain-errors";
 import type { FundingCallback } from "../../ports/milestone-funding";
+import type { GrantScope } from "../../ports/payment-gateway";
 import { type Grant, type GrantAccess, type GrantPending, GRANT_STATUS, type GrantStore } from "../../ports/grant-store";
 
 /** The slice of the SDK the adapters use, so specs can mock it. */
@@ -31,11 +32,15 @@ export async function createOpenPayments(env: OpenPaymentsEnv, grants: GrantStor
   return { client, grants, custodyWalletAddress: env.custodyWalletAddress };
 }
 
+const SCOPE_NAME: Record<GrantScope, string> = { milestone: "Milestone", liquidation: "Settlement" };
+
 // A revoked grant must not pay: refused as a DomainError (409) before anything reaches the network.
-export async function activeOutgoingGrant(grants: GrantStore, milestoneId: string): Promise<Grant & { access: GrantAccess }> {
-  const grant = await grants.findLatestForMilestone(milestoneId);
-  if (grant?.status === GRANT_STATUS.REVOKED) throw new DomainError(`Milestone ${milestoneId} is closed: its outgoing-payment grant was revoked`);
-  if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) throw new Error(`Milestone ${milestoneId} has no outgoing-payment grant`);
+// `id` is the milestone id, or the settlement id for the liquidation grant (RF-26).
+export async function activeOutgoingGrant(grants: GrantStore, id: string, scope: GrantScope = "milestone"): Promise<Grant & { access: GrantAccess }> {
+  const grant = scope === "liquidation" ? await grants.findLatestForSettlement(id) : await grants.findLatestForMilestone(id);
+  const name = `${SCOPE_NAME[scope]} ${id}`;
+  if (grant?.status === GRANT_STATUS.REVOKED) throw new DomainError(`${name} is closed: its outgoing-payment grant was revoked`);
+  if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) throw new Error(`${name} has no outgoing-payment grant`);
   return { ...grant, access: grant.access };
 }
 
@@ -50,9 +55,14 @@ export async function requestToken({ client }: OpenPayments, authServer: string,
 
 const isAuthError = (error: unknown) => error instanceof OpenPaymentsClientError && (error.status === 401 || error.status === 403);
 
-// Calls `use` with the milestone's outgoing token; on 401/403 rotates it once through the manage URL and retries once.
-export async function withOutgoingToken<T>({ client, grants }: OpenPayments, milestoneId: string, use: (accessToken: string) => Promise<T>) {
-  const grant = await activeOutgoingGrant(grants, milestoneId);
+// Calls `use` with the grant's outgoing token; on 401/403 rotates it once through the manage URL and retries once.
+export async function withOutgoingToken<T>(
+  { client, grants }: OpenPayments,
+  id: string,
+  use: (accessToken: string) => Promise<T>,
+  scope: GrantScope = "milestone",
+) {
+  const grant = await activeOutgoingGrant(grants, id, scope);
   try {
     return await use(grant.access.accessToken);
   } catch (error) {

@@ -9,6 +9,8 @@ import {
   review,
   submitEvidence,
   grantRevocable,
+  addSupplierLine,
+  remainingCap,
   type LineInput,
   type Milestone,
 } from "./milestone";
@@ -38,9 +40,11 @@ describe("createMilestone", () => {
     expect(m.lines.every((l) => l.status === LINE_STATUS.PENDIENTE && l.reference === null && l.settledAt === null)).toBe(true);
   });
 
-  it("accepts lines that sum to the total and rejects a mismatch", () => {
+  // v3 (PRD "Split del hito", RF-16): supplier lines are added during execution up to the cap, so Σ lines ≤ amount (was ==).
+  it("accepts lines up to the milestone cap and rejects lines above it", () => {
     expect(draft().lines.reduce((sum, l) => sum + l.amount, 0)).toBe(draft().amount);
-    expect(() => createMilestone({ ...input, amount: 1_000_001 })).toThrow(DomainError);
+    expect(createMilestone({ ...input, amount: 1_000_001 }).amount).toBe(1_000_001);
+    expect(() => createMilestone({ ...input, amount: 999_999 })).toThrow(/exceed/);
   });
 
   it("rejects non-integer minor units", () => {
@@ -56,9 +60,10 @@ describe("createMilestone", () => {
     expect(() => createMilestone({ ...input, amount: unsafe, lines: [{ ...lines[0], amount: unsafe }] })).toThrow(DomainError);
   });
 
-  it("requires exactly one productor line", () => {
+  // v3 (PRD "Split del hito": "en nivel C y primer ciclo no existe la línea de jornales"): the productor line is optional (was exactly one).
+  it("allows at most one productor line, and none at all", () => {
     const none = lines.filter((l) => l.kind !== LINE_KIND.PRODUCTOR).map((l, i) => (i === 0 ? { ...l, amount: 900_000 } : l));
-    expect(() => createMilestone({ ...input, lines: none })).toThrow(DomainError);
+    expect(createMilestone({ ...input, lines: none }).lines).toHaveLength(2);
     const two = [lines[0], { ...lines[0], id: "l-prod2", amount: 400_000 }];
     expect(() => createMilestone({ ...input, lines: two })).toThrow(DomainError);
   });
@@ -140,6 +145,12 @@ describe("line payments", () => {
     expect(assertLinePayable(approved(), "l-prod").kind).toBe(LINE_KIND.PRODUCTOR);
   });
 
+  it("blocks the platform fee line until the milestone is approved (RF-20: the fee is paid on approval)", () => {
+    expect(() => assertLinePayable(draft(), "l-fee")).toThrow(/after the verifier approves/);
+    expect(() => assertLinePayable(submitted(), "l-fee")).toThrow(DomainError);
+    expect(assertLinePayable(approved(), "l-fee").kind).toBe(LINE_KIND.PLATAFORMA);
+  });
+
   it("rejects unknown lines and lines that are not pending", () => {
     expect(() => assertLinePayable(draft(), "nope")).toThrow(DomainError);
     expect(() => assertLinePayable(done(draft(), "l-prov"), "l-prov")).toThrow(DomainError);
@@ -164,6 +175,19 @@ describe("line payments", () => {
     expect(m.closedAt).toBeNull();
     m = done(m, "l-fee");
     expect(m.closedAt).toEqual(now);
+  });
+
+  // v3 (RF-22): closing revokes the grant, so a milestone closes only once approved, never when its supplier lines settle earlier.
+  it("does not close a milestone that is not approved, even with every line final", () => {
+    const allFinal = ["l-prod", "l-prov", "l-fee"].reduce((m, id) => done(m, id), draft());
+    expect(allFinal.closedAt).toBeNull();
+  });
+
+  it("closes on approval when every existing line is already final", () => {
+    const supplierOnly = fund(createMilestone({ ...input, lines: [lines[1]] }), now);
+    const paid = submitEvidence(done(supplierOnly, "l-prov"), "Foto", now);
+    expect(review(paid, "approved", null, now).closedAt).toEqual(now);
+    expect(review(paid, "observado", "Falta", now).closedAt).toBeNull();
   });
 
   it("does not close while a line is queued", () => {
@@ -256,5 +280,36 @@ describe("line receipt (RF-23)", () => {
     const settled = applyLineResult(queued(), "l-prov", { status: "completado", reference: "OP-1" }, now);
     expect(receiptOf(settled)).toEqual(receiptOf(queued()));
     expect(receiptOf(done(draft(), "l-prov"))).toBeNull();
+  });
+});
+
+describe("supplier lines added during execution (RF-15/RF-16)", () => {
+  const order = { id: "l-ord", beneficiary: "Almacén Don Pedro", walletAddress: "https://wallet.test/pedro", amount: 50_000 };
+  // Room for orders: the cap is above the lines the milestone was created with.
+  const roomy = () => fund(createMilestone({ ...input, amount: 1_100_000 }), now);
+
+  it("reports the cap still unallocated", () => {
+    expect(remainingCap(draft())).toBe(0);
+    expect(remainingCap(roomy())).toBe(100_000);
+  });
+
+  it("adds a pending proveedor line that fits the remaining cap", () => {
+    const m = addSupplierLine(roomy(), order);
+    expect(m.lines.at(-1)).toMatchObject({ ...order, kind: LINE_KIND.PROVEEDOR, status: LINE_STATUS.PENDIENTE, receipt: null });
+    expect(remainingCap(m)).toBe(50_000);
+    expect(addSupplierLine(m, { ...order, id: "l-ord2", amount: 50_000 }).lines).toHaveLength(5);
+  });
+
+  it("rejects a line above the remaining cap, a repeated id and a non-positive amount", () => {
+    expect(() => addSupplierLine(roomy(), { ...order, amount: 100_001 })).toThrow(/does not fit/);
+    expect(() => addSupplierLine(roomy(), { ...order, id: "l-prov" })).toThrow(DomainError);
+    expect(() => addSupplierLine(roomy(), { ...order, amount: 0 })).toThrow(DomainError);
+  });
+
+  it("accepts orders only while the milestone executes (draft or observado), never after approval or close", () => {
+    const sub = submitEvidence(roomy(), "Foto", now);
+    expect(addSupplierLine(review(sub, "observado", "Falta", now), order).lines).toHaveLength(4);
+    expect(() => addSupplierLine(sub, order)).toThrow(DomainError);
+    expect(() => addSupplierLine(review(sub, "approved", null, now), order)).toThrow(DomainError);
   });
 });

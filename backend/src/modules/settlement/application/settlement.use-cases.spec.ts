@@ -8,7 +8,9 @@ import { PAYOUT_STATUS, SETTLEMENT_STATUS } from "./settlement";
 import { SettlementUseCases } from "./settlement.use-cases";
 import { CapturedInvestors } from "../ports/captured-investors";
 import type { InvestorPosition } from "./settlement";
-import { FakeSettlementRepository, sampleTerms } from "./testing";
+import type { LiquidationFunding } from "../ports/liquidation-funding";
+import { SimulatedLiquidationFunding } from "../infrastructure/adapters/simulated-liquidation-funding.adapter";
+import { FakeLiquidationFunding, FakeSettlementRepository, sampleTerms } from "./testing";
 
 const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
 const owner: Viewer = { id: "u-prod", role: "seller" };
@@ -17,7 +19,11 @@ const admin: Viewer = { id: "u-admin", role: "admin" };
 const fidu: Viewer = { id: "u-fidu", role: "fidu" };
 const investor: Viewer = { id: "u-inv", role: "investor" };
 
-async function setup(gateway: PaymentGateway = new FakeGateway((r) => ({ status: "en_cola", reference: `REF-${r.lineId}` }))) {
+async function setup(
+  gateway: PaymentGateway = new FakeGateway((r) => ({ status: "en_cola", reference: `REF-${r.lineId}` })),
+  // Simulated mode by default: payouts need no liquidation grant there.
+  liquidation: LiquidationFunding = new SimulatedLiquidationFunding(),
+) {
   const projects = new FakeProjectRepository(new FakeRepository(new Map()));
   const project = await new CreateProjectUseCase(projects, wallets).execute(owner, {
     title: "Tomate bajo invernadero",
@@ -29,7 +35,7 @@ async function setup(gateway: PaymentGateway = new FakeGateway((r) => ({ status:
     milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100, laborBudget: 200, requirements: [] }],
   });
   const settlements = new FakeSettlementRepository();
-  return { projects, project, settlements, gateway, useCases: new SettlementUseCases(projects, settlements, gateway, wallets) };
+  return { projects, project, settlements, gateway, liquidation, useCases: new SettlementUseCases(projects, settlements, gateway, wallets, liquidation) };
 }
 
 describe("SettlementUseCases.preview", () => {
@@ -139,6 +145,55 @@ describe("SettlementUseCases create → approve → execute", () => {
   });
 });
 
+// PRD v3 Fase 3 paso 5 / RF-26: in open-payments mode the fiduciaria approves a liquidation grant on custody before any payout.
+describe("SettlementUseCases liquidation grant (RF-26)", () => {
+  const approvedWithGrant = async () => {
+    const gateway = new FakeGateway((r) => ({ status: "completado", reference: `REF-${r.lineId}` }));
+    const s = await setup(gateway, new FakeLiquidationFunding());
+    const draft = await s.useCases.create(s.project.id, admin, { ...sampleTerms(), days: 365 });
+    await s.useCases.approve(draft.id, fidu);
+    return { ...s, gateway, liquidation: s.liquidation as FakeLiquidationFunding, id: draft.id };
+  };
+
+  it("refuses to execute (409) before the liquidation grant is approved, without reaching the gateway", async () => {
+    const { useCases, gateway, settlements, id } = await approvedWithGrant();
+    await expect(useCases.execute(id)).rejects.toThrow(/liquidation grant/);
+    expect(gateway.requests).toHaveLength(0);
+    expect((await settlements.findById(id))?.status).toBe(SETTLEMENT_STATUS.APPROVED);
+  });
+
+  it("starts the grant only for an approved settlement and returns the consent URL", async () => {
+    const { useCases, liquidation, id } = await approvedWithGrant();
+    expect(await useCases.startLiquidationGrant(id)).toEqual({ redirectUrl: `https://wallet.test/consent/${id}` });
+    expect(liquidation.started).toEqual([id]);
+  });
+
+  it("refuses to start the grant of a draft, or once the grant is active", async () => {
+    const s = await setup(undefined, new FakeLiquidationFunding());
+    const draft = await s.useCases.create(s.project.id, admin, { ...sampleTerms(), days: 365 });
+    await expect(s.useCases.startLiquidationGrant(draft.id)).rejects.toThrow(DomainError);
+    await s.useCases.approve(draft.id, fidu);
+    await s.useCases.completeLiquidationGrant(draft.id, { interactRef: "r", hash: "h" });
+    await expect(s.useCases.startLiquidationGrant(draft.id)).rejects.toThrow(/already/);
+  });
+
+  it("pays every payout with the liquidation grant scope once approved, and revokes it when the settlement is executed", async () => {
+    const { useCases, gateway, liquidation, id } = await approvedWithGrant();
+    await useCases.completeLiquidationGrant(id, { interactRef: "r", hash: "h" });
+    const executed = await useCases.execute(id);
+    expect(executed.status).toBe(SETTLEMENT_STATUS.EXECUTED);
+    expect(gateway.requests.every((r) => r.grantScope === "liquidation" && r.milestoneId === id)).toBe(true);
+    expect(liquidation.revoked).toEqual([id]);
+  });
+
+  it("answers null in simulated mode: nothing to approve", async () => {
+    const { useCases, project } = await setup();
+    const draft = await useCases.create(project.id, admin, { ...sampleTerms(), days: 365 });
+    await useCases.approve(draft.id, fidu);
+    expect(await useCases.startLiquidationGrant(draft.id)).toBeNull();
+  });
+});
+
 describe("SettlementUseCases.get", () => {
   it("lets the owner producer, investors, operator and fiduciaria read the plan; another producer gets 404", async () => {
     const { useCases, project } = await setup();
@@ -163,7 +218,7 @@ describe("SettlementUseCases with captured investors", () => {
   it("builds the capital tier from the captured investments when the request has no investors", async () => {
     const { projects, settlements, gateway, project } = await setup();
     const captured = sampleTerms().investors;
-    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured(captured));
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new SimulatedLiquidationFunding(), new FakeCaptured(captured));
     const preview = await useCases.preview(project.id, admin, { ...sampleTerms(), investors: null, days: 365 });
     expect(preview.terms.investors).toEqual(captured);
     const draft = await useCases.create(project.id, admin, { ...sampleTerms(), investors: null, days: 365 });
@@ -172,13 +227,13 @@ describe("SettlementUseCases with captured investors", () => {
 
   it("the explicit investors of the body win", async () => {
     const { projects, settlements, gateway, project } = await setup();
-    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured([]));
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new SimulatedLiquidationFunding(), new FakeCaptured([]));
     expect((await useCases.preview(project.id, admin, { ...sampleTerms(), days: 365 })).terms.investors).toEqual(sampleTerms().investors);
   });
 
   it("refuses on the investors field when nothing was captured", async () => {
     const { projects, settlements, gateway, project } = await setup();
-    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new FakeCaptured([]));
+    const useCases = new SettlementUseCases(projects, settlements, gateway, wallets, new SimulatedLiquidationFunding(), new FakeCaptured([]));
     await expect(useCases.preview(project.id, admin, { ...sampleTerms(), investors: null, days: 365 })).rejects.toThrow(ValidationError);
   });
 });

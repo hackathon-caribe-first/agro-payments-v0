@@ -20,7 +20,7 @@ const toMessage = (r: Row): Message => ({
   createdAt: r.created_at as Date,
 });
 
-const toIntent = (r: Row): Intent => ({
+export const toIntent = (r: Row): Intent => ({
   ...({ type: r.type, data: r.payload } as IntentPayload),
   id: r.id as string,
   conversationId: r.conversation_id as string,
@@ -34,7 +34,7 @@ const toIntent = (r: Row): Intent => ({
   result: (r.result as Record<string, unknown> | null) ?? null,
 });
 
-const INTENT_COLUMNS = "id, conversation_id, user_id, type, payload, summary, requires_pin, status, created_at, decided_at, decided_by, result";
+export const INTENT_COLUMNS = "id, conversation_id, user_id, type, payload, summary, requires_pin, status, created_at, decided_at, decided_by, result";
 
 export class PostgresAssistantStore extends AssistantStore {
   constructor(private readonly dataSource: DataSource) {

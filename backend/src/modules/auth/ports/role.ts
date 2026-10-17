@@ -1,8 +1,9 @@
-export const ROLES = ["admin", "buyer", "seller", "investor", "fidu", "intermediator"] as const;
+// verifier (PRD v3): the technical verifier, a different actor from the fiduciaria (fidu). Assigned by an admin, like fidu.
+export const ROLES = ["admin", "buyer", "seller", "investor", "fidu", "intermediator", "verifier"] as const;
 
 export type Role = (typeof ROLES)[number];
 
-// Roles a person may pick for themselves at sign-up. admin and fidu are only assigned by an admin.
+// Roles a person may pick for themselves at sign-up. admin, fidu and verifier are only assigned by an admin.
 export const SELF_SELECTABLE_ROLES = ["buyer", "seller", "investor", "intermediator"] as const satisfies readonly Role[];
 
 export function isRole(value: unknown): value is Role {

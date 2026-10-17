@@ -1,4 +1,6 @@
 // Test doubles shared by the settlement specs.
+import type { FundingCallback } from "../../milestones/ports/milestone-funding";
+import { LiquidationFunding } from "../ports/liquidation-funding";
 import { SettlementRepository } from "../ports/settlement.repository";
 import { createSettlement, type PartyWallets, type Settlement, type SettlementTerms } from "./settlement";
 
@@ -41,5 +43,26 @@ export class FakeSettlementRepository extends SettlementRepository {
   }
   async findByProject(projectId: string) {
     return [...this.rows.values()].filter((s) => s.projectId === projectId).map((s) => structuredClone(s));
+  }
+}
+
+/** Records the liquidation grant calls; payouts are blocked until complete() runs, like an open-payments grant awaiting consent. */
+export class FakeLiquidationFunding extends LiquidationFunding {
+  readonly interactive = true;
+  readonly started: string[] = [];
+  readonly revoked: string[] = [];
+  private readonly active = new Set<string>();
+  async start(settlement: Settlement) {
+    this.started.push(settlement.id);
+    return { redirectUrl: `https://wallet.test/consent/${settlement.id}` };
+  }
+  async complete(settlementId: string, _params: FundingCallback) {
+    this.active.add(settlementId);
+  }
+  async ready(settlementId: string) {
+    return this.active.has(settlementId);
+  }
+  async revoke(settlementId: string) {
+    this.revoked.push(settlementId);
   }
 }

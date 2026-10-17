@@ -16,6 +16,8 @@ export class GrantEntity {
   negotiationId: string | null;
   @Column({ type: "text", name: "investment_id", nullable: true })
   investmentId: string | null;
+  @Column({ type: "text", name: "settlement_id", nullable: true })
+  settlementId: string | null;
   @Column({ type: "text", name: "payer_wallet_address" })
   payerWalletAddress: string;
   @Column({ type: "text", name: "asset_code" })

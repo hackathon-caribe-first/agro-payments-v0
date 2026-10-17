@@ -10,9 +10,11 @@ import { AssistantTools } from "./application/tools";
 import { AssistantController } from "./controllers/assistant.controller";
 import { AnthropicAssistantModel } from "./infrastructure/anthropic-assistant-model.adapter";
 import { PostgresAssistantStore, PostgresPinStore } from "./infrastructure/persistence/postgres-assistant-store.adapter";
+import { PostgresOrderIntents } from "./infrastructure/persistence/postgres-order-intents.adapter";
 import { UnavailableAssistantModel } from "./infrastructure/unavailable-assistant-model.adapter";
 import { AssistantModel } from "./ports/assistant-model";
 import { AssistantStore, PinStore } from "./ports/assistant-store";
+import { OrderIntents } from "./ports/order-intents";
 
 // Producer assistant (PRD v3 RF-33..RF-41): Claude with four intent-only tools over the projects use cases. No path to payments.
 @Module({
@@ -26,6 +28,11 @@ import { AssistantStore, PinStore } from "./ports/assistant-store";
     { provide: AssistantStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresAssistantStore(dataSource) },
     { provide: PinStore, inject: [DataSource], useFactory: (dataSource: DataSource) => new PostgresPinStore(dataSource) },
     {
+      provide: OrderIntents,
+      inject: [DataSource, AssistantStore],
+      useFactory: (dataSource: DataSource, store: AssistantStore) => new PostgresOrderIntents(dataSource, store),
+    },
+    {
       provide: AssistantModel,
       useFactory: (): AssistantModel => {
         const apiKey = loadEnv().anthropicApiKey;
@@ -38,5 +45,7 @@ import { AssistantStore, PinStore } from "./ports/assistant-store";
       },
     },
   ],
+  // Confirmed order lines for the operator's approval (PayoutsModule); nothing else of the assistant leaves the module.
+  exports: [OrderIntents],
 })
 export class AssistantModule {}

@@ -10,7 +10,7 @@ import { applyPayoutResult, approveSettlement, startExecution } from "../../../s
 import { sampleSettlement } from "../../../settlement/application/testing";
 import { TypeOrmSettlementAdapter } from "../../../settlement/infrastructure/persistence/typeorm-settlement.adapter";
 import { addEvidenceLog, submitForReview } from "../../application/milestone-progress";
-import { applyLineResult, fund, type Milestone, review, submitEvidence } from "../../application/milestone";
+import { addSupplierLine, applyLineResult, fund, type Milestone, review, submitEvidence } from "../../application/milestone";
 import { sampleMilestone, unfundedMilestone } from "../../application/testing";
 import { type Grant, GRANT_PURPOSE, GRANT_STATUS } from "../../ports/grant-store";
 import { demoMilestones } from "../demo-milestones";
@@ -23,6 +23,10 @@ import { TypeOrmNegotiationStore } from "../../../negotiations/infrastructure/pe
 import { InvestmentUseCases } from "../../../investments/application/investments.use-cases";
 import { FakeCapture, INVESTOR, OTHER_INVESTOR, EUR_WALLET, eurQuote } from "../../../investments/application/testing";
 import { TypeOrmInvestmentStore } from "../../../investments/infrastructure/persistence/typeorm-investment-store.adapter";
+import { PostgresAssistantStore } from "../../../assistant/infrastructure/persistence/postgres-assistant-store.adapter";
+import { PostgresOrderIntents } from "../../../assistant/infrastructure/persistence/postgres-order-intents.adapter";
+import { orderIntent } from "../../../payouts/application/testing";
+import { PostgresSupplierRepository } from "../../../payouts/infrastructure/postgres-supplier.repository";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -538,5 +542,84 @@ describe("TypeOrmInvestmentStore", () => {
     await grants.save(grant);
     expect(await grants.findLatestForInvestment(pending.id)).toEqual(grant);
     expect(await grants.findLatestForMilestone("p-i")).toBeNull();
+  });
+});
+
+// ---- custody payouts (PRD v3 RF-13, RF-15/RF-16, RF-26) ----
+
+describe("custody payouts persistence", () => {
+  const cipher = () => SecretCipher.fromBase64Key(randomBytes(32).toString("base64"));
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE suppliers, assistant_intents, assistant_messages, assistant_conversations CASCADE");
+  });
+
+  it("stores the liquidation grant by settlement, apart from milestone grants with the same id", async (ctx) => {
+    const ds = db(ctx);
+    const grants = new TypeOrmGrantStore(ds, cipher());
+    const liquidation: Grant = {
+      id: "0b8c8e7a-3c1f-4d55-9a3e-7c2f8b1d6e01",
+      purpose: GRANT_PURPOSE.LIQUIDATION,
+      projectId: "p1",
+      milestoneId: null,
+      settlementId: "s1",
+      payerWalletAddress: "https://ilp.test/custody",
+      assetCode: "COP",
+      assetScale: 2,
+      debitLimit: 200_000_000,
+      status: GRANT_STATUS.ACTIVE,
+      pending: null,
+      access: { accessToken: "a", manageUrl: "https://auth.test/m", continueUri: "https://auth.test/c", continueToken: "t" },
+      createdAt: now,
+      revokedAt: null,
+    };
+    await grants.save(liquidation);
+    expect(await grants.findLatestForSettlement("s1")).toEqual(liquidation);
+    expect(await grants.findLatestForSettlement("other")).toBeNull();
+    expect(await grants.findLatestForMilestone("s1")).toBeNull();
+  });
+
+  it("persists a proveedor line added during execution and keeps the milestone open until approval closes it", async (ctx) => {
+    const repo = new TypeOrmMilestoneAdapter(db(ctx));
+    const roomy = fund({ ...unfundedMilestone(), amount: 1_200_000 }, now);
+    let m = addSupplierLine(roomy, { id: "m1-order-i-1", beneficiary: "Almacén Don Pedro", walletAddress: "https://ilp.test/pedro", amount: 200_000 });
+    m = ["l-prov", "m1-order-i-1"].reduce((acc, id) => applyLineResult(acc, id, { status: "completado", reference: id }, now), m);
+    await repo.save(m);
+    const stored = await repo.findById("m1");
+    expect(stored?.lines.map((l) => [l.id, l.kind, l.amount, l.status])).toEqual([
+      ["l-prod", "productor", 600_000, "pendiente"],
+      ["l-prov", "proveedor", 300_000, "completado"],
+      ["l-fee", "plataforma", 100_000, "pendiente"],
+      ["m1-order-i-1", "proveedor", 200_000, "completado"],
+    ]);
+    expect(stored?.closedAt).toBeNull();
+    expect(stored).toEqual(m);
+  });
+
+  it("registers suppliers with a case-insensitive unique name", async (ctx) => {
+    const repo = new PostgresSupplierRepository(db(ctx));
+    const pedro = { id: "6a0d3c1e-1f2b-4c3d-8e9f-0a1b2c3d4e5f", name: "Almacén Don Pedro", walletAddress: "https://ilp.test/pedro", assetCode: "COP", assetScale: 2, createdAt: now };
+    await repo.save(pedro);
+    expect(await repo.findByName(" almacén don pedro ")).toEqual(pedro);
+    expect(await repo.findById(pedro.id)).toEqual(pedro);
+    expect(await repo.findAll()).toEqual([pedro]);
+    await expect(repo.save({ ...pedro, id: "7a0d3c1e-1f2b-4c3d-8e9f-0a1b2c3d4e5f", name: "ALMACÉN DON PEDRO" })).rejects.toThrow();
+  });
+
+  it("lists confirmed order intents by milestone and records the operator's decision once", async (ctx) => {
+    const ds = db(ctx);
+    const store = new PostgresAssistantStore(ds);
+    await store.createConversation({ id: "c-1", userId: "u-prod", needsTechnician: false, createdAt: now });
+    await store.saveIntent(orderIntent("i-1", "p1-ms-1", 2_500_000));
+    await store.saveIntent(orderIntent("i-2", "p1-ms-2", 1_000));
+    await store.saveIntent({ ...orderIntent("i-3", "p1-ms-1", 1_000), status: "pending", decidedAt: null, decidedBy: null, result: null });
+    const orders = new PostgresOrderIntents(ds, store);
+
+    expect((await orders.listForMilestone("p1-ms-1")).map((o) => [o.id, o.approval])).toEqual([["i-1", "pending"]]);
+    const decided = await orders.decide("i-1", { approval: "approved", lineId: "p1-ms-1-order-i-1", reason: null, by: "u-fidu", at: now });
+    expect(decided).toMatchObject({ approval: "approved", lineId: "p1-ms-1-order-i-1", decidedBy: "u-fidu", decidedAt: now });
+    expect(await orders.find("i-1")).toEqual(decided);
+    await expect(orders.decide("i-1", { approval: "rejected", lineId: null, reason: "x", by: "u", at: now })).rejects.toThrow(/already approved/);
+    expect(await orders.find("i-3")).toBeNull();
   });
 });

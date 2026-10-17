@@ -118,7 +118,7 @@ export type Milestone = {
   lines: Line[];
   /** Set when the custody wallet's outgoing-payment grant that funds every line is approved. */
   fundedAt: Date | null;
-  /** Set once every line is final (completado or fallido). */
+  /** Set once approved with every line final (completado or fallido); closing revokes the grant (RF-22). */
   closedAt: Date | null;
   /** Null for the legacy demo milestones, which belong to no project. */
   projectId: string | null;
@@ -152,13 +152,26 @@ export type MilestoneInput = {
 
 const isFinal = (l: Line) => l.status === LINE_STATUS.COMPLETADO || l.status === LINE_STATUS.FALLIDO;
 const isMinorUnits = (n: number) => Number.isSafeInteger(n) && n > 0;
+const allocated = (lines: readonly Pick<Line, "amount">[]) => lines.reduce((sum, l) => sum + l.amount, 0);
+
+/** What the grant cap still leaves for new supplier lines, in minor units. */
+export const remainingCap = (m: Pick<Milestone, "amount" | "lines">) => m.amount - allocated(m.lines);
+
+// RF-22: closed means approved with every existing line final; closing is what revokes the grant.
+const closedAtIfDone = (status: MilestoneStatus, lines: readonly Line[], now: Date) =>
+  status === MILESTONE_STATUS.APPROVED && lines.every(isFinal) ? now : null;
+
+/** Lines approved during execution are paid on approval (jornales, fee); supplier lines any time the milestone is funded and open. */
+const PAID_ON_APPROVAL: readonly LineKind[] = [LINE_KIND.PRODUCTOR, LINE_KIND.PLATAFORMA];
 
 export function createMilestone(input: MilestoneInput): Milestone {
   const { lines } = input;
   if (!isMinorUnits(input.amount)) throw new DomainError("Amount must be a positive safe integer in minor units");
   if (!lines.every((l) => isMinorUnits(l.amount))) throw new DomainError("Line amounts must be positive safe integers in minor units");
-  if (lines.reduce((sum, l) => sum + l.amount, 0) !== input.amount) throw new DomainError("Lines must sum to the milestone amount");
-  if (lines.filter((l) => l.kind === LINE_KIND.PRODUCTOR).length !== 1) throw new DomainError("A milestone needs exactly one productor line");
+  // v3 split: the amount is the grant cap; supplier lines join during execution (addSupplierLine), so Σ lines ≤ amount.
+  if (allocated(lines) > input.amount) throw new DomainError("Lines cannot exceed the milestone amount");
+  // Levels C and primer ciclo have no jornales line (PRD v3 "Split del hito").
+  if (lines.filter((l) => l.kind === LINE_KIND.PRODUCTOR).length > 1) throw new DomainError("A milestone allows at most one productor line");
   if (lines.filter((l) => l.kind === LINE_KIND.PLATAFORMA).length > 1) throw new DomainError("A milestone allows at most one plataforma line");
   return {
     id: input.id,
@@ -211,18 +224,39 @@ export function review(m: Milestone, decision: Decision, reason: string | null, 
   if (m.status !== MILESTONE_STATUS.EVIDENCE_SUBMITTED) throw new DomainError(`Milestone ${m.id} has no evidence to review`);
   if (decision === "observado" && !reason?.trim()) throw new DomainError("An observation needs a reason");
   const comment = reason?.trim() || null;
-  return { ...m, status: decision, review: { decision, reason: comment, reviewedAt: now }, reviews: withReview(m, decision, comment, now) };
+  return {
+    ...m,
+    status: decision,
+    review: { decision, reason: comment, reviewedAt: now },
+    reviews: withReview(m, decision, comment, now),
+    closedAt: closedAtIfDone(decision, m.lines, now),
+  };
 }
 
-// Lines are paid only from a funded milestone. Supplier lines any time before it closes; the producer line only after approval.
+export type SupplierLineInput = Pick<Line, "id" | "beneficiary" | "walletAddress" | "amount">;
+
+// RF-15/RF-16 sub-etapa A: an approved order becomes a proveedor line while the milestone executes, only if it fits the cap.
+export function addSupplierLine(m: Milestone, input: SupplierLineInput): Milestone {
+  if (m.closedAt) throw new DomainError(`Milestone ${m.id} is closed`);
+  if (m.status !== MILESTONE_STATUS.DRAFT && m.status !== MILESTONE_STATUS.OBSERVADO) {
+    throw new DomainError(`Milestone ${m.id} takes supplier lines only while it executes, not while ${m.status}`);
+  }
+  if (!isMinorUnits(input.amount)) throw new DomainError("Line amounts must be positive safe integers in minor units");
+  if (m.lines.some((l) => l.id === input.id)) throw new DomainError(`Line ${input.id} already exists in milestone ${m.id}`);
+  if (input.amount > remainingCap(m)) throw new DomainError(`The line of ${input.amount} does not fit the ${remainingCap(m)} left in milestone ${m.id}`);
+  const line: Line = { ...input, kind: LINE_KIND.PROVEEDOR, status: LINE_STATUS.PENDIENTE, reference: null, settledAt: null, receipt: null };
+  return { ...m, lines: [...m.lines, line] };
+}
+
+// Lines are paid only from a funded milestone. Supplier lines any time before it closes; jornales and fee only after approval (RF-20).
 export function assertLinePayable(m: Milestone, lineId: string): Line {
   const line = m.lines.find((l) => l.id === lineId);
   if (!line) throw new DomainError(`Line ${lineId} not found in milestone ${m.id}`);
   if (m.closedAt) throw new DomainError(`Milestone ${m.id} is closed`);
   if (!m.fundedAt) throw new DomainError(`Milestone ${m.id} is not funded yet`);
   if (line.status !== LINE_STATUS.PENDIENTE) throw new DomainError(`Line ${lineId} is ${line.status}, not pendiente`);
-  if (line.kind === LINE_KIND.PRODUCTOR && m.status !== MILESTONE_STATUS.APPROVED) {
-    throw new DomainError("The producer line is released only after the verifier approves the milestone");
+  if (PAID_ON_APPROVAL.includes(line.kind) && m.status !== MILESTONE_STATUS.APPROVED) {
+    throw new DomainError(`The ${line.kind} line is released only after the verifier approves the milestone`);
   }
   return line;
 }
@@ -260,7 +294,7 @@ export function mergeReceipt(previous: LineReceipt | null, update: LineReceiptUp
   };
 }
 
-// Applies a gateway result to a line that is still open (pendiente or en_cola) and closes the milestone when all lines are final.
+// Applies a gateway result to a line that is still open (pendiente or en_cola) and closes an approved milestone when all lines are final.
 export function applyLineResult(
   m: Milestone,
   lineId: string,
@@ -280,7 +314,7 @@ export function applyLineResult(
   const lines = m.lines.map((l) => (l.id === lineId ? updated : l));
   const producerPaid = line.kind === LINE_KIND.PRODUCTOR && updated.status === LINE_STATUS.COMPLETADO;
   const reviews = producerPaid ? withReview(m, REVIEW_VERDICT.PAYOUT_EXECUTED, null, now) : m.reviews;
-  return { ...m, lines, reviews, closedAt: lines.every(isFinal) ? now : null };
+  return { ...m, lines, reviews, closedAt: closedAtIfDone(m.status, lines, now) };
 }
 
 // RF-22: a milestone's grant is revoked once it closed after approval (every line final).

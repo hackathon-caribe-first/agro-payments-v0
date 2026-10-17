@@ -16,7 +16,7 @@ import { ReviewMilestoneDto } from "./dtos/review-milestone.dto";
 import { SubmitEvidenceDto } from "./dtos/submit-evidence.dto";
 import { MILESTONE_ROLES } from "./milestone-roles";
 
-const { verifier, producer, operator, investor } = MILESTONE_ROLES;
+const { verifier, fiduciaria, producer, operator } = MILESTONE_ROLES;
 
 // The legacy wire shape stays exactly MilestoneDto: the PRD fields are served by /api/milestones only.
 const toDto = ({ projectId, sequenceOrder, description, estimatedCompletionDate, requirements, evidenceLogs, reviews, ...legacy }: Milestone): MilestoneDto =>
@@ -25,7 +25,7 @@ const toDto = ({ projectId, sequenceOrder, description, estimatedCompletionDate,
 @ApiTags("milestones")
 @Controller("milestones")
 @UseGuards(AuthGuard, RolesGuard)
-@Roles(verifier, producer, operator)
+@Roles(verifier, fiduciaria, producer, operator)
 export class MilestonesController {
   constructor(
     private readonly store: MilestoneStore,
@@ -56,7 +56,7 @@ export class MilestonesController {
     return toDto(await this.submitEvidence.execute(id, dto.description));
   }
 
-  /** Verifier approves or observes the evidence. Approving pays the producer line. */
+  /** Verifier approves or observes the evidence. Approving pays the jornales line and the milestone fee (RF-20). */
   @Post(":id/review")
   @Roles(verifier)
   @HttpCode(200)
@@ -64,9 +64,9 @@ export class MilestonesController {
     return toDto(await this.reviewMilestone.execute(id, dto.decision, dto.reason ?? null));
   }
 
-  /** Starts funding: send the browser to redirectUrl so the custody wallet holder approves one grant capped at the milestone amount */
+  /** RF-13: the fiduciaria starts the milestone grant; send the browser to redirectUrl to approve it on the custody wallet. 409 while another milestone of the project holds a live grant */
   @Post(":id/funding")
-  @Roles(operator, investor)
+  @Roles(fiduciaria, operator)
   @HttpCode(200)
   startFunding(@Param("id") id: string): Promise<FundingStartDto> {
     return this.startFundingUseCase.execute(id);

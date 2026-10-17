@@ -11,7 +11,7 @@ import { SettlementUseCases } from "../application/settlement.use-cases";
 import { toPlanResponse, toSettlementResponse } from "./settlement.mappers";
 import { parseSettlementRequest } from "./settlement.requests";
 
-const { producer, operator, verifier, investor } = MILESTONE_ROLES;
+const { producer, operator, fiduciaria, investor } = MILESTONE_ROLES;
 
 // RF-26 liquidation cascade. The operator (admin) and the fiduciaria (fidu) preview, create, approve and execute;
 // the project's producer and investors read it. Bodies stay unknown so the global ValidationPipe passes them through.
@@ -20,13 +20,13 @@ const { producer, operator, verifier, investor } = MILESTONE_ROLES;
 @Controller("api")
 @UseGuards(ApiAuthGuard, RolesGuard)
 @UseFilters(ApiErrorFilter)
-@Roles(producer, operator, verifier, investor)
+@Roles(producer, operator, fiduciaria, investor)
 export class SettlementController {
   constructor(private readonly settlements: SettlementUseCases) {}
 
   /** The cascade for these terms; nothing is stored. Amounts in whole pesos. */
   @Post("projects/:projectId/settlement/preview")
-  @Roles(operator, verifier)
+  @Roles(operator, fiduciaria)
   @HttpCode(200)
   async preview(@Param("projectId") projectId: string, @CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
     const preview = await this.settlements.preview(projectId, user, parseSettlementRequest(body));
@@ -35,7 +35,7 @@ export class SettlementController {
 
   /** Stores the cascade as a draft settlement; 409 while the project has an approved, executing or executed one */
   @Post("projects/:projectId/settlement")
-  @Roles(operator, verifier)
+  @Roles(operator, fiduciaria)
   @HttpCode(201)
   async create(@Param("projectId") projectId: string, @CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
     return toSettlementResponse(await this.settlements.create(projectId, user, parseSettlementRequest(body)));
@@ -43,18 +43,27 @@ export class SettlementController {
 
   /** draft → approved */
   @Post("settlements/:id/approve")
-  @Roles(operator, verifier)
+  @Roles(operator, fiduciaria)
   @HttpCode(200)
   async approve(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
     return toSettlementResponse(await this.settlements.approve(id, user));
   }
 
-  /** Pays pending payouts and syncs those in flight; call again until executed. 409 when the gateway refuses a payout. */
+  /** Pays pending payouts and syncs those in flight; call again until executed. 409 when the gateway refuses a payout, or in open-payments mode before the liquidation grant is approved. */
   @Post("settlements/:id/execute")
-  @Roles(operator, verifier)
+  @Roles(operator, fiduciaria)
   @HttpCode(200)
   async execute(@Param("id") id: string) {
     return toSettlementResponse(await this.settlements.execute(id));
+  }
+
+  /** RF-26: the fiduciaria approves the liquidation grant on custody (Σ COP payouts); redirect_url is null in simulated mode (nothing to approve). 409 unless approved */
+  @Post("settlements/:id/liquidation-grant")
+  @Roles(operator, fiduciaria)
+  @HttpCode(200)
+  async startLiquidationGrant(@Param("id") id: string) {
+    const started = await this.settlements.startLiquidationGrant(id);
+    return { redirect_url: started?.redirectUrl ?? null };
   }
 
   /** A settlement with its plan, payouts and receipts; another producer's is a 404 */

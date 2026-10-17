@@ -2,7 +2,7 @@
 // Schemas are strict (additionalProperties: false everywhere) and listed in a fixed order so the prompt prefix caches.
 import { Injectable } from "@nestjs/common";
 import { DomainError, ValidationError } from "../../../shared/domain-errors";
-import { LINE_KIND, LOG_TYPE, type Milestone, REQUIREMENT_TYPE } from "../../milestones/application/milestone";
+import { LINE_KIND, LOG_TYPE, type Milestone, remainingCap, REQUIREMENT_TYPE } from "../../milestones/application/milestone";
 import { addEvidenceLog, canRecordEvidence, type EvidenceLogRequest, PROGRESS_STATUS, type ProgressStatus, progressStatus } from "../../milestones/application/milestone-progress";
 import { CreateProjectUseCase } from "../../projects/application/create-project.use-case";
 import { MilestoneEvidenceUseCase } from "../../projects/application/milestone-evidence.use-case";
@@ -127,6 +127,8 @@ export function describeToolError(error: unknown): string | null {
 }
 
 const linesPesos = (m: Milestone, kind: string) => minorToPesos(m.lines.filter((l) => l.kind === kind).reduce((sum, l) => sum + l.amount, 0), m.assetScale);
+// v3: supplier lines join during execution, so the supplies budget is the ordered lines plus the cap still unallocated.
+const suppliesPesos = (m: Milestone) => linesPesos(m, LINE_KIND.PROVEEDOR) + minorToPesos(remainingCap(m), m.assetScale);
 
 function describeRequirement(r: Milestone["requirements"][number]) {
   const type = r.type === REQUIREMENT_TYPE.PHOTO_ARRAY ? `fotos, mínimo ${r.minItems}` : r.type === REQUIREMENT_TYPE.NUMBER ? "número" : "verificación sí/no";
@@ -174,7 +176,8 @@ export class AssistantTools {
         return { milestoneId: intent.data.milestoneId, logId: log.id };
       }
       case INTENT_TYPE.ORDER_LINE:
-        // ponytail: no operator approval screen yet; the confirmed intent is the order of record (RF-34). No line, no payment.
+        // The confirmed intent is the order of record (RF-34); the operator or fiduciaria approves it into a proveedor line
+        // (POST /api/milestones/:id/orders/:intentId/approve). No payment from here.
         return { operatorApproval: "pending" };
     }
   }
@@ -188,7 +191,7 @@ export class AssistantTools {
         const lines = milestones.map(({ milestone: m, status }) => {
           const date = m.estimatedCompletionDate ? `, para el ${formatDate(m.estimatedCompletionDate)}` : "";
           const requirements = m.requirements.length > 0 ? ` Requisitos: ${m.requirements.map(describeRequirement).join(", ")}.` : "";
-          return `  - Hito ${m.sequenceOrder ?? "?"} «${m.title}» (id ${m.id}): ${STATUS_LABELS[status]}${date}. Insumos ${formatPesos(linesPesos(m, LINE_KIND.PROVEEDOR))}, mano de obra ${formatPesos(linesPesos(m, LINE_KIND.PRODUCTOR))}. Registros de evidencia: ${m.evidenceLogs.length}.${requirements}`;
+          return `  - Hito ${m.sequenceOrder ?? "?"} «${m.title}» (id ${m.id}): ${STATUS_LABELS[status]}${date}. Insumos ${formatPesos(suppliesPesos(m))}, mano de obra ${formatPesos(linesPesos(m, LINE_KIND.PRODUCTOR))}. Registros de evidencia: ${m.evidenceLogs.length}.${requirements}`;
         });
         return [
           `Proyecto ${p.projectCode} «${p.title}», estado ${p.currentStatus}, del ${formatDate(p.startDate)} al ${formatDate(p.estimatedEndDate)}. Presupuesto ${formatPesos(minorToPesos(p.targetAmount, p.assetScale))}, desembolsado ${formatPesos(minorToPesos(p.totalDisbursed, p.assetScale))}.`,
@@ -268,8 +271,9 @@ export class AssistantTools {
     if (!canRecordEvidence(status) && status !== PROGRESS_STATUS.SUPPLIES_ORDERED) {
       throw new DomainError(`El hito «${milestone.title}» no recibe órdenes ahora: está ${STATUS_LABELS[status]}.`);
     }
-    // ponytail: the cap is the milestone's supplies budget; earlier confirmed orders are not subtracted yet.
-    const cap = linesPesos(milestone, LINE_KIND.PROVEEDOR);
+    // RF-16: the cap is what the grant still leaves unallocated; approved orders are already lines.
+    // ponytail: confirmed orders still waiting for the operator are not subtracted; the approval re-checks the cap (409).
+    const cap = minorToPesos(remainingCap(milestone), milestone.assetScale);
     if (!Number.isSafeInteger(total) || total > cap) {
       throw new DomainError(`La orden de ${formatPesos(total)} no cabe en el tope de insumos del hito «${milestone.title}» (${formatPesos(cap)}).`);
     }

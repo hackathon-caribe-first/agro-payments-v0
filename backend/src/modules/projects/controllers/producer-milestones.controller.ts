@@ -14,14 +14,14 @@ import { parseEvidenceLogRequest } from "./api.requests";
 import { EvidenceLogRequestDto, EvidenceLogResponseDto, MilestoneDetailResponseDto } from "./dtos/project-milestone.dto";
 import { ApiErrorDto } from "./dtos/project.dto";
 
-const { producer, operator, verifier, investor } = MILESTONE_ROLES;
+const { producer, operator, fiduciaria, investor } = MILESTONE_ROLES;
 
 // PRD view of the same milestones the legacy /milestones routes serve; the verifier still reviews through POST /milestones/:id/review.
 @ApiTags("projects")
 @Controller("api/milestones")
 @UseGuards(ApiAuthGuard, RolesGuard)
 @UseFilters(ApiErrorFilter)
-@Roles(producer, operator, verifier, investor)
+@Roles(producer, operator, fiduciaria, investor)
 export class ProducerMilestonesController {
   constructor(
     private readonly queries: ProjectQueries,

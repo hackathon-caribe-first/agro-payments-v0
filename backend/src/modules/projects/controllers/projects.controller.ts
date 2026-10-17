@@ -14,14 +14,14 @@ import { parseCreateProjectRequest } from "./api.requests";
 import { MilestoneSummaryResponseDto } from "./dtos/project-milestone.dto";
 import { ApiErrorDto, CreateProjectRequestDto, ProjectResponseDto } from "./dtos/project.dto";
 
-const { producer, operator, verifier, investor } = MILESTONE_ROLES;
+const { producer, operator, fiduciaria, investor } = MILESTONE_ROLES;
 
 // PRD producer projects for the web app on feat/producer-milestones. Not a global prefix: legacy routes stay unprefixed.
 @ApiTags("projects")
 @Controller("api")
 @UseGuards(ApiAuthGuard, RolesGuard)
 @UseFilters(ApiErrorFilter)
-@Roles(producer, operator, verifier, investor)
+@Roles(producer, operator, fiduciaria, investor)
 export class ProjectsController {
   constructor(
     private readonly queries: ProjectQueries,
