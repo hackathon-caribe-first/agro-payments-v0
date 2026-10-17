@@ -45,7 +45,8 @@ export function createHarvestMockFetch(store: HarvestMockStore, delegate: typeof
     return {
       project_id: p.id,
       currency: p.currency,
-      balance: Math.max(0, p.custody_balance - debited),
+      balance: p.custody_balance - debited,
+      overdrawn: p.custody_balance - debited < 0,
       credited: p.custody_balance + ledgerDebits,
       credits: [...credits].map(([category, amount]) => ({ category, amount })),
       debits: [...debits].map(([category, amount]) => ({ category, amount })),

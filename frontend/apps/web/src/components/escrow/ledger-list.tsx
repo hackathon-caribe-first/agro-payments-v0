@@ -22,7 +22,9 @@ export function LedgerList({ ledger, currency = "COP" }: { ledger: ProjectLedger
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4">
         <p className="text-sm text-muted-foreground">
-          Saldo en custodia: <span className="font-semibold tabular-nums text-foreground">{formatMoney(ledger.balance, currency)}</span>
+          {/* custody_balance is the ledger's net (credits − ledger debits), not what custody still holds after milestone payouts:
+              "Saldo en custodia" is only the custody card (RF-21 statement). */}
+          Neto del libro de la fiducia: <span className="font-semibold tabular-nums text-foreground">{formatMoney(ledger.balance, currency)}</span>
         </p>
         {ledger.entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aún no hay movimientos en la fiducia.</p>

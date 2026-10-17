@@ -19,6 +19,7 @@ const fromCustody = (d: CustodyDto): Custody => ({
   projectId: d.project_id,
   currency: d.currency,
   balance: d.balance,
+  overdrawn: d.overdrawn ?? d.balance < 0,
   credited: d.credited,
   credits: d.credits,
   debits: d.debits,
