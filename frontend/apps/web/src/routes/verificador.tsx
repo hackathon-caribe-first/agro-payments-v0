@@ -12,11 +12,13 @@ export default function Verificador({ loaderData }: Route.ComponentProps) {
   const rest = loaderData.filter((m) => m.status !== "evidence_submitted");
 
   return (
-    <>
-      <h1 className="text-3xl text-primary">Por revisar</h1>
-      <p className="mt-2 text-muted-foreground">Aprobar un hito no ordena el pago: eso lo hace el custodio.</p>
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-3xl text-primary">Por revisar</h1>
+        <p className="mt-2 text-muted-foreground">Aprobar un hito no ordena el pago: eso lo hace el custodio.</p>
+      </header>
       {pending.length === 0 && (
-        <p className="mt-6 rounded-lg border bg-card p-5 text-muted-foreground">
+        <p className="rounded-lg border bg-card p-5 text-muted-foreground">
           No hay evidencias pendientes. Cuando un productor envíe una, aparecerá aquí.
         </p>
       )}
@@ -24,7 +26,7 @@ export default function Verificador({ loaderData }: Route.ComponentProps) {
         {pending.map((m) => (
           <MilestoneCard key={m.id} milestone={m}>
             <blockquote className="border-l-4 border-lime-deep pl-3">{m.evidence?.description}</blockquote>
-            <div className="mt-4 grid gap-6 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-6">
               <ActionForm id={m.id} intent="approve" label="Aprobar hito" />
               <ActionForm id={m.id} intent="reject" label="Pedir corrección" variant="outline">
                 <TextField name="reason" label="¿Qué debe corregir?" />
@@ -34,15 +36,15 @@ export default function Verificador({ loaderData }: Route.ComponentProps) {
         ))}
       </MilestoneList>
       {rest.length > 0 && (
-        <>
-          <h2 className="mt-10 text-xl text-primary">Otros hitos</h2>
+        <section className="flex flex-col gap-6">
+          <h2 className="text-xl text-primary">Otros hitos</h2>
           <MilestoneList>
             {rest.map((m) => (
               <MilestoneCard key={m.id} milestone={m} />
             ))}
           </MilestoneList>
-        </>
+        </section>
       )}
-    </>
+    </div>
   );
 }

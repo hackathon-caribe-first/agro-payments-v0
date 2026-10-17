@@ -36,6 +36,6 @@ export async function milestoneAction(request: Request): Promise<ActionResult> {
     if (response.status === 400) return { error: "Revisa los datos: falta información obligatoria." };
     return { error: `El servidor respondió ${response.status}. Intenta de nuevo.` };
   } catch {
-    return { error: "No pudimos conectar con el servidor de la demo. Revisa tu conexión e intenta de nuevo." };
+    return { error: "No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo." };
   }
 }

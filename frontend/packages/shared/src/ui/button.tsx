@@ -20,6 +20,9 @@ const buttonVariants = cva(
         sm: "h-9 px-3 text-sm",
         lg: "h-12 px-6 text-base",
         icon: "size-11",
+        // Compact density for dense app screens (apps/web); landing and example keep the sizes above.
+        compact: "h-[33px] px-3 text-sm [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        "icon-compact": "size-[33px] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

@@ -5,7 +5,7 @@ export type MilestoneState = { label: string; tone: Tone; symbol: string };
 
 // Visible state per DESIGN.md §6: text + color + symbol, and approval is never shown as payment.
 export function milestoneState(m: Milestone): MilestoneState {
-  if (m.payment?.status === "confirmed") return { label: "Pago simulado confirmado", tone: "success", symbol: "✓" };
+  if (m.payment?.status === "confirmed") return { label: "Pago confirmado", tone: "success", symbol: "✓" };
   if (m.payment?.status === "processing") return { label: "Pago en proceso", tone: "warning", symbol: "◷" };
   switch (m.status) {
     case "evidence_submitted":

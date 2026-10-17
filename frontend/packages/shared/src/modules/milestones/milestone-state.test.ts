@@ -25,7 +25,7 @@ test.each([
   [{ ...base, status: "approved" }, "Hito aprobado", "success"],
   [{ ...base, status: "rejected" }, "Requiere corrección", "danger"],
   [{ ...base, status: "approved", payment: payment("processing") }, "Pago en proceso", "warning"],
-  [{ ...base, status: "approved", payment: payment("confirmed") }, "Pago simulado confirmado", "success"],
+  [{ ...base, status: "approved", payment: payment("confirmed") }, "Pago confirmado", "success"],
 ] as const)("%#: shows «%s»", (milestone, label, tone) => {
   expect(milestoneState(milestone as Milestone)).toMatchObject({ label, tone });
 });

@@ -7,10 +7,10 @@ export function Shares({ payment, currency }: { payment: NonNullable<Milestone["
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted-foreground">
-        Referencia de simulación <span className="font-semibold text-foreground">{payment.reference}</span>
+        Referencia de pago <span className="font-semibold text-foreground">{payment.reference}</span>
       </p>
       <table className="w-full text-left">
-        <caption className="sr-only">Distribución del pago simulado</caption>
+        <caption className="sr-only">Distribución del pago</caption>
         <thead className="text-sm text-muted-foreground">
           <tr>
             <th className="py-1 font-semibold">Destinatario</th>
