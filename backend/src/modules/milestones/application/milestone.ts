@@ -52,6 +52,8 @@ export type Milestone = {
   evidence: { description: string; submittedAt: Date } | null;
   review: { decision: Decision; reason: string | null; reviewedAt: Date } | null;
   lines: Line[];
+  /** Set when the investor approves the outgoing-payment grant that funds every line. */
+  fundedAt: Date | null;
   /** Set once every line is final (completado or fallido). */
   closedAt: Date | null;
 };
@@ -87,8 +89,14 @@ export function createMilestone(input: MilestoneInput): Milestone {
     evidence: null,
     review: null,
     lines: lines.map((l) => ({ ...l, status: LINE_STATUS.PENDIENTE, reference: null, settledAt: null })),
+    fundedAt: null,
     closedAt: null,
   };
+}
+
+export function fund(m: Milestone, now: Date): Milestone {
+  if (m.fundedAt) throw new DomainError(`Milestone ${m.id} is already funded`);
+  return { ...m, fundedAt: now };
 }
 
 export function submitEvidence(m: Milestone, description: string, now: Date): Milestone {
@@ -105,11 +113,12 @@ export function review(m: Milestone, decision: Decision, reason: string | null, 
   return { ...m, status: decision, review: { decision, reason: reason?.trim() || null, reviewedAt: now } };
 }
 
-// Supplier lines can be paid any time before the milestone closes; the producer line only after approval.
+// Lines are paid only from a funded milestone. Supplier lines any time before it closes; the producer line only after approval.
 export function assertLinePayable(m: Milestone, lineId: string): Line {
   const line = m.lines.find((l) => l.id === lineId);
   if (!line) throw new DomainError(`Line ${lineId} not found in milestone ${m.id}`);
   if (m.closedAt) throw new DomainError(`Milestone ${m.id} is closed`);
+  if (!m.fundedAt) throw new DomainError(`Milestone ${m.id} is not funded yet`);
   if (line.status !== LINE_STATUS.PENDIENTE) throw new DomainError(`Line ${lineId} is ${line.status}, not pendiente`);
   if (line.kind === LINE_KIND.PRODUCTOR && m.status !== MILESTONE_STATUS.APPROVED) {
     throw new DomainError("The producer line is released only after the verifier approves the milestone");

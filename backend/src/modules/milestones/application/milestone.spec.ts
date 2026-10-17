@@ -2,6 +2,7 @@ import {
   applyLineResult,
   assertLinePayable,
   createMilestone,
+  fund,
   LINE_KIND,
   LINE_STATUS,
   MILESTONE_STATUS,
@@ -21,7 +22,8 @@ const lines: LineInput[] = [
 ];
 
 const input = { id: "m1", title: "Siembra", amount: 1_000_000, lines };
-const draft = () => createMilestone(input);
+// Funded so the payment rules below are tested in isolation; the funding gate has its own block.
+const draft = () => fund(createMilestone(input), now);
 const submitted = () => submitEvidence(draft(), "Foto del lote sembrado", now);
 const approved = () => review(submitted(), "approved", null, now);
 const done = (m: Milestone, lineId: string, status: "completado" | "fallido" | "en_cola" = "completado") =>
@@ -64,6 +66,25 @@ describe("createMilestone", () => {
     const twoFees = [lines[0], { ...lines[1], amount: 200_000 }, lines[2], { ...lines[2], id: "l-fee2", amount: 100_000 }];
     expect(() => createMilestone({ ...input, lines: twoFees })).toThrow(DomainError);
     expect(createMilestone({ ...input, lines: [lines[0], { ...lines[1], amount: 400_000 }] }).lines).toHaveLength(2);
+  });
+});
+
+describe("funding", () => {
+  it("starts unfunded and records when the investor's grant is approved", () => {
+    const m = createMilestone(input);
+    expect(m.fundedAt).toBeNull();
+    expect(fund(m, now).fundedAt).toEqual(now);
+  });
+
+  it("cannot be funded twice", () => {
+    expect(() => fund(fund(createMilestone(input), now), now)).toThrow(DomainError);
+  });
+
+  it("refuses every line payment until the milestone is funded", () => {
+    const unfunded = createMilestone(input);
+    expect(() => assertLinePayable(unfunded, "l-prov")).toThrow(DomainError);
+    const approvedUnfunded = review(submitEvidence(unfunded, "Foto", now), "approved", null, now);
+    expect(() => assertLinePayable(approvedUnfunded, "l-prod")).toThrow(/not funded/);
   });
 });
 

@@ -24,6 +24,7 @@ const base: Milestone = {
   evidence: null,
   review: null,
   lines: [line("a", "pendiente")],
+  fundedAt: null,
   closedAt: null,
 };
 const closedAt = "2026-10-16T12:00:00Z";

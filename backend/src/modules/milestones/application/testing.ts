@@ -1,10 +1,12 @@
 // Test doubles shared by the use case specs.
 import { type LinePaymentRequest, type LinePaymentResult, PaymentGateway } from "../ports/payment-gateway";
+import { type FundingCallback, MilestoneFunding } from "../ports/milestone-funding";
 import { MilestoneRepository } from "../ports/milestone.repository";
-import { createMilestone, LINE_KIND, type Milestone } from "./milestone";
+import { createMilestone, fund, LINE_KIND, type Milestone } from "./milestone";
 import { MilestoneStore } from "./milestone-store";
 
-export const sampleMilestone = (): Milestone =>
+// Funded by default: most specs exercise payments, the funding gate is tested on unfundedMilestone.
+export const unfundedMilestone = (): Milestone =>
   createMilestone({
     id: "m1",
     title: "Siembra",
@@ -15,6 +17,8 @@ export const sampleMilestone = (): Milestone =>
       { id: "l-fee", kind: LINE_KIND.PLATAFORMA, beneficiary: "Plataforma", walletAddress: "https://wallet.test/fee", amount: 100_000 },
     ],
   });
+
+export const sampleMilestone = (): Milestone => fund(unfundedMilestone(), new Date("2026-10-16T12:00:00Z"));
 
 class FakeRepository extends MilestoneRepository {
   constructor(private readonly milestones: Map<string, Milestone>) {
@@ -60,5 +64,22 @@ export class ThrowingGateway extends PaymentGateway {
   }
   async check(): Promise<LinePaymentResult> {
     throw new Error("network down");
+  }
+}
+
+// Records the funding calls; `fail` makes complete() reject like a bad hash would.
+export class FakeFunding extends MilestoneFunding {
+  readonly started: string[] = [];
+  readonly completed: { milestoneId: string; params: FundingCallback }[] = [];
+  constructor(private readonly fail = false) {
+    super();
+  }
+  async start(milestone: Milestone) {
+    this.started.push(milestone.id);
+    return { redirectUrl: `https://wallet.test/consent/${milestone.id}` };
+  }
+  async complete(milestoneId: string, params: FundingCallback) {
+    if (this.fail) throw new Error("hash mismatch");
+    this.completed.push({ milestoneId, params });
   }
 }

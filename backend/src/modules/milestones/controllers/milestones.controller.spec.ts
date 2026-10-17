@@ -40,7 +40,12 @@ describe("MilestonesController access control", () => {
     expect(path("sync")).toBe(":id/lines/sync");
   });
 
-  it("maps the roles to fidu, seller and admin", () => {
-    expect(MILESTONE_ROLES).toEqual({ verifier: "fidu", producer: "seller", operator: "admin" });
+  it("lets the operator and the investor start funding a milestone", () => {
+    expect(handlerRoles("startFunding")).toEqual([MILESTONE_ROLES.operator, MILESTONE_ROLES.investor]);
+    expect(path("startFunding")).toBe(":id/funding");
+  });
+
+  it("maps the roles to fidu, seller, admin and investor", () => {
+    expect(MILESTONE_ROLES).toEqual({ verifier: "fidu", producer: "seller", operator: "admin", investor: "investor" });
   });
 });
