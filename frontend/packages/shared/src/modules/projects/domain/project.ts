@@ -36,6 +36,9 @@ export interface Project {
   plotPolygon?: PlotPolygon;
   /** RF-01: the producer's COP wallet; the productor line pays here. */
   producerWalletAddress?: string;
+  // RF-21 / D-05: share of each milestone budget kept as contingency reserve, in basis points (500 = 5 %). Absent = no reserve.
+  // Frontend only: our backend does not store it yet (it never sends contingency_bps).
+  contingencyBps?: number | null;
 }
 
 export interface PlotPolygon {

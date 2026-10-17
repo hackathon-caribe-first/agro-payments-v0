@@ -1,5 +1,6 @@
 import type { ProjectDto } from "../../../projects/infrastructure/dto";
 import type { LedgerEntryDto } from "../../../escrow/infrastructure/dto";
+import type { PaymentAuthorizationDto } from "../../../payment-authorization/infrastructure/dto";
 import type { OpenRequestDto, QuoteRequestDto } from "../dto";
 
 // The producer the web app acts as. Mirrored by PRODUCER_PROFILE in apps/web/src/producer/presales.ts (keep both in sync).
@@ -198,7 +199,7 @@ const QUOTE_REQUESTS: QuoteRequestDto[] = [
   },
 ];
 
-// Project negotiations (Flow A): a deposited project agreement, a live project negotiation (buyer's turn), an agreed
+// Project negotiations (Flow A): a project agreement with its payment authorization, a live project negotiation (buyer's turn), an agreed
 // milestone price, and a live milestone offer on another producer's project.
 const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
   {
@@ -216,9 +217,9 @@ const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
     status: "ACCEPTED",
     created_at: "2026-10-02T15:00:00Z",
     agreed_total: 24000000,
-    deposit_status: "DEPOSITED",
-    deposited_at: "2026-10-03T16:00:00Z",
-    ledger_entry_id: "led-seed-1",
+    authorization_status: "AUTHORIZED",
+    authorized_at: "2026-10-03T16:00:00Z",
+    payment_authorization_id: "pay-auth-seed-1",
     quotes: [
       {
         request_id: "qr-seed-3",
@@ -238,7 +239,7 @@ const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
     history: [
       { id: "h-seed-6", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-02T15:00:00Z", payload: { revision: 1, unit_price: 52000, quantity: 500, total: 26000000 } },
       { id: "h-seed-7", actor: "PRODUCER", type: "ACCEPT", from: "QUOTED", to: "ACCEPTED", at: "2026-10-03T15:00:00Z", payload: { revision: 1, unit_price: 52000, quantity: 500, total: 26000000, agreed_total: 24000000 } },
-      { id: "h-seed-8", actor: "BUYER", type: "DEPOSIT", from: "ACCEPTED", to: "ACCEPTED", at: "2026-10-03T16:00:00Z", payload: { amount: 24000000, currency: "COP", ledger_entry_id: "led-seed-1" } },
+      { id: "h-seed-8", actor: "BUYER", type: "AUTHORIZE_PAYMENT", from: "ACCEPTED", to: "ACCEPTED", at: "2026-10-03T16:00:00Z", payload: { cap: 24000000, currency: "COP", authorization_id: "pay-auth-seed-1" } },
     ],
   },
   {
@@ -310,7 +311,7 @@ const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
         request_id: "qr-seed-5",
         revision: 1,
         author: "BUYER",
-        unit_price: 11500000,
+        unit_price: 12500000,
         quantity: 1,
         currency: "COP",
         delivery_date: "2027-04-30",
@@ -320,8 +321,8 @@ const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
       },
     ],
     history: [
-      { id: "h-seed-11", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-09T15:00:00Z", payload: { revision: 1, unit_price: 11500000, quantity: 1, total: 11500000, price: 11500000 } },
-      { id: "h-seed-12", actor: "PRODUCER", type: "ACCEPT", from: "QUOTED", to: "ACCEPTED", at: "2026-10-11T15:00:00Z", payload: { revision: 1, unit_price: 11500000, quantity: 1, total: 11500000, price: 11500000 } },
+      { id: "h-seed-11", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-09T15:00:00Z", payload: { revision: 1, unit_price: 12500000, quantity: 1, total: 12500000, price: 12500000 } },
+      { id: "h-seed-12", actor: "PRODUCER", type: "ACCEPT", from: "QUOTED", to: "ACCEPTED", at: "2026-10-11T15:00:00Z", payload: { revision: 1, unit_price: 12500000, quantity: 1, total: 12500000, price: 12500000 } },
     ],
   },
   {
@@ -359,6 +360,22 @@ const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
   },
 ];
 
+const PAYMENT_AUTHORIZATIONS: PaymentAuthorizationDto[] = [
+  {
+    id: "pay-auth-seed-1",
+    negotiation_id: "qr-seed-3",
+    project_id: "proj-platano-meta",
+    buyer_id: BUYER.id,
+    cap: 24000000,
+    spent: 0,
+    currency: "COP",
+    status: "AUTHORIZED",
+    created_at: "2026-10-03T16:00:00Z",
+    revoked_at: null,
+  },
+];
+
+// The custody ledger mirror of the seeded authorization (our escrow screens read the ledger).
 const LEDGER_ENTRIES: LedgerEntryDto[] = [
   {
     id: "led-seed-1",
@@ -374,6 +391,7 @@ const LEDGER_ENTRIES: LedgerEntryDto[] = [
 ];
 
 export const createLedgerFixtures = (): LedgerEntryDto[] => structuredClone(LEDGER_ENTRIES);
+export const createPaymentAuthorizationFixtures = (): PaymentAuthorizationDto[] => structuredClone(PAYMENT_AUTHORIZATIONS);
 export const createExternalProjectFixtures = (): ProjectDto[] => structuredClone(EXTERNAL_PROJECTS);
 export const createOpenRequestFixtures = (): OpenRequestDto[] => structuredClone(OPEN_REQUESTS);
 export const createQuoteRequestFixtures = (): QuoteRequestDto[] => structuredClone([...QUOTE_REQUESTS, ...PROJECT_NEGOTIATIONS]);

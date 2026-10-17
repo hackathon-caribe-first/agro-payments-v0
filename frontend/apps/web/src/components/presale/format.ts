@@ -6,7 +6,7 @@ const UNIT_LABELS: Record<Unit, { singular: string; plural: string }> = {
   BULTO: { singular: "bulto", plural: "bultos" },
 };
 
-// Anything that carries a unit (a listing, or {unit, rawUnit}).
+// Anything that carries a unit ({unit, rawUnit}).
 export interface UnitRef {
   unit: ListingUnit;
   rawUnit: string;

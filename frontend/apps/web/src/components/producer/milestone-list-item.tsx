@@ -4,9 +4,11 @@ import { Button } from "@agro/shared/ui/button";
 import type { MilestoneSummary } from "@agro/shared/modules/milestones/domain/milestone";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
+import type { PendingRetry } from "@agro/shared/modules/payment-lines/domain/line";
+import { PendingRetryBanner } from "~/components/split/pending-retry-banner";
 import { MilestoneStatusBadge } from "./status-label";
 
-export function MilestoneListItem({ milestone }: { milestone: MilestoneSummary }) {
+export function MilestoneListItem({ milestone, pending }: { milestone: MilestoneSummary; pending?: PendingRetry }) {
   const locked = milestone.status === "LOCKED";
   return (
     <li>
@@ -15,7 +17,7 @@ export function MilestoneListItem({ milestone }: { milestone: MilestoneSummary }
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm text-muted-foreground">Hito {milestone.sequenceOrder}</p>
-              <CardTitle className="text-lg text-primary">{milestone.title}</CardTitle>
+              <CardTitle className="min-w-0 break-words text-lg text-primary">{milestone.title}</CardTitle>
             </div>
             <MilestoneStatusBadge status={milestone.status} />
           </div>
@@ -31,6 +33,7 @@ export function MilestoneListItem({ milestone }: { milestone: MilestoneSummary }
               <dd className="font-semibold tabular-nums">{formatMoney(milestone.laborBudget, milestone.currency)}</dd>
             </div>
           </dl>
+          {pending && <PendingRetryBanner pending={pending} linesHref={`/producer/milestones/${milestone.id}/lines`} />}
           {locked ? (
             <p className="text-sm text-muted-foreground">Este hito se habilita cuando se completa el anterior.</p>
           ) : (

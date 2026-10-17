@@ -13,7 +13,7 @@ export type PresaleError =
   | { kind: "duplicate_negotiation" }
   | { kind: "backing_mismatch"; reason: "closed" | "not_owned" }
   | { kind: "not_negotiable"; reason: "own_project" | "project_status" | "project_agreed" | "milestone_status" | "milestone_agreed" | "duplicate" }
-  | { kind: "deposit_unavailable"; reason: "not_project" | "not_agreed" | "already_deposited" | "not_owner" | "project_status" | "no_total" }
+  | { kind: "authorization_unavailable"; reason: "not_project" | "not_agreed" | "already_authorized" | "not_owner" | "project_status" | "no_total" }
   | { kind: "total_changed"; total: number };
 
 export type PresaleResult<T> = Result<T, PresaleError>;

@@ -1,5 +1,5 @@
 import { redirectDocument } from "react-router";
-import { api } from "@agro/shared/api/client";
+import { api, type Milestone } from "@agro/shared/api/client";
 
 export async function loadMilestones() {
   const { data, error, response } = await api.GET("/milestones");
@@ -7,6 +7,20 @@ export async function loadMilestones() {
   if (response?.status === 403) throw new Response("Tu rol no puede ver los hitos", { status: 403 });
   if (error || !data) throw new Response("No se pudieron cargar los hitos", { status: 502 });
   return data;
+}
+
+export const SERVER_UNREACHABLE =
+  "No pudimos conectar con el servidor de pagos. Revisa que el servidor esté en ejecución e inténtalo de nuevo.";
+
+// Same load, but an unreachable/failing backend becomes data (rendered in-page) instead of the generic error view.
+// Auth answers (401/403) keep throwing: they belong to the layout error view.
+export async function loadMilestonesOrError(): Promise<{ milestones: Milestone[]; error: null } | { milestones: null; error: string }> {
+  try {
+    return { milestones: await loadMilestones(), error: null };
+  } catch (e) {
+    if (e instanceof Response && (e.status === 401 || e.status === 403)) throw e;
+    return { milestones: null, error: SERVER_UNREACHABLE };
+  }
 }
 
 export type ActionResult = { error: string } | { ok: true };

@@ -16,7 +16,7 @@ export function MilestoneNegotiationRow({ row, project }: { row: MilestoneRow; p
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Hito {summary.sequenceOrder}</p>
-          <h3 className="break-words text-base text-primary">{summary.title}</h3>
+          <h3 className="min-w-0 break-words text-base text-primary">{summary.title}</h3>
         </div>
         {startBlock === null ? (
           <Button asChild size="compact">
@@ -50,7 +50,7 @@ export function MilestoneNegotiationRow({ row, project }: { row: MilestoneRow; p
           <dd className="font-semibold tabular-nums">{agreedPrice !== null ? formatMoney(agreedPrice, summary.currency) : "Sin acuerdo"}</dd>
         </div>
       </dl>
-      {startBlock !== null && startBlock !== "duplicate" && (
+      {startBlock !== null && !(startBlock === "duplicate" && myLiveId) && (
         <p id={reasonId} className="text-sm text-muted-foreground">
           {startBlockText(startBlock, project)}
         </p>

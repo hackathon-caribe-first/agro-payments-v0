@@ -90,7 +90,7 @@ export class HttpPresaleRepository implements PresaleRepository {
     return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/quotes`, toMilestoneCounterDto(author, input))));
   }
 
-  async deposit(requestId: string, buyer: PartyIdentity, expectedTotal: number) {
+  async authorizePayment(requestId: string, buyer: PartyIdentity, expectedTotal: number) {
     const response = await this.post(`/negotiations/${enc(requestId)}/deposit`, { buyer_id: buyer.id, expected_total: expectedTotal });
     return toQuoteRequest(await this.json(response));
   }

@@ -3,22 +3,27 @@ import { HarvestCard, HarvestStepForm } from "~/components/harvest/harvest-card"
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
 import { harvest, harvestAction, isHarvestIntent } from "~/harvest/module";
-import { loadMilestones, milestoneAction } from "~/milestones";
+import { ServerUnreachable } from "~/components/server-unreachable";
+import { loadMilestonesOrError, milestoneAction } from "~/milestones";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/verifier";
 
 export const meta = () => [{ title: "Por revisar · Surco" }];
 // RF-24: the harvest queue is optional; the milestone review still works without it.
 export async function clientLoader() {
-  const [milestones, harvests] = await Promise.all([loadMilestones(), harvest.listForReview()]);
-  return { milestones, harvests: harvests.ok ? harvests.value : [] };
+  const [loaded, harvests] = await Promise.all([loadMilestonesOrError(), harvest.listForReview()]);
+  if (loaded.error !== null) return { error: loaded.error } as const;
+  return { error: null, milestones: loaded.milestones, harvests: harvests.ok ? harvests.value : [] };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.clone().formData();
   return isHarvestIntent(form.get("intent")) ? harvestAction(form) : milestoneAction(request);
 }
 
 export default function Verifier({ loaderData }: Route.ComponentProps) {
+  if (loaderData.error !== null) return <ServerUnreachable title="Hitos del servidor" message={loaderData.error} />;
   const { milestones, harvests } = loaderData;
   const pending = milestones.filter((m) => m.status === "evidence_submitted");
   const rest = milestones.filter((m) => m.status !== "evidence_submitted");

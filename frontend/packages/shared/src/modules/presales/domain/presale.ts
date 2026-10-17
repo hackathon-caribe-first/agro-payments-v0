@@ -1,5 +1,5 @@
 import type { Project } from "../../projects/domain/project";
-import type { DepositStatus } from "../../escrow/domain/ledger";
+import type { AuthorizationStatus } from "../../payment-authorization/domain/authorization";
 
 // Domain types for presales, negotiations (quote requests with offer rounds) and open requests.
 // Naming: a "sale quote" / "offer" (SaleQuote) is what one party proposes to the other in a negotiation;
@@ -32,7 +32,7 @@ export const HISTORY_KINDS = [
   "WITHDRAW",
   "EXPIRE",
   "AUTO_CLOSE",
-  "DEPOSIT",
+  "AUTHORIZE_PAYMENT",
 ] as const;
 // What a project negotiation is about: the whole project or one of its milestones.
 export const NEGOTIATION_SCOPES = ["PROJECT", "MILESTONE"] as const;
@@ -60,11 +60,11 @@ export type OfferTerms =
   // A lump-sum price for one milestone. It carries no validity: milestone offers never expire.
   | { kind: "MILESTONE"; price: number; deliveryDate: string; notes: string };
 
-export interface DepositState {
-  status: DepositStatus;
+export interface AuthorizationState {
+  status: AuthorizationStatus;
   agreedTotal: number;
-  depositedAt: string | null;
-  ledgerEntryId: string | null;
+  authorizedAt: string | null;
+  authorizationId: string | null;
 }
 
 // Keyed by (requestId, revision). Each counter-offer is a new revision; only the latest can be SENT.
@@ -126,9 +126,9 @@ export interface QuoteRequest {
   createdAt: string;
   quotes: SaleQuote[];
   history: HistoryEntry[];
-  // Present on an agreed PROJECT negotiation: the frozen total and its deposit state.
-  deposit: DepositState | null;
-  // Set only on the answer to a deposit (or buyer accept) that needs the buyer's wallet approval first.
+  // Present on an agreed PROJECT negotiation: the frozen total and its payment authorization state.
+  authorization: AuthorizationState | null;
+  // Set only on the answer to a deposit (or buyer accept) that needs the buyer's wallet approval first (Open Payments).
   depositRedirectUrl?: string;
 }
 

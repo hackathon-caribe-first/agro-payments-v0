@@ -5,6 +5,7 @@ import { FORM_LEVEL_KEY, type FieldErrors } from "@agro/shared/modules/milestone
 import { Alert, AlertDescription } from "@agro/shared/ui/alert";
 import { Button } from "@agro/shared/ui/button";
 import { Card, CardContent } from "@agro/shared/ui/card";
+import { DEFAULT_CONTINGENCY_BPS } from "@agro/shared/modules/projects/domain/project-draft";
 import { Separator } from "@agro/shared/ui/separator";
 import { parseAmount } from "./amount";
 import { MilestoneEditorList, createEmptyRow } from "./milestone-editor-list";
@@ -14,12 +15,29 @@ import { TotalsSummary } from "./totals-summary";
 
 export type CreateProjectActionData = { fieldErrors: FieldErrors };
 
-const EMPTY_DETAILS: ProjectDetails = { title: "", description: "", productionType: "", startDate: "", estimatedEndDate: "" };
+const EMPTY_DETAILS: ProjectDetails = {
+  title: "",
+  description: "",
+  productionType: "",
+  startDate: "",
+  estimatedEndDate: "",
+  producerWalletAddress: "",
+  contingencyPct: String(DEFAULT_CONTINGENCY_BPS / 100),
+};
+
+// "5" -> 500 basis points. Empty or invalid text becomes null, which the schema reports as an invalid percentage.
+function percentToBps(text: string): number | null {
+  if (text.trim() === "") return null;
+  const value = Number(text.replace(",", "."));
+  return Number.isFinite(value) ? Math.round(value * 100 * 1000) / 1000 : null;
+}
 
 // Wire payload: numbers or null (null reaches the schema and is reported as a missing amount).
 function buildPayload(details: ProjectDetails, rows: MilestoneRowValue[]) {
+  const { contingencyPct, ...rest } = details;
   return {
-    ...details,
+    ...rest,
+    contingencyBps: percentToBps(contingencyPct),
     productionType: details.productionType || null,
     milestones: rows.map(({ key: _key, suppliesBudget, laborBudget, ...rest }) => ({
       ...rest,
@@ -30,7 +48,7 @@ function buildPayload(details: ProjectDetails, rows: MilestoneRowValue[]) {
 }
 
 // Maps project-level schema keys to the detail field they belong to.
-const DETAIL_KEYS = ["title", "description", "productionType", "startDate", "estimatedEndDate"] as const;
+const DETAIL_KEYS = ["title", "description", "productionType", "startDate", "estimatedEndDate", "producerWalletAddress"] as const;
 
 export function ProjectForm({ actionData }: { actionData?: CreateProjectActionData }) {
   const navigation = useNavigation();
@@ -74,7 +92,8 @@ export function ProjectForm({ actionData }: { actionData?: CreateProjectActionDa
             value={details}
             errors={errors}
             onChange={(patch) => {
-              (Object.keys(patch) as (keyof ProjectDetails)[]).forEach((k) => DETAIL_KEYS.includes(k) && clearError(k));
+              (Object.keys(patch) as (keyof ProjectDetails)[]).forEach((k) => DETAIL_KEYS.includes(k as never) && clearError(k));
+              if ("contingencyPct" in patch) clearError("contingencyBps");
               clearError("estimatedEndDate");
               setDetails((d) => ({ ...d, ...patch }));
             }}

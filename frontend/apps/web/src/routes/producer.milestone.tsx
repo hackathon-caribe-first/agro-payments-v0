@@ -1,8 +1,11 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ListChecks } from "lucide-react";
 import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
 import { canRecordEvidence, canSubmitFromStatus, currentFieldData, missingRequirements, requirementChecklist } from "@agro/shared/modules/milestones/domain/milestone-rules";
+import type { PendingRetry } from "@agro/shared/modules/payment-lines/domain/line";
+import { Button } from "@agro/shared/ui/button";
 import { Separator } from "@agro/shared/ui/separator";
 import { CustodyCard } from "~/components/harvest/custody-card";
+import { DeadlineBadge } from "~/components/deadline-badge";
 import { BudgetSummary } from "~/components/producer/budget-summary";
 import { EvidenceForm } from "~/components/producer/evidence-form";
 import { RequirementsChecklist } from "~/components/producer/requirements-checklist";
@@ -12,24 +15,29 @@ import { SubmitReviewForm } from "~/components/producer/submit-review-form";
 import { errorMessage, toActionResult, type ProducerActionResult } from "~/producer/error-copy";
 import { harvest } from "~/harvest/module";
 import { PHOTO_OPTIONS, milestones } from "~/producer/module";
+import { PendingRetryBanner } from "~/components/split/pending-retry-banner";
+import { milestonePayments } from "~/payment-lines/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/producer.milestone";
 
 export const meta = () => [{ title: "Detalle del hito · Surco" }];
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const result = await milestones.getMilestoneDetail(params.milestoneId);
+  const [result, payments] = await Promise.all([milestones.getMilestoneDetail(params.milestoneId), milestonePayments.getPendingRetry(params.milestoneId)]);
   if (!result.ok) {
     if (result.error.kind === "not_found") throw data(null, { status: 404 });
     throw new Response(errorMessage(result.error), { status: 502 });
   }
   // RF-21: with an observed milestone nothing more is paid; show what is still in custody. Optional: the page renders without it.
   const custody = result.value.status === OBSERVED ? await harvest.custody(result.value.projectId) : null;
-  return { ...result.value, custody: custody?.ok ? custody.value : null };
+  const pending: PendingRetry = payments.ok ? payments.value : { count: 0, lines: [] };
+  return { ...result.value, custody: custody?.ok ? custody.value : null, pending };
 }
 
 const OBSERVED = "CHANGES_REQUESTED";
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<ProducerActionResult> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.formData();
 
   if (form.get("intent") === "submit") {
@@ -45,7 +53,9 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
   return { ok: false, message: "Acción desconocida." };
 }
 
-export default function ProducerMilestone({ loaderData: m }: Route.ComponentProps) {
+export default function ProducerMilestone({ loaderData }: Route.ComponentProps) {
+  const m = loaderData;
+  const { pending } = loaderData;
   const fieldData = currentFieldData(m.logs);
   const checklist = requirementChecklist(m.requirements, fieldData);
   const missing = missingRequirements(m.requirements, fieldData);
@@ -60,10 +70,21 @@ export default function ProducerMilestone({ loaderData: m }: Route.ComponentProp
         <p className="text-sm text-muted-foreground">Hito {m.sequenceOrder}</p>
         <h1 className="break-words text-3xl text-primary">{m.title}</h1>
         <p className="text-pretty text-muted-foreground">{m.description}</p>
-        <div className="mt-1">
+        <div className="mt-1 flex flex-wrap items-center gap-2">
           <MilestoneStatusBadge status={m.status} />
+          <DeadlineBadge status={m.status} dueDate={m.estimatedCompletionDate} />
+        </div>
+        <div>
+          <Button asChild variant="outline" size="compact">
+            <Link to={`/producer/milestones/${m.id}/lines`}>
+              <ListChecks aria-hidden="true" />
+              Líneas de pago del hito
+            </Link>
+          </Button>
         </div>
       </header>
+
+      <PendingRetryBanner pending={pending} linesHref={`/producer/milestones/${m.id}/lines`} />
 
       {/* Summary column first in the DOM so it reads before the forms when stacked; it moves to the right on wide screens. */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">

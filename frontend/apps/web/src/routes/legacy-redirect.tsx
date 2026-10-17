@@ -42,6 +42,13 @@ function translatePath(pathname: string): Target {
     return { pathname: "/producer/negotiations", extra: { project: parts[3] } };
   }
 
+  // Positional: only /productor/proyectos/:id/publicacion (the id itself is never translated).
+  if (module === "producer" && parts[2] === "proyectos" && parts[3] !== undefined && parts[4] === "publicacion") {
+    parts[2] = "projects";
+    parts[4] = "publication";
+    return { pathname: parts.join("/") };
+  }
+
   const spanishSection = parts[2] ?? "";
   const section = SECTIONS.get(spanishSection);
   if (section) {

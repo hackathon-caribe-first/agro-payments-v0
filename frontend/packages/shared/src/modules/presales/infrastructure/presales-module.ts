@@ -1,10 +1,13 @@
+import { HttpPaymentAuthorizationRepository } from "../../payment-authorization/infrastructure/http-payment-authorization-repository";
 import {
-  depositProjectAgreement,
+  authorizeProjectPayment,
+  getProducerProjectView,
   getBuyerProjectDetail,
   getStartNegotiationForm,
   listBuyerCatalog,
   startNegotiation,
 } from "../application/project-negotiation";
+import { HttpGrantRepository } from "../../grants/infrastructure/http-grant-repository";
 import { HttpMilestoneRepository } from "../../milestones/infrastructure/http-milestone-repository";
 import { HttpProjectRepository } from "../../projects/infrastructure/http-project-repository";
 import {
@@ -45,20 +48,23 @@ export function createPresalesModule({ fetchFn, baseUrl = DEFAULT_BASE_URL, toda
     presales: new HttpPresaleRepository({ baseUrl, fetchFn }),
     projects: new HttpProjectRepository({ baseUrl, fetchFn }),
     milestones: new HttpMilestoneRepository({ baseUrl, fetchFn }),
+    paymentAuthorizations: new HttpPaymentAuthorizationRepository({ baseUrl, fetchFn }),
+    grants: new HttpGrantRepository({ baseUrl, fetchFn }),
     today,
     ownProducerId: producerId ?? null,
   };
 
   return {
     // Flow A: project negotiation
+    getProducerProjectView: (projectId: string) => getProducerProjectView(deps, projectId),
     listBuyerCatalog: (buyerId: string) => listBuyerCatalog(deps, buyerId),
     getBuyerProjectDetail: (projectId: string, buyerId: string) => getBuyerProjectDetail(deps, projectId, buyerId),
     getStartNegotiationForm: (projectId: string, milestoneId: string | null, buyerId: string) =>
       getStartNegotiationForm(deps, projectId, milestoneId, buyerId),
     startNegotiation: (target: { projectId: string; milestoneId: string | null }, buyer: PartyIdentity, raw: unknown) =>
       startNegotiation(deps, target, buyer, raw),
-    depositProjectAgreement: (negotiationId: string, buyer: PartyIdentity, raw: unknown) =>
-      depositProjectAgreement(deps, negotiationId, buyer, raw),
+    authorizeProjectPayment: (negotiationId: string, buyer: PartyIdentity, raw: unknown) =>
+      authorizeProjectPayment(deps, negotiationId, buyer, raw),
 
     counterOffer: (requestId: string, actor: Actor, raw: unknown) => counterOffer(deps, requestId, actor, raw),
     acceptSaleQuote: (requestId: string, revision: unknown, actor?: Actor, raw?: unknown) => acceptSaleQuote(deps, requestId, revision, actor, raw),

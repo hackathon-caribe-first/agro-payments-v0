@@ -16,6 +16,14 @@ const EVIDENCE_ALLOWED: ReadonlySet<MilestoneStatus> = new Set([
 
 const SUBMIT_ALLOWED: ReadonlySet<MilestoneStatus> = new Set(["ACTIVE", "IN_FIELD_EXECUTION", "CHANGES_REQUESTED"]);
 
+// Milestones that already have a favorable dictamen (or are past it): their deadline no longer matters.
+const DICTAMEN_DONE: ReadonlySet<string> = new Set(["TECHNICALLY_APPROVED", "LABOR_PAYOUT_PENDING", "COMPLETED_AND_PAID"]);
+
+// D-08: "Plazo vencido" is only a WARNING (the grant is never revoked automatically): the estimated completion date passed
+// without a favorable dictamen on a milestone that has started. `today` is an ISO yyyy-mm-dd day.
+export const isDeadlineExpired = (milestone: { status: string; dueDate?: string | null }, today: string): boolean =>
+  Boolean(milestone.dueDate) && milestone.status !== "LOCKED" && !DICTAMEN_DONE.has(milestone.status) && String(milestone.dueDate) < today;
+
 export interface ChecklistItem {
   requirement: RequirementSpec;
   done: boolean;

@@ -1,6 +1,18 @@
 import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
+import { grantRoutes } from "./routes/grant.routes";
+import { harvestRoutes } from "./routes/harvest.routes";
+import { investmentRoutes } from "./routes/investment.routes";
+import { opsRoutes } from "./routes/ops.routes";
+import { reviewRoutes } from "./routes/review.routes";
+import { splitRoutes } from "./routes/split.routes";
+import { statementRoutes } from "./routes/statement.routes";
+import { supplierRoutes } from "./routes/supplier.routes";
 
 export default [
+  // Public pages, OUTSIDE the sidebar layout (and its session guard).
+  route("login", "routes/login.tsx"),
+  route("unauthorized", "routes/unauthorized.tsx"),
+  route("logout", "routes/logout.tsx"),
   layout("routes/layout.tsx", [
     index("routes/index.tsx"),
     route("producer", "routes/producer.tsx"),
@@ -39,6 +51,15 @@ export default [
     route("custodian", "routes/custodian.tsx"),
     route("custodian/projects/:projectId", "routes/custodian.project.tsx"),
     route("custodian/traces", "routes/custodian.traces.tsx"),
+    // Workstream fragments (React Router ranks static above dynamic segments regardless of order).
+    ...investmentRoutes,
+    ...grantRoutes,
+    ...splitRoutes,
+    ...reviewRoutes,
+    ...harvestRoutes,
+    ...opsRoutes,
+    ...supplierRoutes,
+    ...statementRoutes,
     // LEGACY Spanish URLs: all redirect to the English ones (see routes/legacy-redirect.tsx).
     route("productor", "routes/legacy-redirect.tsx", { id: "legacy-productor" }),
     route("productor/*", "routes/legacy-redirect.tsx", { id: "legacy-productor-splat" }),

@@ -9,8 +9,8 @@ export interface NegotiationApi {
   reject(revision: unknown): Promise<PresaleResult<unknown>>;
   counter(raw: unknown): Promise<PresaleResult<unknown>>;
   withdraw(): Promise<PresaleResult<unknown>>;
-  // Buyer-only: executes the pending deposit of an agreed PROJECT negotiation.
-  deposit?(raw: unknown): Promise<PresaleResult<unknown>>;
+  // Buyer-only: executes the pending payment authorization of an agreed PROJECT negotiation.
+  authorizePayment?(raw: unknown): Promise<PresaleResult<unknown>>;
 }
 
 const text = (form: FormData, name: string) => String(form.get(name) ?? "");
@@ -31,7 +31,7 @@ export async function runNegotiationAction(api: NegotiationApi, form: FormData):
   else if (intent === "reject") result = await api.reject(form.get("revision"));
   else if (intent === "counter") result = await api.counter(offerFields(form));
   else if (intent === "withdraw") result = await api.withdraw();
-  else if (intent === "deposit" && api.deposit) result = await api.deposit({ expectedTotal: text(form, "expectedTotal") });
+  else if (intent === "authorize-payment" && api.authorizePayment) result = await api.authorizePayment({ expectedTotal: text(form, "expectedTotal") });
 
   if (!result) return { fieldErrors: { _form: ["Acción desconocida."] } };
   return result.ok ? { fieldErrors: {} } : toActionData(result.error);

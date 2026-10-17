@@ -1,6 +1,8 @@
 import { FORM_LEVEL_KEY } from "../../../milestones/domain/errors";
 import { toFieldErrors } from "../../../milestones/schemas/evidence-log";
 import type { MilestoneDetailDto } from "../../../milestones/infrastructure/dto";
+import { normalizeWalletUrl, walletProblem } from "../../../payment-lines/domain/supplier";
+import { lookupWallet } from "../../../payment-lines/infrastructure/mock/wallet-registry";
 import { projectTargetAmount } from "../../domain/project-draft";
 import { createProjectInputSchema } from "../../schemas/create-project";
 import { createProjectRequestDtoSchema, type CreateProjectRequestDto, type ProjectDto, type RejectionBody } from "../dto";
@@ -21,6 +23,8 @@ const toDomainInput = (dto: CreateProjectRequestDto) => ({
   productionType: dto.production_type,
   startDate: dto.start_date,
   estimatedEndDate: dto.estimated_end_date,
+  producerWalletAddress: dto.producer_wallet_address,
+  contingencyBps: dto.contingency_bps,
   milestones: [...dto.milestones]
     .sort((a, b) => a.sequence_order - b.sequence_order)
     .map((m) => ({
@@ -60,6 +64,9 @@ function createProject(store: ProducerMockStore, dto: CreateProjectRequestDto): 
     start_date: input.startDate,
     estimated_end_date: input.estimatedEndDate,
     currency: CURRENCY,
+    // RF-01 / RF-21: stored as validated by the endpoint; projects created without them keep working.
+    ...(input.producerWalletAddress ? { producer_wallet_address: normalizeWalletUrl(input.producerWalletAddress) ?? input.producerWalletAddress } : {}),
+    ...(input.contingencyBps !== undefined ? { contingency_bps: input.contingencyBps } : {}),
   };
 
   const milestones: MilestoneDetailDto[] = input.milestones.map((m, i) => ({
@@ -105,6 +112,12 @@ export function createProjectsMockFetch(store: ProducerMockStore, delegate: type
       if (!dto.success) return reject({ [FORM_LEVEL_KEY]: ["La solicitud no tiene el formato esperado."] });
       const input = createProjectInputSchema.safeParse(toDomainInput(dto.data));
       if (!input.success) return reject(toFieldErrors(input.error));
+      // The server validates the wallet again (RF-01): never trust the client's earlier check.
+      if (input.data.producerWalletAddress) {
+        const lookup = lookupWallet(input.data.producerWalletAddress);
+        const problem = lookup.kind === "invalid" ? lookup.message : walletProblem(lookup.validation);
+        if (problem) return reject({ producerWalletAddress: [problem] });
+      }
       return json(createProject(store, dto.data), 201);
     }
 

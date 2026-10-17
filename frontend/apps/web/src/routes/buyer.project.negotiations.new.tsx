@@ -8,6 +8,7 @@ import { offerFields } from "~/components/negotiation/actions";
 import { ScopedOfferForm } from "~/components/negotiation/scoped-offer-form";
 import { presaleErrorMessage, toActionData, type PresaleActionData } from "~/components/presale/error-copy";
 import { buyer } from "~/buyer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/buyer.project.negotiations.new";
 
 export const meta = () => [{ title: "Iniciar negociación · Surco" }];
@@ -24,6 +25,7 @@ export async function clientLoader({ params, request }: Route.ClientLoaderArgs) 
 }
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData | Response> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.formData();
   const result = await buyer.startNegotiation({ projectId: params.projectId, milestoneId: milestoneParam(request) }, offerFields(form));
   return result.ok ? redirect(`/buyer/negotiations/${result.value.id}`) : toActionData(result.error);

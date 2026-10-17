@@ -31,6 +31,7 @@ const fromDto = (dto: ProjectDto): Project => ({
   currency: dto.currency,
   ...(dto.plot_polygon && { plotPolygon: dto.plot_polygon }),
   ...(dto.producer_wallet_address && { producerWalletAddress: dto.producer_wallet_address }),
+  contingencyBps: dto.contingency_bps ?? null,
 });
 
 export const toProject = (data: unknown): Project => fromDto(parse(projectDtoSchema, data, "project"));
@@ -43,6 +44,7 @@ export const toCreateProjectRequestDto = (input: CreateProjectInput): CreateProj
   production_type: input.productionType,
   start_date: input.startDate,
   estimated_end_date: input.estimatedEndDate,
+  ...(input.contingencyBps !== undefined ? { contingency_bps: input.contingencyBps } : {}),
   milestones: withSequence(input.milestones).map((m) => ({
     title: m.title,
     description: m.description,

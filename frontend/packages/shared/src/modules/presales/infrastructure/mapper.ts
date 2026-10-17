@@ -18,7 +18,7 @@ import {
   type QuoteRequest,
   type SaleQuote,
 } from "../domain/presale";
-import { DEPOSIT_STATUSES } from "../../escrow/domain/ledger";
+import { AUTHORIZATION_STATES } from "../../payment-authorization/domain/authorization";
 import { toProject } from "../../projects/infrastructure/mapper";
 import { saleQuoteTotal } from "../domain/presale-rules";
 import type { PartyIdentity, StartTarget } from "../application/presale-repository";
@@ -100,11 +100,26 @@ const quoteFromDto = (dto: SaleQuoteDto, scope: NegotiationScope | null): SaleQu
   createdAt: dto.created_at,
 });
 
+// Our backend's deposit (deposit_status PENDING|DEPOSITED, deposited_at, ledger_entry_id) is the domain's payment authorization;
+// the mock still answers authorization_*. Either one fills the same state.
+const DEPOSIT_TO_AUTHORIZATION: Readonly<Record<string, string>> = { PENDING: "PENDING", DEPOSITED: "AUTHORIZED" };
+const authorizationFromDto = (dto: QuoteRequestDto): QuoteRequest["authorization"] => {
+  const raw = dto.authorization_status ?? (dto.deposit_status ? (DEPOSIT_TO_AUTHORIZATION[dto.deposit_status] ?? dto.deposit_status) : undefined);
+  if (!raw) return null;
+  return {
+    status: toKnown(raw, AUTHORIZATION_STATES),
+    agreedTotal: dto.agreed_total ?? 0,
+    authorizedAt: dto.authorized_at ?? dto.deposited_at ?? null,
+    authorizationId: dto.payment_authorization_id ?? dto.ledger_entry_id ?? null,
+  };
+};
+
 const historyFromDto = (dto: HistoryEntryDto): HistoryEntry => ({
   id: dto.id,
   actor: toKnown(dto.actor, ACTORS),
   type: dto.type,
-  kind: toKnown(dto.type, HISTORY_KINDS),
+  // Our backend logs the buyer's deposit as DEPOSIT; the domain calls it AUTHORIZE_PAYMENT.
+  kind: toKnown(dto.type === "DEPOSIT" ? "AUTHORIZE_PAYMENT" : dto.type, HISTORY_KINDS),
   from: dto.from,
   to: dto.to,
   at: dto.at,
@@ -140,14 +155,7 @@ const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => {
   createdAt: dto.created_at,
   quotes: dto.quotes.map((q) => quoteFromDto(q, scope)),
   history: [...dto.history].map(historyFromDto).sort((a, b) => a.at.localeCompare(b.at)),
-  deposit: dto.deposit_status
-    ? {
-        status: toKnown(dto.deposit_status, DEPOSIT_STATUSES),
-        agreedTotal: dto.agreed_total ?? 0,
-        depositedAt: dto.deposited_at ?? null,
-        ledgerEntryId: dto.ledger_entry_id ?? null,
-      }
-    : null,
+  authorization: authorizationFromDto(dto),
   ...(dto.deposit_redirect_url ? { depositRedirectUrl: dto.deposit_redirect_url } : {}),
   };
 };

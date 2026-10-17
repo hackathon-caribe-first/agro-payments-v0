@@ -33,7 +33,12 @@ export interface ProjectDraft {
   plotPolygon?: { type: "Polygon"; coordinates: [number, number][][] };
   /** RF-01, optional: https wallet address (validated with GET by the backend in Open Payments mode). */
   producerWalletAddress?: string;
+  // RF-21 / D-05: contingency reserve in basis points (0 to 2000). The form defaults it to 5 % (500). Not stored by our backend yet.
+  contingencyBps?: number;
 }
+
+export const DEFAULT_CONTINGENCY_BPS = 500;
+export const MAX_CONTINGENCY_PCT = 20;
 
 // Validated input handed to the repository (after the zod schema).
 export type CreateProjectInput = ProjectDraft;

@@ -19,10 +19,10 @@ import { Button } from "@agro/shared/ui/button";
 import type { PresaleActionData } from "~/components/presale/error-copy";
 
 // Accepting a PROJECT offer fixes the total of the project quotation: both parties confirm it first.
-// `deposit` is true when the accepting party is the buyer, whose acceptance deposits in the same step.
+// `authorizesPayment` is true when the accepting party is the buyer, whose acceptance authorizes the payment in the same step.
 export interface AcceptConfirm {
   total: number;
-  deposit: boolean;
+  authorizesPayment: boolean;
   currency?: string;
 }
 
@@ -71,17 +71,17 @@ export function DecisionBar({ decidableRevision, canCounter, canWithdraw, counte
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>{acceptConfirm.deposit ? "¿Aceptar y depositar en la fiducia?" : "¿Aceptar el acuerdo?"}</AlertDialogTitle>
+                    <AlertDialogTitle>{acceptConfirm.authorizesPayment ? "¿Autorizar el pago del proyecto?" : "¿Aceptar el acuerdo?"}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      {acceptConfirm.deposit
-                        ? `Al aceptar, depositarás el total de la cotización del proyecto: ${formatMoney(acceptConfirm.total, acceptConfirm.currency ?? "COP")}. El monto queda en la fiducia y la acción no se puede deshacer.`
-                        : `El total de la cotización del proyecto es ${formatMoney(acceptConfirm.total, acceptConfirm.currency ?? "COP")}. Al aceptar, el acuerdo queda cerrado y el comprador deberá depositar ese monto en la fiducia. La acción no se puede deshacer.`}
+                      {acceptConfirm.authorizesPayment
+                        ? `Al aceptar autorizas a la plataforma a pagar hasta ${formatMoney(acceptConfirm.total, acceptConfirm.currency ?? "COP")}. El dinero permanece en tu billetera; solo se paga al confirmar la recepción.`
+                        : `El comprador deberá autorizar el pago de ${formatMoney(acceptConfirm.total, acceptConfirm.currency ?? "COP")} para activar el proyecto.`}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel size="compact">Volver</AlertDialogCancel>
                     <AlertDialogAction size="compact" type="submit" form="decision-form" name="intent" value="accept">
-                      {acceptConfirm.deposit ? "Aceptar y depositar en la fiducia" : "Aceptar acuerdo"}
+                      {acceptConfirm.authorizesPayment ? "Aceptar y autorizar pago" : "Aceptar acuerdo"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

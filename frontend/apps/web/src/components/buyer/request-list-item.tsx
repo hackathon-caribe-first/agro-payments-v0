@@ -37,8 +37,8 @@ export function RequestListItem({ entry }: { entry: RequestEntry }) {
               </Link>
             </Button>
             {turnText && <Badge variant={turn === "BUYER" ? "default" : "secondary"}>{turnText}</Badge>}
-            {request.deposit?.status === "PENDING" && <Badge variant="secondary">Depósito pendiente</Badge>}
-            {request.deposit?.status === "DEPOSITED" && <Badge variant="secondary">Depositado en la fiducia</Badge>}
+            {request.authorization?.status === "PENDING" && <Badge variant="secondary">Autorización pendiente</Badge>}
+            {request.authorization?.status === "AUTHORIZED" && <Badge variant="secondary">Pago autorizado</Badge>}
           </div>
         </CardContent>
       </Card>

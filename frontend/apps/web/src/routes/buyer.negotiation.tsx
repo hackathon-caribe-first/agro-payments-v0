@@ -5,6 +5,7 @@ import { runNegotiationAction } from "~/components/negotiation/actions";
 import { NegotiationDetail } from "~/components/negotiation/detail";
 import { presaleErrorMessage, type PresaleActionData } from "~/components/presale/error-copy";
 import { buyer } from "~/buyer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/buyer.negotiation";
 
 export const meta = () => [{ title: "Negociación · Surco" }];
@@ -19,6 +20,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 }
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<PresaleActionData | Response> {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const id = params.negotiationId;
   // Open Payments: a deposit that needs the buyer's wallet approval answers with its consent URL, and the app leaves for it.
   let walletUrl: string | undefined;
@@ -33,7 +35,7 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
       reject: (revision) => buyer.rejectSaleQuote(id, revision),
       counter: (raw) => buyer.counterOffer(id, raw),
       withdraw: () => buyer.withdrawNegotiation(id),
-      deposit: (raw) => followWallet(buyer.depositProjectAgreement(id, raw)),
+      authorizePayment: (raw) => followWallet(buyer.authorizeProjectPayment(id, raw)),
     },
     await request.formData(),
   );

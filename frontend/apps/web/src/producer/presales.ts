@@ -9,6 +9,7 @@ const presales = createPresalesModule({ fetchFn: transport, baseUrl: API_BASE_UR
 
 // Producer-side presale and negotiation operations. Every write acts as PRODUCER.
 export const producerPresales = {
+  getProjectView: presales.getProducerProjectView,
   listProducerRequests: presales.listProducerRequests,
   getRequestDetail: (requestId: string) => presales.getRequestDetail(requestId, "PRODUCER"),
   counterOffer: (requestId: string, raw: unknown) => presales.counterOffer(requestId, "PRODUCER", raw),

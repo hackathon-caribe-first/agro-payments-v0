@@ -95,7 +95,7 @@ export default function BuyerProject({ loaderData }: Route.ComponentProps) {
           <h1 className="break-words text-3xl text-primary">{project.title}</h1>
           <p className="mt-2 text-pretty text-muted-foreground">{project.description}</p>
         </div>
-        <ProjectStatusBadge status={project.currentStatus} />
+        <ProjectStatusBadge status={project.currentStatus} audience="buyer" />
       </header>
 
       <HarvestPaymentResult />
@@ -133,7 +133,7 @@ export default function BuyerProject({ loaderData }: Route.ComponentProps) {
               </div>
             </CardContent>
           </Card>
-          {agreement && <AgreementBanner deposit={agreement.deposit} to={`/buyer/negotiations/${agreement.negotiationId}`} />}
+          {agreement && <AgreementBanner authorization={agreement.authorization} to={`/buyer/negotiations/${agreement.negotiationId}`} />}
         </aside>
 
         <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
@@ -143,7 +143,7 @@ export default function BuyerProject({ loaderData }: Route.ComponentProps) {
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <p className="text-pretty text-sm text-muted-foreground">
-                Propón cantidad, unidad, precio y fecha de entrega. Si el productor y tú llegan a un acuerdo, depositas el total de la cotización del proyecto en la fiducia.
+                Propón cantidad, unidad, precio y fecha de entrega. Si el productor y tú llegan a un acuerdo, autorizas el pago del total de la cotización del proyecto.
               </p>
               {projectStartBlock === null ? (
                 <Button asChild size="compact" className="self-start">

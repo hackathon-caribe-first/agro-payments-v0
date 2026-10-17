@@ -12,15 +12,19 @@ import { harvest } from "~/harvest/module";
 import { milestones as projectMilestones } from "~/producer/module";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
-import { loadMilestones } from "~/milestones";
+import { ServerUnreachable } from "~/components/server-unreachable";
+import { loadMilestonesOrError } from "~/milestones";
 import { custodianAction, loadOrders, loadSuppliers, type Order, type Supplier } from "~/payouts";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/custodian";
 
 export const meta = () => [{ title: "Pagos · Surco" }];
 export async function clientLoader() {
-  const milestones = await loadMilestones();
+  const loaded = await loadMilestonesOrError();
+  if (loaded.error !== null) return { error: loaded.error } as const;
+  const milestones = loaded.milestones;
   const [orders, suppliers, custody] = await Promise.all([loadOrders(milestones), loadSuppliers(), observedCustody(milestones)]);
-  return { milestones, orders, suppliers, custody };
+  return { error: null, milestones, orders, suppliers, custody };
 }
 
 // RF-21: an observed milestone pays nothing more, so the operator sees what stays in its project's custody. The legacy milestone
@@ -39,6 +43,7 @@ async function observedCustody(milestones: Milestone[]): Promise<Record<string, 
   return Object.fromEntries(entries.filter((e): e is [string, Custody] => e !== null));
 }
 export async function clientAction({ request }: Route.ClientActionArgs) {
+  await requireSession(request); // actions run before the layout guard (RNF-07)
   const form = await request.clone().formData();
   const projectId = String(form.get("projectId") ?? "").trim();
   if (form.get("intent") === "open-project" && projectId) return redirect(`/custodian/projects/${encodeURIComponent(projectId)}`);
@@ -191,6 +196,7 @@ function RegisterSupplier({ suppliers }: { suppliers: Supplier[] }) {
 }
 
 export default function Custodian({ loaderData }: Route.ComponentProps) {
+  if (loaderData.error !== null) return <ServerUnreachable title="Pagos" message={loaderData.error} />;
   const { milestones, orders, suppliers, custody } = loaderData;
   return (
     <div className="flex flex-col gap-6">

@@ -25,6 +25,8 @@ export const projectDtoSchema = z.object({
   currency: z.string(),
   plot_polygon: plotPolygonDtoSchema.optional(),
   producer_wallet_address: z.string().optional(),
+  // Mock only: our backend neither stores nor returns it.
+  contingency_bps: z.number().int().nonnegative().nullable().optional(),
 });
 
 export type ProjectDto = z.infer<typeof projectDtoSchema>;
@@ -36,6 +38,8 @@ export const createProjectRequestDtoSchema = z.object({
   production_type: z.string(),
   start_date: z.string(),
   estimated_end_date: z.string(),
+  // Mock only: our backend ignores it.
+  contingency_bps: z.number().int().nonnegative().optional(),
   milestones: z.array(
     z.object({
       title: z.string(),
