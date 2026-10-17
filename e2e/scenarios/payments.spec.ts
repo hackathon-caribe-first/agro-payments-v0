@@ -9,9 +9,9 @@ test("Productor: registrar evidencia y solicitar nueva revisión", async ({ page
   await expect(page.getByRole("heading", { name: "Registrar evidencia" })).toBeVisible();
   await page.locator('input[name="seedlings_planted"]').fill("1500");
   await page.locator('input[name="spacing_cm"]').fill("150");
-  const photos = page.locator('input[name="field_photos"]');
-  await photos.nth(0).check();
-  await photos.nth(1).check();
+  const photos = page.locator('label[for^="field-field_photos-"]');
+  await photos.nth(0).click();
+  await photos.nth(1).click();
   await page.getByRole("button", { name: "Guardar registro" }).click();
   await expect(page.getByText("Registro guardado.")).toBeVisible();
   await scene(page, "2 · Evidencia guardada");
