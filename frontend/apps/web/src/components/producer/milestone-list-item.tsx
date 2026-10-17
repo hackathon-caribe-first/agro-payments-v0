@@ -6,6 +6,7 @@ import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
 import type { PendingRetry } from "@agro/shared/modules/payment-lines/domain/line";
 import { PendingRetryBanner } from "~/components/split/pending-retry-banner";
+import { IS_HTTP } from "~/platform/transport";
 import { MilestoneStatusBadge } from "./status-label";
 
 export function MilestoneListItem({ milestone, pending }: { milestone: MilestoneSummary; pending?: PendingRetry }) {
@@ -33,7 +34,7 @@ export function MilestoneListItem({ milestone, pending }: { milestone: Milestone
               <dd className="font-semibold tabular-nums">{formatMoney(milestone.laborBudget, milestone.currency)}</dd>
             </div>
           </dl>
-          {pending && <PendingRetryBanner pending={pending} linesHref={`/producer/milestones/${milestone.id}/lines`} />}
+          {pending && <PendingRetryBanner pending={pending} linesHref={IS_HTTP ? undefined : `/producer/milestones/${milestone.id}/lines`} />}
           {locked ? (
             <p className="text-sm text-muted-foreground">Este hito se habilita cuando se completa el anterior.</p>
           ) : (

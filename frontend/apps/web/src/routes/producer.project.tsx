@@ -22,6 +22,7 @@ import { producer } from "~/producer/module";
 import { producerPresales } from "~/producer/presales";
 import { milestonePayments } from "~/payment-lines/module";
 import { requireSession } from "~/auth/guard";
+import { IS_HTTP } from "~/platform/transport";
 import type { Route } from "./+types/producer.project";
 
 export const meta = () => [{ title: "Proyecto · Surco" }];
@@ -102,25 +103,30 @@ export default function ProducerProject({ loaderData }: Route.ComponentProps) {
               Contratos y seguro
             </Link>
           </Button>
-          <Button asChild variant="outline" size="compact">
-            <Link to={`/producer/projects/${project.id}/lines`}>
-              <ListChecks aria-hidden="true" />
-              Líneas de pago
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="compact">
-            <Link to={`/producer/projects/${project.id}/audit`}>
-              <FileSearch aria-hidden="true" />
-              Auditoría del proyecto
-            </Link>
-          </Button>
+          {/* Payment lines, audit and statement still run on the in-browser prototype: a real project dead-ends there. */}
+          {!IS_HTTP && (
+            <>
+              <Button asChild variant="outline" size="compact">
+                <Link to={`/producer/projects/${project.id}/lines`}>
+                  <ListChecks aria-hidden="true" />
+                  Líneas de pago
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="compact">
+                <Link to={`/producer/projects/${project.id}/audit`}>
+                  <FileSearch aria-hidden="true" />
+                  Auditoría del proyecto
+                </Link>
+              </Button>
+            </>
+          )}
           <Button asChild variant="outline" size="compact">
             <Link to="/producer/proposals">
               <FileSignature aria-hidden="true" />
               Propuestas de inversión
             </Link>
           </Button>
-          {SETTLEMENT_STATUSES.includes(project.currentStatus) && (
+          {!IS_HTTP && SETTLEMENT_STATUSES.includes(project.currentStatus) && (
             <Button asChild variant="outline" size="compact">
               <Link to={`/producer/projects/${project.id}/statement`}>
                 <FileText aria-hidden="true" />

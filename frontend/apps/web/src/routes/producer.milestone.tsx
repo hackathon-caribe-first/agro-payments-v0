@@ -18,6 +18,7 @@ import { PHOTO_OPTIONS, milestones } from "~/producer/module";
 import { PendingRetryBanner } from "~/components/split/pending-retry-banner";
 import { milestonePayments } from "~/payment-lines/module";
 import { requireSession } from "~/auth/guard";
+import { IS_HTTP } from "~/platform/transport";
 import type { Route } from "./+types/producer.milestone";
 
 export const meta = () => [{ title: "Detalle del hito · Surco" }];
@@ -74,17 +75,20 @@ export default function ProducerMilestone({ loaderData }: Route.ComponentProps) 
           <MilestoneStatusBadge status={m.status} />
           <DeadlineBadge status={m.status} dueDate={m.estimatedCompletionDate} />
         </div>
-        <div>
-          <Button asChild variant="outline" size="compact">
-            <Link to={`/producer/milestones/${m.id}/lines`}>
-              <ListChecks aria-hidden="true" />
-              Líneas de pago del hito
-            </Link>
-          </Button>
-        </div>
+        {/* Payment lines still run on the in-browser prototype: a real milestone dead-ends there. */}
+        {!IS_HTTP && (
+          <div>
+            <Button asChild variant="outline" size="compact">
+              <Link to={`/producer/milestones/${m.id}/lines`}>
+                <ListChecks aria-hidden="true" />
+                Líneas de pago del hito
+              </Link>
+            </Button>
+          </div>
+        )}
       </header>
 
-      <PendingRetryBanner pending={pending} linesHref={`/producer/milestones/${m.id}/lines`} />
+      <PendingRetryBanner pending={pending} linesHref={IS_HTTP ? undefined : `/producer/milestones/${m.id}/lines`} />
 
       {/* Summary column first in the DOM so it reads before the forms when stacked; it moves to the right on wide screens. */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">

@@ -3,11 +3,13 @@ import type { Milestone } from "@agro/shared/api/client";
 import { formatMoney, milestoneState } from "@agro/shared/modules/milestones/milestone-state";
 import { StatusBadge } from "@agro/shared/ui/status-badge";
 
-export function MilestoneCard({ milestone, children }: { milestone: Milestone; children?: React.ReactNode }) {
+// `project` names the project the milestone belongs to, so repeated milestone titles stay distinguishable.
+export function MilestoneCard({ milestone, project, children }: { milestone: Milestone; project?: string; children?: React.ReactNode }) {
   return (
     <li className="min-w-0 rounded-lg border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
+          {project && <p className="text-sm text-muted-foreground">{project}</p>}
           <h2 className="text-lg text-primary">{milestone.title}</h2>
           <p className="text-muted-foreground tabular-nums">{formatMoney(milestone.amount, milestone.currency, milestone.assetScale)}</p>
         </div>

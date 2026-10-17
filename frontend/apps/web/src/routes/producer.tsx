@@ -9,6 +9,7 @@ import { DashboardSummary } from "~/components/producer/dashboard-summary";
 import { ProjectCard } from "~/components/producer/project-card";
 import { errorMessage } from "~/producer/error-copy";
 import { DASHBOARD_CURRENCY, producer } from "~/producer/module";
+import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/producer";
 
 export const meta = () => [{ title: "Mis proyectos · Surco" }];
@@ -17,6 +18,8 @@ const TABS = ["active", "finished", "drafts"] as const;
 type Tab = (typeof TABS)[number];
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  // A buyer or verifier gets the layout's 403 view: throw it here too, before GET /producer/projects is fetched.
+  await requireSession(request);
   const params = new URL(request.url).searchParams;
   const typeParam = params.get("type");
   const selected = typeParam && typeParam !== ALL_TYPES ? typeParam : null;

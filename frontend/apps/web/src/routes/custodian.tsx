@@ -6,10 +6,11 @@ import { Button } from "@agro/shared/ui/button";
 import { Input } from "@agro/shared/ui/input";
 import { StatusBadge } from "@agro/shared/ui/status-badge";
 import type { Custody } from "@agro/shared/modules/harvest/domain/harvest";
+import { PROJECT_STATUSES, type ProjectStatus } from "@agro/shared/modules/projects/domain/project";
 import { ActionForm } from "~/components/action-form";
 import { CustodyCard } from "~/components/harvest/custody-card";
 import { harvest } from "~/harvest/module";
-import { milestones as projectMilestones } from "~/producer/module";
+import { producer, milestones as projectMilestones } from "~/producer/module";
 import { MilestoneCard, MilestoneList } from "~/components/milestone-card";
 import { Lines } from "~/components/shares";
 import { ServerUnreachable } from "~/components/server-unreachable";
@@ -19,28 +20,58 @@ import { requireSession } from "~/auth/guard";
 import type { Route } from "./+types/custodian";
 
 export const meta = () => [{ title: "Pagos · Surco" }];
-export async function clientLoader() {
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  // A role that cannot open /custodian gets the layout's 403 view: throw it here too, before any milestone or order is fetched.
+  await requireSession(request);
   const loaded = await loadMilestonesOrError();
   if (loaded.error !== null) return { error: loaded.error } as const;
   const milestones = loaded.milestones;
-  const [orders, suppliers, custody] = await Promise.all([loadOrders(milestones), loadSuppliers(), observedCustody(milestones)]);
-  return { error: null, milestones, orders, suppliers, custody };
+  const [orders, suppliers, context] = await Promise.all([loadOrders(milestones), loadSuppliers(), projectContext(milestones)]);
+  return { error: null, milestones, orders, suppliers, ...context };
 }
 
-// RF-21: an observed milestone pays nothing more, so the operator sees what stays in its project's custody. The legacy milestone
-// shape has no project, so its PRD detail gives it. Best effort: a failed read just hides the card.
-async function observedCustody(milestones: Milestone[]): Promise<Record<string, Custody>> {
-  const entries = await Promise.all(
-    milestones
-      .filter((m) => m.status === "observado")
-      .map(async (m): Promise<[string, Custody] | null> => {
-        const detail = await projectMilestones.getMilestoneDetail(m.id);
-        if (!detail.ok) return null;
-        const custody = await harvest.custody(detail.value.projectId);
-        return custody.ok ? [m.id, custody.value] : null;
+// RF-05 / RF-13: custody pays milestones from FUNDED_IN_CUSTODY until the harvest is delivered (backend custodyPaysMilestones).
+const CUSTODY_PAYS: readonly ProjectStatus[] = PROJECT_STATUSES.slice(PROJECT_STATUSES.indexOf("FUNDED_IN_CUSTODY"), PROJECT_STATUSES.indexOf("DELIVERED_TO_BUYER") + 1);
+
+interface MilestoneContext {
+  /** "AGR-… · title" of its project; "Demo" for the legacy demo milestones that have none. */
+  project: string;
+  /** false when the backend would refuse its grant (409): milestone LOCKED, or its project's custody not funded or overdrawn. */
+  fundable: boolean;
+}
+
+// The legacy milestone shape has no project, so its PRD detail (GET /api/milestones/:id) gives it: the card names the project,
+// and the grant action hides when the backend would answer 409. RF-21: an observed milestone pays nothing more, so the operator
+// sees what stays in its project's custody. Best effort: a failed read shows "Demo" and hides the custody card.
+async function projectContext(milestones: Milestone[]) {
+  const details = await Promise.all(milestones.map((m) => projectMilestones.getMilestoneDetail(m.id)));
+  const projectIds = [...new Set(details.flatMap((d) => (d.ok && d.value.projectId ? [d.value.projectId] : [])))];
+  const projects = new Map(
+    await Promise.all(
+      projectIds.map(async (id) => {
+        const [project, custody] = await Promise.all([producer.getProjectWithMilestones(id), harvest.custody(id)]);
+        return [id, { project: project.ok ? project.value.project : null, custody: custody.ok ? custody.value : null }] as const;
       }),
+    ),
   );
-  return Object.fromEntries(entries.filter((e): e is [string, Custody] => e !== null));
+  const context: Record<string, MilestoneContext> = {};
+  const custody: Record<string, Custody> = {};
+  milestones.forEach((m, i) => {
+    const detail = details[i];
+    const read = detail.ok && detail.value.projectId ? projects.get(detail.value.projectId) : undefined;
+    if (!detail.ok || !read) {
+      context[m.id] = { project: "Demo", fundable: true };
+      return;
+    }
+    const { project, custody: projectCustody } = read;
+    context[m.id] = {
+      project: project ? `${project.projectCode} · ${project.title}` : "Proyecto",
+      fundable:
+        detail.value.status !== "LOCKED" && project !== null && CUSTODY_PAYS.includes(project.currentStatus) && !projectCustody?.overdrawn,
+    };
+    if (m.status === "observado" && projectCustody) custody[m.id] = projectCustody;
+  });
+  return { context, custody };
 }
 export async function clientAction({ request }: Route.ClientActionArgs) {
   await requireSession(request); // actions run before the layout guard (RNF-07)
@@ -197,7 +228,7 @@ function RegisterSupplier({ suppliers }: { suppliers: Supplier[] }) {
 
 export default function Custodian({ loaderData }: Route.ComponentProps) {
   if (loaderData.error !== null) return <ServerUnreachable title="Pagos" message={loaderData.error} />;
-  const { milestones, orders, suppliers, custody } = loaderData;
+  const { milestones, orders, suppliers, custody, context } = loaderData;
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -220,11 +251,11 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
       <RegisterSupplier suppliers={suppliers} />
       <MilestoneList>
         {milestones.map((m) => (
-          <MilestoneCard key={m.id} milestone={m}>
+          <MilestoneCard key={m.id} milestone={m} project={context[m.id]?.project}>
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <GrantStatus milestone={m} />
-                {!m.fundedAt && !m.closedAt && <ActionForm id={m.id} intent="fund" label="Aprobar grant del hito" />}
+                {!m.fundedAt && !m.closedAt && context[m.id]?.fundable !== false && <ActionForm id={m.id} intent="fund" label="Aprobar grant del hito" />}
               </div>
               {custody[m.id] && <CustodyCard custody={custody[m.id]} note="Hito observado: el grant sigue vivo, sin jornales ni hito siguiente. Este es el saldo que sigue en custodia." />}
               <Orders milestone={m} orders={orders[m.id] ?? []} suppliers={suppliers} />

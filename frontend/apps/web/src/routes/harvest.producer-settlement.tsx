@@ -6,6 +6,7 @@ import { linkClass } from "~/components/harvest/format";
 import { HarvestRouteError } from "~/components/harvest/route-error";
 import { unwrap } from "~/harvest-batches/action-data";
 import { producerHarvest } from "~/harvest-batches/module";
+import { IS_HTTP } from "~/platform/transport";
 import type { Route } from "./+types/harvest.producer-settlement";
 
 export const meta = () => [{ title: "Estado de cuenta final · Surco" }];
@@ -18,10 +19,13 @@ export default function ProducerSettlement({ loaderData }: Route.ComponentProps)
   const { projectId, settlements } = loaderData;
   return (
     <div className="flex flex-col gap-6">
-      <Link to={`/producer/projects/${projectId}/harvest`} className={linkClass}>
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Volver a la cosecha
-      </Link>
+      {/* The harvest page runs on the in-browser prototype: a real project dead-ends there. */}
+      {!IS_HTTP && (
+        <Link to={`/producer/projects/${projectId}/harvest`} className={linkClass}>
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          Volver a la cosecha
+        </Link>
+      )}
       <header>
         {settlements[0] && <p className="text-sm text-muted-foreground">{settlements[0].projectTitle}</p>}
         <h1 className="text-3xl text-primary">Estado de cuenta final</h1>
