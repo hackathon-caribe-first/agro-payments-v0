@@ -10,7 +10,7 @@ export const ALL_TYPES = "all";
 // GET form: the filter lives in the URL (?type=), so it survives reloads and can be shared.
 // Shared by the buyer catalog and the producer dashboard: `clearTo` is where "Limpiar filtro" goes and `hidden` carries
 // extra query params (e.g. the active tab) through the GET submit.
-export function ListingFilter({
+export function TypeFilter({
   types,
   selected,
   clearTo = "/buyer",

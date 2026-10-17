@@ -8,11 +8,13 @@ export type PresaleError =
   | { kind: "boundary"; message: string }
   | { kind: "network"; message: string }
   | { kind: "invalid_transition"; from: string; action: string }
-  | { kind: "oversold"; available: number }
   | { kind: "not_your_turn"; turn: Actor | null }
   | { kind: "over_allocated"; remaining: number }
   | { kind: "duplicate_negotiation" }
-  | { kind: "backing_mismatch"; reason: "closed" | "unit" | "not_owned" | "sold_out" };
+  | { kind: "backing_mismatch"; reason: "closed" | "not_owned" }
+  | { kind: "not_negotiable"; reason: "own_project" | "project_status" | "project_agreed" | "milestone_status" | "milestone_agreed" | "duplicate" }
+  | { kind: "deposit_unavailable"; reason: "not_project" | "not_agreed" | "already_deposited" | "not_owner" | "project_status" | "no_total" }
+  | { kind: "total_changed"; total: number };
 
 export type PresaleResult<T> = Result<T, PresaleError>;
 

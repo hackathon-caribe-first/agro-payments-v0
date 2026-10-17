@@ -3,9 +3,7 @@ import type { OfferCap } from "../domain/presale-rules";
 import { optionalIsoDate, positiveInt, isoDate } from "./fields";
 
 const CAP_MESSAGES: Record<OfferCap["reason"], (cap: number) => string> = {
-  available: (cap) => `Supera la cantidad disponible (${cap}).`,
   remaining: (cap) => `Supera la cantidad pendiente por asignar (${cap}).`,
-  requested: (cap) => `Supera la cantidad solicitada (${cap}).`,
 };
 
 export const capMessage = (cap: OfferCap): string => CAP_MESSAGES[cap.reason](cap.cap);

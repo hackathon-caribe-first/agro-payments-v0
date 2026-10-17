@@ -4,26 +4,30 @@ import type { PresaleError } from "@agro/shared/modules/presales/domain/errors";
 export type PresaleActionData = { fieldErrors: FieldErrors };
 
 const BACKING_MESSAGES = {
-  closed: "El proyecto elegido no está publicado.",
-  unit: "La unidad del proyecto no coincide con la de la solicitud.",
+  closed: "El proyecto elegido ya no admite ofertas.",
   not_owned: "El proyecto elegido no pertenece a este productor.",
-  sold_out: "El proyecto elegido no tiene disponibilidad.",
+} as const;
+
+const NOT_NEGOTIABLE_MESSAGES = {
+  own_project: "No puedes negociar sobre un proyecto propio.",
+  project_status: "Este proyecto ya no admite nuevas negociaciones.",
+  project_agreed: "Este proyecto ya tiene un acuerdo: no admite nuevas negociaciones.",
+  milestone_status: "Este hito ya no admite nuevas negociaciones.",
+  milestone_agreed: "Este hito ya tiene un acuerdo: no admite nuevas negociaciones.",
+  duplicate: "Ya tienes una negociación activa para este proyecto o hito.",
+} as const;
+
+const DEPOSIT_MESSAGES = {
+  not_project: "Solo los acuerdos del proyecto tienen depósito.",
+  not_agreed: "Esta negociación no tiene un depósito pendiente.",
+  already_deposited: "El depósito ya se realizó.",
+  not_owner: "Solo el comprador de este acuerdo puede depositar.",
+  project_status: "Este proyecto ya no admite depósitos.",
+  no_total: "El proyecto no tiene hitos: no hay un total para depositar.",
 } as const;
 
 function transitionMessage(from: string, action: string): string {
   switch (action) {
-    case "publish":
-      return from === "OPEN"
-        ? "Este proyecto ya está publicado."
-        : "No se puede publicar un proyecto en este estado.";
-    case "close":
-      return "La publicación ya está cerrada.";
-    case "request":
-      return from === "SOLD_OUT" ? "Este proyecto ya no tiene disponibilidad." : "Este proyecto ya no recibe solicitudes.";
-    case "respond":
-      return from === "OPEN" || from === "CLOSED"
-        ? "La publicación está cerrada: no se pueden enviar nuevas ofertas."
-        : "Esta solicitud ya no admite una oferta.";
     case "accept":
     case "reject":
       return from === "EXPIRED" ? "La oferta venció." : "Esta oferta ya no se puede decidir.";
@@ -53,8 +57,6 @@ export function presaleErrorMessage(error: PresaleError): string {
       return "Recibimos datos con un formato inesperado. Intenta de nuevo en unos minutos.";
     case "network":
       return "No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.";
-    case "oversold":
-      return error.available > 0 ? `Supera la cantidad disponible (${error.available}).` : "Este proyecto ya no tiene disponibilidad.";
     case "invalid_transition":
       return transitionMessage(error.from, error.action);
     case "not_your_turn":
@@ -65,6 +67,12 @@ export function presaleErrorMessage(error: PresaleError): string {
       return "Ya tienes una negociación activa en esta solicitud.";
     case "backing_mismatch":
       return BACKING_MESSAGES[error.reason];
+    case "not_negotiable":
+      return NOT_NEGOTIABLE_MESSAGES[error.reason];
+    case "deposit_unavailable":
+      return DEPOSIT_MESSAGES[error.reason];
+    case "total_changed":
+      return "El total de la cotización del proyecto cambió. Revisa el nuevo monto antes de depositar.";
   }
 }
 

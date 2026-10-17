@@ -1,4 +1,5 @@
-import type { Actor, HistoryEntry } from "@agro/shared/modules/presales/domain/presale";
+import { AUTO_CLOSE_LABELS } from "@agro/shared/modules/presales/domain/negotiation-rules";
+import type { Actor, HistoryEntry, NegotiationScope } from "@agro/shared/modules/presales/domain/presale";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { formatDateTime, formatQuantity, type UnitRef } from "~/components/presale/format";
 import { negotiationStatusText } from "./status-badge";
@@ -15,17 +16,26 @@ const KIND_LABELS: Record<string, string> = {
   WITHDRAW: "Retiró la negociación",
   EXPIRE: "La oferta venció",
   STATUS_CHANGED: "Cambio de estado",
+  AUTO_CLOSE: "Negociación cerrada",
+  DEPOSIT: "Depositó en la fiducia",
 };
 
-function termsLine(entry: HistoryEntry, unit: UnitRef | null): string | null {
+function termsLine(entry: HistoryEntry, unit: UnitRef | null, scope: NegotiationScope | null): string | null {
   const p = entry.payload;
-  if (!p || typeof p.quantity !== "number" || typeof p.unit_price !== "number") return null;
+  if (entry.kind === "DEPOSIT" && p && typeof p.amount === "number") return `Monto ${formatMoney(p.amount, "COP")}`;
+  if (entry.kind === "AUTO_CLOSE") return null;
+  if (!p) return null;
+  if (typeof p.price === "number") return `Precio del hito ${formatMoney(p.price, "COP")}`;
+  if (entry.kind === "ACCEPT" && typeof p.agreed_total === "number") return `Total acordado ${formatMoney(p.agreed_total, "COP")}`;
+  if (typeof p.quantity !== "number" || typeof p.unit_price !== "number") return null;
+  // A PROJECT offer's value is only registered: it is not the deposit, so the line carries no total.
+  if (scope === "PROJECT") return `${formatQuantity(p.quantity, unit)} a ${formatMoney(p.unit_price, "COP")}`;
   const total = typeof p.total === "number" ? p.total : p.quantity * p.unit_price;
   return `${formatQuantity(p.quantity, unit)} a ${formatMoney(p.unit_price, "COP")} · Total ${formatMoney(total, "COP")}`;
 }
 
 // Append-only list of rounds, oldest first (the mapper sorts by time).
-export function Timeline({ history, unit }: { history: HistoryEntry[]; unit: UnitRef | null }) {
+export function Timeline({ history, unit, scope = null }: { history: HistoryEntry[]; unit: UnitRef | null; scope?: NegotiationScope | null }) {
   return (
     <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
       <h2 id="timeline-heading" className="text-lg text-primary">
@@ -36,11 +46,13 @@ export function Timeline({ history, unit }: { history: HistoryEntry[]; unit: Uni
       ) : (
         <ol className="flex flex-col gap-3">
           {history.map((h) => {
-            const terms = termsLine(h, unit);
+            const terms = termsLine(h, unit, scope);
             const label =
               h.kind === "STATUS_CHANGED" && h.from && h.to
                 ? `${negotiationStatusText(h.from)} → ${negotiationStatusText(h.to)}`
-                : (KIND_LABELS[h.kind] ?? "Evento");
+                : h.kind === "AUTO_CLOSE"
+                  ? AUTO_CLOSE_LABELS[h.payload?.reason === "MILESTONE" ? "MILESTONE" : "PROJECT"]
+                  : (KIND_LABELS[h.kind] ?? "Evento");
             return (
               <li key={h.id} className="rounded-md border bg-card p-3">
                 <p className="font-semibold">{label}</p>

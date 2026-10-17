@@ -1,17 +1,16 @@
 import type { MilestoneRepository } from "../../milestones/application/milestone-repository";
 import { err, ok } from "../../milestones/domain/errors";
 import { toFieldErrors } from "../../milestones/schemas/evidence-log";
+import type { MilestoneSummary } from "../../milestones/domain/milestone";
 import type { Project } from "../../projects/domain/project";
-import { milestoneProgress, type MilestoneProgress } from "../../projects/domain/project-rules";
+import { projectQuotationTotal } from "../../projects/domain/project-rules";
 import type { ProjectRepository } from "../../projects/application/project-repository";
 import { attemptPresale, type PresaleError, type PresaleResult } from "../domain/errors";
-import type { Actor, OpenRequest, OpenRequestView, PresaleListing, QuoteRequest, SaleQuote } from "../domain/presale";
+import type { Actor, ListingUnit, OpenRequest, OpenRequestView, QuoteRequest, SaleQuote } from "../domain/presale";
 import {
   allocationGuard,
-  availableQuantity,
-  backingListingBlock,
+  backingProjectBlock,
   canAct,
-  canRequest,
   canStartOnOpenRequest,
   effectiveQuoteStatus,
   effectiveRequestStatus,
@@ -19,19 +18,18 @@ import {
   isNegotiationActive,
   isOwnProducer,
   latestQuote,
-  offerCap,
   openRequestView,
-  oversellGuard,
-  publishBlock,
+  quantityCap,
   remainingToAward,
   whoseTurn,
 } from "../domain/presale-rules";
-import { LISTING_TRANSITIONS, OPEN_REQUEST_TRANSITIONS, REQUEST_TRANSITIONS, nextStatus } from "../domain/transitions";
+import { OPEN_REQUEST_TRANSITIONS, REQUEST_TRANSITIONS, nextStatus } from "../domain/transitions";
+import { agreedMilestonePrices } from "../domain/negotiation-rules";
 import { buildCounterOfferSchema } from "../schemas/counter-offer";
 import { buildCreateOpenRequestSchema } from "../schemas/create-open-request";
-import { buildPublishListingSchema } from "../schemas/publish-listing";
-import { buildRequestQuoteSchema } from "../schemas/request-quote";
-import { buildRespondQuoteSchema, revisionSchema } from "../schemas/respond-quote";
+import { expectedTotalSchema, revisionSchema } from "../schemas/revision";
+import { buildMilestoneCounterSchema } from "../schemas/start-milestone-negotiation";
+import { buildProjectCounterSchema } from "../schemas/start-project-negotiation";
 import { buildStartOpenRequestNegotiationSchema } from "../schemas/start-open-request-negotiation";
 import type { PartyIdentity, PresaleRepository } from "./presale-repository";
 
@@ -45,27 +43,13 @@ export interface PresaleDeps {
   ownProducerId: string | null;
 }
 
-export interface ListingEntry {
-  listing: PresaleListing;
-  projectTitle: string;
-}
-
-export interface ListingDetail {
-  listing: PresaleListing;
-  project: Project;
-  progress: MilestoneProgress;
-  canRequest: boolean;
-}
-
-export interface ProjectPresale {
-  project: Project;
-  listing: PresaleListing | null;
-  requests: RequestEntry[];
-}
-
 export interface RequestEntry {
   request: QuoteRequest;
-  listing: PresaleListing | null;
+  projectTitle: string;
+  // Title of the milestone a MILESTONE negotiation is about.
+  milestoneTitle: string | null;
+  // The unit its quantities are shown in: the buyer's unit on a PROJECT offer, the open request's unit otherwise.
+  unit: UnitRef | null;
   // Whose move it is; null when the negotiation has ended.
   turn: Actor | null;
 }
@@ -73,6 +57,9 @@ export interface RequestEntry {
 export interface RequestDetail extends RequestEntry {
   project: Project | null;
   openRequest: OpenRequest | null;
+  milestone: MilestoneSummary | null;
+  // The project quotation total for a PROJECT negotiation: frozen once agreed, otherwise the live preview.
+  quotationTotal: number | null;
 }
 
 export interface OpenRequestEntry {
@@ -85,10 +72,10 @@ export interface OpenRequestBoard extends OpenRequestEntry {
   negotiations: RequestEntry[];
 }
 
+// One of the producer's projects an open-request offer can be backed with.
 export interface BackingOption {
-  listing: PresaleListing;
+  project: Project;
   projectTitle: string;
-  available: number;
 }
 
 export interface OpenRequestForProducer extends OpenRequestEntry {
@@ -98,10 +85,15 @@ export interface OpenRequestForProducer extends OpenRequestEntry {
   options: BackingOption[];
 }
 
+export interface UnitRef {
+  unit: ListingUnit;
+  rawUnit: string;
+}
+
 const invalidTransition = (from: string, action: string): PresaleError => ({ kind: "invalid_transition", from, action });
 
 // Reads return the status a user should see today: lazy expiry is applied here, never stored.
-function withEffectiveStatus(request: QuoteRequest, today: string): QuoteRequest {
+export function withEffectiveStatus(request: QuoteRequest, today: string): QuoteRequest {
   return {
     ...request,
     status: effectiveRequestStatus(request, today),
@@ -111,12 +103,33 @@ function withEffectiveStatus(request: QuoteRequest, today: string): QuoteRequest
 
 async function toEntries(deps: PresaleDeps, requests: QuoteRequest[]): Promise<RequestEntry[]> {
   const today = deps.today();
-  const listings = new Map<string, PresaleListing | null>();
-  for (const id of new Set(requests.map((r) => r.listingId))) listings.set(id, await deps.presales.getListing(id));
+  const titles = new Map<string, string>();
+  const milestones = new Map<string, MilestoneSummary[]>();
+  const openRequests = new Map<string, OpenRequest | null>();
+  for (const id of new Set(requests.map((r) => r.projectId))) {
+    titles.set(id, (await deps.projects.getProject(id))?.title ?? "");
+    if (requests.some((r) => r.projectId === id && r.scope === "MILESTONE")) milestones.set(id, await deps.milestones.listByProject(id));
+  }
+  for (const id of new Set(requests.map((r) => r.openRequestId).filter((id): id is string => id !== null))) {
+    openRequests.set(id, await deps.presales.getOpenRequest(id));
+  }
   return requests
     .map((request) => withEffectiveStatus(request, today))
-    .map((request) => ({ request, listing: listings.get(request.listingId) ?? null, turn: whoseTurn(request, today) }))
+    .map((request) => ({
+      request,
+      projectTitle: titles.get(request.projectId) ?? "",
+      milestoneTitle: request.milestoneId ? (milestones.get(request.projectId)?.find((m) => m.id === request.milestoneId)?.title ?? null) : null,
+      unit: unitOf(request, request.openRequestId ? (openRequests.get(request.openRequestId) ?? null) : null),
+      turn: whoseTurn(request, today),
+    }))
     .sort((a, b) => b.request.createdAt.localeCompare(a.request.createdAt));
+}
+
+// PROJECT offers carry the buyer's unit; open-request negotiations use the request's unit; milestone offers have none.
+function unitOf(request: QuoteRequest, openRequest: OpenRequest | null): UnitRef | null {
+  const terms = request.quotes[request.quotes.length - 1]?.terms;
+  if (terms?.kind === "PROJECT") return { unit: terms.unit, rawUnit: terms.rawUnit };
+  return openRequest ? { unit: openRequest.unit, rawUnit: openRequest.rawUnit } : null;
 }
 
 const openEntry = (openRequest: OpenRequest, today: string): OpenRequestEntry => ({
@@ -124,75 +137,6 @@ const openEntry = (openRequest: OpenRequest, today: string): OpenRequestEntry =>
   view: openRequestView(openRequest, today),
   remaining: remainingToAward(openRequest),
 });
-
-// ---- listings ----
-
-export const publishListing = (deps: PresaleDeps, projectId: string, raw: unknown) =>
-  attemptPresale<PresaleListing>(async () => {
-    const project = await deps.projects.getProject(projectId);
-    if (!project) return err({ kind: "not_found" });
-    const block = publishBlock(project.currentStatus, await deps.presales.listByProject(projectId));
-    if (block === "project_status") return err(invalidTransition(project.currentStatus, "publish"));
-    if (block === "open_listing_exists") return err(invalidTransition("OPEN", "publish"));
-
-    const parsed = buildPublishListingSchema(deps.today()).safeParse(raw);
-    if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
-    return ok(await deps.presales.publish(projectId, parsed.data));
-  });
-
-export const closeListing = (deps: PresaleDeps, listingId: string) =>
-  attemptPresale<PresaleListing>(async () => {
-    const listing = await deps.presales.getListing(listingId);
-    if (!listing) return err({ kind: "not_found" });
-    if (!nextStatus(LISTING_TRANSITIONS, listing.status, "close")) return err(invalidTransition(listing.status, "close"));
-    return ok(await deps.presales.close(listingId));
-  });
-
-export const listOpenListings = (deps: PresaleDeps) =>
-  attemptPresale<ListingEntry[]>(async () => {
-    const listings = await deps.presales.listOpenListings();
-    const titles = new Map<string, string>();
-    for (const id of new Set(listings.map((l) => l.projectId))) {
-      titles.set(id, (await deps.projects.getProject(id))?.title ?? "");
-    }
-    return ok(listings.map((listing) => ({ listing, projectTitle: titles.get(listing.projectId) ?? "" })));
-  });
-
-export const getListingDetail = (deps: PresaleDeps, listingId: string) =>
-  attemptPresale<ListingDetail>(async () => {
-    const listing = await deps.presales.getListing(listingId);
-    if (!listing) return err({ kind: "not_found" });
-    const project = await deps.projects.getProject(listing.projectId);
-    if (!project) return err({ kind: "not_found" });
-    const milestones = await deps.milestones.listByProject(project.id);
-    return ok({ listing, project, progress: milestoneProgress(milestones), canRequest: canRequest(listing) });
-  });
-
-export const getProjectPresale = (deps: PresaleDeps, projectId: string) =>
-  attemptPresale<ProjectPresale>(async () => {
-    const project = await deps.projects.getProject(projectId);
-    if (!project) return err({ kind: "not_found" });
-    const listings = await deps.presales.listByProject(projectId);
-    const current = listings.find((l) => l.status === "OPEN") ?? null;
-    const requests = await toEntries(deps, await deps.presales.listProducerRequests(projectId, deps.ownProducerId ?? undefined));
-    return ok({ project, listing: current, requests });
-  });
-
-// ---- negotiations opened from a project ----
-
-// The buyer opens a negotiation from a project's presale. (Original name kept: it is the same use case.)
-export const requestQuote = (deps: PresaleDeps, listingId: string, buyer: PartyIdentity, raw: unknown) =>
-  attemptPresale<QuoteRequest>(async () => {
-    const listing = await deps.presales.getListing(listingId);
-    if (!listing) return err({ kind: "not_found" });
-    if (!canRequest(listing)) return err(invalidTransition(listing.status === "OPEN" ? "SOLD_OUT" : listing.status, "request"));
-
-    const parsed = buildRequestQuoteSchema({ available: availableQuantity(listing), today: deps.today() }).safeParse(raw);
-    if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
-    return ok(await deps.presales.createRequest(listingId, buyer, parsed.data));
-  });
-
-export const startProjectNegotiation = requestQuote;
 
 async function loadRequest(deps: PresaleDeps, requestId: string) {
   const request = await deps.presales.getRequest(requestId);
@@ -203,45 +147,10 @@ async function loadRequest(deps: PresaleDeps, requestId: string) {
 const visibleTo = (request: QuoteRequest, actor: Actor, deps: PresaleDeps) =>
   actor !== "PRODUCER" || isOwnProducer(request.producerId, deps.ownProducerId);
 
-export const cancelRequest = (deps: PresaleDeps, requestId: string) =>
-  attemptPresale<QuoteRequest>(async () => {
-    const request = await loadRequest(deps, requestId);
-    if (!request) return err({ kind: "not_found" });
-    if (!canAct(request, "BUYER", "cancel", deps.today())) return err(invalidTransition(request.status, "cancel"));
-    return ok(await deps.presales.cancel(requestId));
-  });
-
-export const declineRequest = (deps: PresaleDeps, requestId: string) =>
-  attemptPresale<QuoteRequest>(async () => {
-    const request = await loadRequest(deps, requestId);
-    if (!request || !visibleTo(request, "PRODUCER", deps)) return err({ kind: "not_found" });
-    if (!canAct(request, "PRODUCER", "decline", deps.today())) return err(invalidTransition(request.status, "decline"));
-    return ok(await deps.presales.decline(requestId));
-  });
-
-// The producer's first response to a project-interest request.
-export const respondToRequest = (deps: PresaleDeps, requestId: string, raw: unknown) =>
-  attemptPresale<QuoteRequest>(async () => {
-    const request = await loadRequest(deps, requestId);
-    if (!request || !visibleTo(request, "PRODUCER", deps)) return err({ kind: "not_found" });
-    if (!canAct(request, "PRODUCER", "respond", deps.today())) return err(invalidTransition(request.status, "respond"));
-
-    const listing = await deps.presales.getListing(request.listingId);
-    if (!listing) return err({ kind: "not_found" });
-    // A closed listing blocks new quotes.
-    if (listing.status !== "OPEN") return err(invalidTransition(listing.status, "respond"));
-    const available = availableQuantity(listing);
-    if (available <= 0) return err({ kind: "oversold", available });
-
-    const parsed = buildRespondQuoteSchema({ requested: request.quantity, available, today: deps.today() }).safeParse(raw);
-    if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
-    return ok(await deps.presales.respond(requestId, parsed.data));
-  });
-
 // ---- rounds: counter-offer, accept, reject, withdraw ----
 
-// Either party's counter-offer. A closed listing or request does not block it: live negotiations continue, but the
-// supply (and, for open requests, the remaining quantity) always caps the quantity.
+// Either party's counter-offer. A closed project or open request does not block it: live negotiations continue, but an
+// open-request negotiation is always capped by the quantity still to be awarded.
 export const counterOffer = (deps: PresaleDeps, requestId: string, actor: Actor, raw: unknown) =>
   attemptPresale<QuoteRequest>(async () => {
     const request = await loadRequest(deps, requestId);
@@ -250,13 +159,27 @@ export const counterOffer = (deps: PresaleDeps, requestId: string, actor: Actor,
     if (!nextStatus(REQUEST_TRANSITIONS, request.status, "counter")) return err(invalidTransition(request.status, "counter"));
     if (!canAct(request, actor, "counter", today)) return err({ kind: "not_your_turn", turn: whoseTurn(request, today) });
 
-    const listing = await deps.presales.getListing(request.listingId);
-    if (!listing) return err({ kind: "not_found" });
-    const available = availableQuantity(listing);
-    if (available <= 0) return err({ kind: "oversold", available });
-    const openRequest = request.openRequestId ? await deps.presales.getOpenRequest(request.openRequestId) : null;
+    // Project negotiations: the terms and the "change at least one term" rule depend on the scope.
+    if (request.scope === "PROJECT" || request.scope === "MILESTONE") {
+      const latest = latestQuote(request)?.terms;
+      if (request.scope === "PROJECT" && latest?.kind === "PROJECT") {
+        const parsed = buildProjectCounterSchema({ today, latest }).safeParse(raw);
+        if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
+        return ok(await deps.presales.counterProject(requestId, actor, parsed.data));
+      }
+      if (request.scope === "MILESTONE" && latest?.kind === "MILESTONE") {
+        const parsed = buildMilestoneCounterSchema({ today, latest }).safeParse(raw);
+        if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
+        return ok(await deps.presales.counterMilestone(requestId, actor, parsed.data));
+      }
+      return err(invalidTransition(request.status, "counter"));
+    }
 
-    const cap = offerCap({ available, remaining: openRequest ? remainingToAward(openRequest) : undefined });
+    // Open-request negotiations: only what is still to be awarded caps the quantity.
+    const openRequest = request.openRequestId ? await deps.presales.getOpenRequest(request.openRequestId) : null;
+    if (!openRequest) return err({ kind: "not_found" });
+
+    const cap = quantityCap(remainingToAward(openRequest));
     const parsed = buildCounterOfferSchema({ cap, today }).safeParse(raw);
     if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
     return ok(await deps.presales.counter(requestId, actor, parsed.data));
@@ -280,16 +203,25 @@ async function loadDecision(deps: PresaleDeps, requestId: string, rawRevision: u
   return { request, quote: latest };
 }
 
-export const acceptSaleQuote = (deps: PresaleDeps, requestId: string, rawRevision: unknown, actor: Actor = "BUYER") =>
+// `raw` carries the total the user saw ({ expectedTotal }) when a PROJECT offer is accepted.
+export const acceptSaleQuote = (deps: PresaleDeps, requestId: string, rawRevision: unknown, actor: Actor = "BUYER", raw?: unknown) =>
   attemptPresale<QuoteRequest>(async () => {
     const decision = await loadDecision(deps, requestId, rawRevision, actor, "accept");
     if (decision.failure) return err(decision.failure);
 
-    const listing = await deps.presales.getListing(decision.request.listingId);
-    if (!listing) return err({ kind: "not_found" });
-    // Closing the listing does not block accepting a still-valid offer; overselling does.
-    const oversold = oversellGuard(listing, decision.quote.quantity);
-    if (!oversold.ok) return err({ kind: "oversold", available: oversold.available });
+    // Project negotiations: the server re-checks the agreement guards and, for the buyer on a PROJECT offer, deposits in the same step.
+    if (decision.request.scope === "PROJECT" || decision.request.scope === "MILESTONE") {
+      let expectedTotal: number | undefined;
+      if (decision.request.scope === "PROJECT") {
+        const given = (raw as { expectedTotal?: unknown } | null | undefined)?.expectedTotal;
+        if (actor === "BUYER" || given !== undefined) {
+          const parsed = expectedTotalSchema.safeParse({ expectedTotal: given });
+          if (!parsed.success) return err({ kind: "validation", fieldErrors: { expectedTotal: ["Confirma el total del depósito."] } });
+          expectedTotal = parsed.data.expectedTotal;
+        }
+      }
+      return ok(await deps.presales.acceptQuote(requestId, decision.quote.revision, actor, expectedTotal));
+    }
 
     if (decision.request.openRequestId) {
       const openRequest = await deps.presales.getOpenRequest(decision.request.openRequestId);
@@ -331,12 +263,30 @@ export const getRequestDetail = (deps: PresaleDeps, requestId: string, viewer: A
   attemptPresale<RequestDetail>(async () => {
     const request = await loadRequest(deps, requestId);
     if (!request || !visibleTo(request, viewer, deps)) return err({ kind: "not_found" });
-    const [listing, project, openRequest] = await Promise.all([
-      deps.presales.getListing(request.listingId),
+    const [project, openRequest, milestones] = await Promise.all([
       deps.projects.getProject(request.projectId),
       request.openRequestId ? deps.presales.getOpenRequest(request.openRequestId) : Promise.resolve(null),
+      request.scope ? deps.milestones.listByProject(request.projectId) : Promise.resolve([] as MilestoneSummary[]),
     ]);
-    return ok({ request, listing, project, openRequest, turn: whoseTurn(request, deps.today()) });
+    let quotationTotal: number | null = null;
+    if (request.scope === "PROJECT") {
+      if (request.deposit) quotationTotal = request.deposit.agreedTotal;
+      else {
+        const prices = agreedMilestonePrices(await deps.presales.listBuyerRequests(request.buyerId), request.buyerId);
+        quotationTotal = projectQuotationTotal(milestones, prices);
+      }
+    }
+    return ok({
+      request,
+      unit: unitOf(request, openRequest),
+      project,
+      openRequest,
+      projectTitle: project?.title ?? "",
+      milestone: request.milestoneId ? (milestones.find((m) => m.id === request.milestoneId) ?? null) : null,
+      milestoneTitle: request.milestoneId ? (milestones.find((m) => m.id === request.milestoneId)?.title ?? null) : null,
+      quotationTotal,
+      turn: whoseTurn(request, deps.today()),
+    });
   });
 
 // ---- open requests ----
@@ -394,14 +344,10 @@ export const getOpenRequestForProducer = (deps: PresaleDeps, openRequestId: stri
     const ownLive = negotiations.filter((n) => isOwnProducer(n.producerId, deps.ownProducerId) && isNegotiationActive(n, today));
     const own = ownLive[0] ? (await toEntries(deps, [ownLive[0]]))[0] : null;
 
-    // Backing options: the producer's projects with an OPEN listing in the same unit and stock left.
+    // Backing options: the producer's own projects that are not closed or cancelled.
     const options: BackingOption[] = [];
     for (const project of await deps.projects.listProducerProjects()) {
-      for (const listing of await deps.presales.listByProject(project.id)) {
-        if (backingListingBlock(listing, openRequest, deps.ownProducerId) === null) {
-          options.push({ listing, projectTitle: project.title, available: availableQuantity(listing) });
-        }
-      }
+      if (backingProjectBlock(project, true) === null) options.push({ project, projectTitle: project.title });
     }
     return ok({ ...openEntry(openRequest, today), canStart: canStartOnOpenRequest(openRequest, today), own, options });
   });
@@ -418,17 +364,14 @@ export const startOpenRequestNegotiation = (deps: PresaleDeps, openRequestId: st
     const negotiations = await deps.presales.listOpenRequestNegotiations(openRequestId);
     if (hasActiveNegotiation(negotiations, producer.id, today)) return err({ kind: "duplicate_negotiation" });
 
-    const listingId = typeof (raw as { listingId?: unknown } | null)?.listingId === "string" ? (raw as { listingId: string }).listingId : "";
-    const listing = listingId ? await deps.presales.getListing(listingId) : null;
-    if (!listing) return err({ kind: "validation", fieldErrors: { listingId: ["Selecciona el proyecto que respalda la oferta."] } });
-    const block = backingListingBlock(listing, openRequest, producer.id);
+    const projectId = typeof (raw as { projectId?: unknown } | null)?.projectId === "string" ? (raw as { projectId: string }).projectId : "";
+    const project = projectId ? await deps.projects.getProject(projectId) : null;
+    if (!project) return err({ kind: "validation", fieldErrors: { projectId: ["Selecciona el proyecto que respalda la oferta."] } });
+    const owned = (await deps.projects.listProducerProjects()).some((p) => p.id === project.id);
+    const block = backingProjectBlock(project, owned);
     if (block) return err({ kind: "backing_mismatch", reason: block });
 
-    const parsed = buildStartOpenRequestNegotiationSchema({
-      remaining: remainingToAward(openRequest),
-      availableByListing: { [listing.id]: availableQuantity(listing) },
-      today,
-    }).safeParse(raw);
+    const parsed = buildStartOpenRequestNegotiationSchema({ remaining: remainingToAward(openRequest), today }).safeParse(raw);
     if (!parsed.success) return err({ kind: "validation", fieldErrors: toFieldErrors(parsed.error) });
     return ok(await deps.presales.startOpenRequestNegotiation(openRequestId, producer, parsed.data));
   });

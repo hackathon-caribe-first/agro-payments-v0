@@ -9,16 +9,10 @@ const presales = createPresalesModule({ fetchFn: transport, baseUrl: API_BASE_UR
 
 // Producer-side presale and negotiation operations. Every write acts as PRODUCER.
 export const producerPresales = {
-  publishListing: presales.publishListing,
-  closeListing: presales.closeListing,
-  getProjectPresale: presales.getProjectPresale,
-
   listProducerRequests: presales.listProducerRequests,
   getRequestDetail: (requestId: string) => presales.getRequestDetail(requestId, "PRODUCER"),
-  respondToRequest: presales.respondToRequest,
-  declineRequest: presales.declineRequest,
   counterOffer: (requestId: string, raw: unknown) => presales.counterOffer(requestId, "PRODUCER", raw),
-  acceptSaleQuote: (requestId: string, revision: unknown) => presales.acceptSaleQuote(requestId, revision, "PRODUCER"),
+  acceptSaleQuote: (requestId: string, revision: unknown, raw?: unknown) => presales.acceptSaleQuote(requestId, revision, "PRODUCER", raw),
   rejectSaleQuote: (requestId: string, revision: unknown) => presales.rejectSaleQuote(requestId, revision, "PRODUCER"),
   withdrawNegotiation: (requestId: string) => presales.withdrawNegotiation(requestId, "PRODUCER"),
 

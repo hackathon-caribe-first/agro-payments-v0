@@ -28,7 +28,8 @@ export default [
     route("buyer/requests/:requestId", "routes/buyer.request.tsx"),
     // Legacy: redirect-only.
     route("buyer/presales/:listingId", "routes/buyer.presales.tsx"),
-    route("buyer/projects/:listingId", "routes/buyer.project.tsx"),
+    route("buyer/projects/:projectId/negotiations/new", "routes/buyer.project.negotiations.new.tsx"),
+    route("buyer/projects/:projectId", "routes/buyer.project.tsx"),
     route("verifier", "routes/verifier.tsx"),
     route("custodian", "routes/custodian.tsx"),
     // LEGACY Spanish URLs: all redirect to the English ones (see routes/legacy-redirect.tsx).

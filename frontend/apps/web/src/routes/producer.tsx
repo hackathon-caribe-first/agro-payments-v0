@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { Button } from "@agro/shared/ui/button";
 import type { ProjectOverview } from "@agro/shared/modules/projects/application/use-cases";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@agro/shared/ui/tabs";
-import { ALL_TYPES, ListingFilter } from "~/components/buyer/listing-filter";
+import { ALL_TYPES, TypeFilter } from "~/components/buyer/type-filter";
 import { DashboardSummary } from "~/components/producer/dashboard-summary";
 import { ProjectCard } from "~/components/producer/project-card";
 import { errorMessage } from "~/producer/error-copy";
@@ -88,7 +88,7 @@ export default function Producer({ loaderData }: Route.ComponentProps) {
       <DashboardSummary summary={summary} currency={DASHBOARD_CURRENCY} />
 
       {types.length > 0 && (
-        <ListingFilter key={selected ?? "all"} types={types} selected={selected} clearTo={`/producer?tab=${tab}`} hidden={{ tab }} />
+        <TypeFilter key={selected ?? "all"} types={types} selected={selected} clearTo={`/producer?tab=${tab}`} hidden={{ tab }} />
       )}
 
       <Tabs value={tab} onValueChange={setTab}>

@@ -22,6 +22,49 @@ export function LatestOffer({ request, unit }: { request: QuoteRequest; unit: Un
       </dl>
     );
   }
+  const terms = latest.terms;
+  if (terms.kind === "MILESTONE") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-muted-foreground">Última oferta · {AUTHOR_LABELS[latest.author]}</p>
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          <div>
+            <dt className="text-muted-foreground">Precio del hito</dt>
+            <dd className="font-semibold tabular-nums">{formatMoney(terms.price, latest.currency)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Entrega</dt>
+            <dd className="font-semibold">{terms.deliveryDate ? formatDay(terms.deliveryDate) : "Sin definir"}</dd>
+          </div>
+        </dl>
+      </div>
+    );
+  }
+  if (terms.kind === "PROJECT") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-muted-foreground">Última oferta · {AUTHOR_LABELS[latest.author]}</p>
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          <div>
+            <dt className="text-muted-foreground">Cantidad</dt>
+            <dd className="font-semibold tabular-nums">{formatQuantity(terms.quantity, terms)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Precio unitario</dt>
+            <dd className="font-semibold tabular-nums">{formatMoney(terms.unitPrice, latest.currency)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Entrega</dt>
+            <dd className="font-semibold">{terms.deliveryDate ? formatDay(terms.deliveryDate) : "Sin definir"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Vigente hasta</dt>
+            <dd className="font-semibold">{terms.validUntil ? formatDay(terms.validUntil) : "Sin vencimiento"}</dd>
+          </div>
+        </dl>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted-foreground">Última oferta · {AUTHOR_LABELS[latest.author]}</p>
@@ -40,7 +83,7 @@ export function LatestOffer({ request, unit }: { request: QuoteRequest; unit: Un
         </div>
         <div>
           <dt className="text-muted-foreground">Vigente hasta</dt>
-          <dd className="font-semibold">{formatDay(latest.validUntil)}</dd>
+          <dd className="font-semibold">{latest.validUntil ? formatDay(latest.validUntil) : "Sin vencimiento"}</dd>
         </div>
       </dl>
       <p className="text-sm tabular-nums text-muted-foreground">Solicitado {formatQuantity(request.quantity, unit)}</p>

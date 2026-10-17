@@ -31,7 +31,7 @@ export default function BuyerNegotiations({ loaderData }: Route.ComponentProps) 
       </header>
       {loaderData.length === 0 ? (
         <p className="rounded-lg border bg-card p-5 text-muted-foreground">
-          Aún no tienes negociaciones. Solicita una cotización desde un proyecto o publica una solicitud abierta.
+          Aún no tienes negociaciones. Inicia una negociación desde un proyecto o pide una cotización.
         </p>
       ) : (
         <ul className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]">

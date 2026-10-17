@@ -1,5 +1,6 @@
 import type { ProjectDto } from "../../../projects/infrastructure/dto";
-import type { ListingDto, OpenRequestDto, QuoteRequestDto } from "../dto";
+import type { LedgerEntryDto } from "../../../escrow/infrastructure/dto";
+import type { OpenRequestDto, QuoteRequestDto } from "../dto";
 
 // The producer the web app acts as. Mirrored by PRODUCER_PROFILE in apps/web/src/producer/presales.ts (keep both in sync).
 export const LOCAL_PRODUCER = { id: "producer-main", name: "Agrícola La Esperanza S.A.S." } as const;
@@ -7,6 +8,13 @@ export const LOCAL_PRODUCER = { id: "producer-main", name: "Agrícola La Esperan
 const SIERRA = { id: "producer-sierra", name: "Cooperativa Café de la Sierra" } as const;
 const TOLIMA = { id: "producer-tolima", name: "Cacaoteros del Tolima" } as const;
 const BUYER = { id: "buyer-andina", name: "Comercializadora Andina S.A.S." } as const;
+
+// Who owns each project. Projects not listed here belong to the local producer.
+const PROJECT_OWNERS: Readonly<Record<string, { id: string; name: string }>> = {
+  "ext-sierra-cafe": SIERRA,
+  "ext-tolima-cacao": TOLIMA,
+};
+export const projectOwner = (projectId: string): { id: string; name: string } => PROJECT_OWNERS[projectId] ?? LOCAL_PRODUCER;
 
 // Projects of the other producers. They live apart from the local producer's projects so the producer dashboard stays theirs.
 const EXTERNAL_PROJECTS: ProjectDto[] = [
@@ -16,12 +24,12 @@ const EXTERNAL_PROJECTS: ProjectDto[] = [
     title: "Café de altura · Sierra Nevada",
     production_type: "Café",
     description: "Café especial de altura cultivado bajo sombra en la vertiente norte de la Sierra Nevada.",
-    target_amount: 48000000,
-    custody_balance: 30000000,
-    total_disbursed: 18000000,
+    target_amount: 24000000,
+    custody_balance: 0,
+    total_disbursed: 0,
     investor_roi_pct: 13,
     platform_fee_pct: 3,
-    current_status: "IN_EXECUTION",
+    current_status: "CONTRACT_SIGNED",
     start_date: "2026-05-01",
     estimated_end_date: "2027-03-31",
     currency: "COP",
@@ -32,86 +40,15 @@ const EXTERNAL_PROJECTS: ProjectDto[] = [
     title: "Cacao fino · Tolima",
     production_type: "Cacao",
     description: "Cacao fino de aroma con fermentación y secado controlados en fincas asociadas del Tolima.",
-    target_amount: 36000000,
-    custody_balance: 12000000,
-    total_disbursed: 24000000,
+    target_amount: 14000000,
+    custody_balance: 0,
+    total_disbursed: 0,
     investor_roi_pct: 15,
     platform_fee_pct: 3,
-    current_status: "IN_EXECUTION",
+    current_status: "DRAFT",
     start_date: "2026-04-15",
     estimated_end_date: "2027-02-28",
     currency: "COP",
-  },
-];
-
-const LISTINGS: ListingDto[] = [
-  {
-    id: "presale-1",
-    project_id: "proj-finca-la-esperanza",
-    producer_id: LOCAL_PRODUCER.id,
-    producer_name: LOCAL_PRODUCER.name,
-    title: "Café Castillo de la Finca La Esperanza",
-    summary: "Café pergamino seco de variedad Castillo, cosecha principal del lote norte, con taza limpia y trazabilidad por lote.",
-    production_type: "Café",
-    expected_quantity: 2400,
-    unit: "KG",
-    reference_unit_price: 18500,
-    currency: "COP",
-    estimated_harvest_date: "2027-03-15",
-    status: "OPEN",
-    committed_quantity: 0,
-    created_at: "2026-09-20T15:00:00Z",
-  },
-  {
-    id: "presale-2",
-    project_id: "proj-platano-meta",
-    producer_id: LOCAL_PRODUCER.id,
-    producer_name: LOCAL_PRODUCER.name,
-    title: "Plátano Hartón de Granada, Meta",
-    summary: "Plátano Hartón de primera calidad cosechado en racimos, empacado en bultos para distribución mayorista.",
-    production_type: "Plátano",
-    expected_quantity: 600,
-    unit: "BULTO",
-    reference_unit_price: 52000,
-    currency: "COP",
-    estimated_harvest_date: "2027-08-01",
-    status: "OPEN",
-    committed_quantity: 0,
-    created_at: "2026-10-02T15:00:00Z",
-  },
-  {
-    id: "presale-3",
-    project_id: "ext-sierra-cafe",
-    producer_id: SIERRA.id,
-    producer_name: SIERRA.name,
-    title: "Café de altura de la Sierra Nevada",
-    summary: "Café pergamino de altura con perfil de taza floral, procesado en beneficiaderos de la cooperativa.",
-    production_type: "Café",
-    expected_quantity: 1500,
-    unit: "KG",
-    reference_unit_price: 20500,
-    currency: "COP",
-    estimated_harvest_date: "2027-02-20",
-    status: "OPEN",
-    committed_quantity: 0,
-    created_at: "2026-09-28T15:00:00Z",
-  },
-  {
-    id: "presale-4",
-    project_id: "ext-tolima-cacao",
-    producer_id: TOLIMA.id,
-    producer_name: TOLIMA.name,
-    title: "Cacao fino de aroma del Tolima",
-    summary: "Cacao en grano fermentado y seco, con certificación de origen, apto para chocolatería fina.",
-    production_type: "Cacao",
-    expected_quantity: 1200,
-    unit: "KG",
-    reference_unit_price: 15500,
-    currency: "COP",
-    estimated_harvest_date: "2027-01-31",
-    status: "OPEN",
-    committed_quantity: 0,
-    created_at: "2026-09-30T15:00:00Z",
   },
 ];
 
@@ -172,7 +109,6 @@ const QUOTE_REQUESTS: QuoteRequestDto[] = [
     id: "qr-seed-1",
     origin: "OPEN_REQUEST",
     open_request_id: "or-1",
-    listing_id: "presale-3",
     project_id: "ext-sierra-cafe",
     producer_id: SIERRA.id,
     producer_name: SIERRA.name,
@@ -231,7 +167,6 @@ const QUOTE_REQUESTS: QuoteRequestDto[] = [
     id: "qr-seed-2",
     origin: "OPEN_REQUEST",
     open_request_id: "or-3",
-    listing_id: "presale-4",
     project_id: "ext-tolima-cacao",
     producer_id: TOLIMA.id,
     producer_name: TOLIMA.name,
@@ -263,7 +198,182 @@ const QUOTE_REQUESTS: QuoteRequestDto[] = [
   },
 ];
 
-export const createPresaleListingFixtures = (): ListingDto[] => structuredClone(LISTINGS);
+// Project negotiations (Flow A): a deposited project agreement, a live project negotiation (buyer's turn), an agreed
+// milestone price, and a live milestone offer on another producer's project.
+const PROJECT_NEGOTIATIONS: QuoteRequestDto[] = [
+  {
+    id: "qr-seed-3",
+    origin: "PROJECT_INTEREST",
+    scope: "PROJECT",
+    project_id: "proj-platano-meta",
+    producer_id: LOCAL_PRODUCER.id,
+    producer_name: LOCAL_PRODUCER.name,
+    buyer_id: BUYER.id,
+    buyer_name: BUYER.name,
+    quantity: 500,
+    desired_delivery_date: "2027-08-01",
+    notes: "",
+    status: "ACCEPTED",
+    created_at: "2026-10-02T15:00:00Z",
+    agreed_total: 24000000,
+    deposit_status: "DEPOSITED",
+    deposited_at: "2026-10-03T16:00:00Z",
+    ledger_entry_id: "led-seed-1",
+    quotes: [
+      {
+        request_id: "qr-seed-3",
+        revision: 1,
+        author: "BUYER",
+        unit_price: 52000,
+        quantity: 500,
+        unit: "BULTO",
+        currency: "COP",
+        delivery_date: "2027-08-01",
+        valid_until: "2026-12-31",
+        notes: "Entrega en bultos de 25 kg, calidad de primera.",
+        status: "ACCEPTED",
+        created_at: "2026-10-02T15:00:00Z",
+      },
+    ],
+    history: [
+      { id: "h-seed-6", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-02T15:00:00Z", payload: { revision: 1, unit_price: 52000, quantity: 500, total: 26000000 } },
+      { id: "h-seed-7", actor: "PRODUCER", type: "ACCEPT", from: "QUOTED", to: "ACCEPTED", at: "2026-10-03T15:00:00Z", payload: { revision: 1, unit_price: 52000, quantity: 500, total: 26000000, agreed_total: 24000000 } },
+      { id: "h-seed-8", actor: "BUYER", type: "DEPOSIT", from: "ACCEPTED", to: "ACCEPTED", at: "2026-10-03T16:00:00Z", payload: { amount: 24000000, currency: "COP", ledger_entry_id: "led-seed-1" } },
+    ],
+  },
+  {
+    id: "qr-seed-4",
+    origin: "PROJECT_INTEREST",
+    scope: "PROJECT",
+    project_id: "proj-cacao-arauca",
+    producer_id: LOCAL_PRODUCER.id,
+    producer_name: LOCAL_PRODUCER.name,
+    buyer_id: BUYER.id,
+    buyer_name: BUYER.name,
+    quantity: 2000,
+    desired_delivery_date: "2027-10-31",
+    notes: "",
+    status: "NEGOTIATING",
+    created_at: "2026-10-08T15:00:00Z",
+    quotes: [
+      {
+        request_id: "qr-seed-4",
+        revision: 1,
+        author: "BUYER",
+        unit_price: 14000,
+        quantity: 2000,
+        unit: "KG",
+        currency: "COP",
+        delivery_date: "2027-10-31",
+        valid_until: "2027-01-31",
+        notes: "Cacao fermentado y seco, entrega en Bogotá.",
+        status: "SUPERSEDED",
+        created_at: "2026-10-08T15:00:00Z",
+      },
+      {
+        request_id: "qr-seed-4",
+        revision: 2,
+        author: "PRODUCER",
+        unit_price: 15500,
+        quantity: 2000,
+        unit: "KG",
+        currency: "COP",
+        delivery_date: "2027-11-15",
+        valid_until: "2027-01-31",
+        notes: "Entrega puesta en Bogotá, empaque en sacos de 50 kg.",
+        status: "SENT",
+        created_at: "2026-10-10T15:00:00Z",
+      },
+    ],
+    history: [
+      { id: "h-seed-9", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-08T15:00:00Z", payload: { revision: 1, unit_price: 14000, quantity: 2000, total: 28000000 } },
+      { id: "h-seed-10", actor: "PRODUCER", type: "COUNTER_OFFER", from: "QUOTED", to: "NEGOTIATING", at: "2026-10-10T15:00:00Z", payload: { revision: 2, unit_price: 15500, quantity: 2000, total: 31000000 } },
+    ],
+  },
+  {
+    id: "qr-seed-5",
+    origin: "PROJECT_INTEREST",
+    scope: "MILESTONE",
+    milestone_id: "ms-12",
+    project_id: "proj-cacao-arauca",
+    producer_id: LOCAL_PRODUCER.id,
+    producer_name: LOCAL_PRODUCER.name,
+    buyer_id: BUYER.id,
+    buyer_name: BUYER.name,
+    quantity: 1,
+    desired_delivery_date: "2027-04-30",
+    notes: "",
+    status: "ACCEPTED",
+    created_at: "2026-10-09T15:00:00Z",
+    quotes: [
+      {
+        request_id: "qr-seed-5",
+        revision: 1,
+        author: "BUYER",
+        unit_price: 11500000,
+        quantity: 1,
+        currency: "COP",
+        delivery_date: "2027-04-30",
+        notes: "Siembra de clones con plántulas certificadas.",
+        status: "ACCEPTED",
+        created_at: "2026-10-09T15:00:00Z",
+      },
+    ],
+    history: [
+      { id: "h-seed-11", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-09T15:00:00Z", payload: { revision: 1, unit_price: 11500000, quantity: 1, total: 11500000, price: 11500000 } },
+      { id: "h-seed-12", actor: "PRODUCER", type: "ACCEPT", from: "QUOTED", to: "ACCEPTED", at: "2026-10-11T15:00:00Z", payload: { revision: 1, unit_price: 11500000, quantity: 1, total: 11500000, price: 11500000 } },
+    ],
+  },
+  {
+    id: "qr-seed-6",
+    origin: "PROJECT_INTEREST",
+    scope: "MILESTONE",
+    milestone_id: "ms-ext-s1",
+    project_id: "ext-sierra-cafe",
+    producer_id: SIERRA.id,
+    producer_name: SIERRA.name,
+    buyer_id: BUYER.id,
+    buyer_name: BUYER.name,
+    quantity: 1,
+    desired_delivery_date: "2026-12-15",
+    notes: "",
+    status: "QUOTED",
+    created_at: "2026-10-12T15:00:00Z",
+    quotes: [
+      {
+        request_id: "qr-seed-6",
+        revision: 1,
+        author: "BUYER",
+        unit_price: 7500000,
+        quantity: 1,
+        currency: "COP",
+        delivery_date: "2026-12-15",
+        notes: "",
+        status: "SENT",
+        created_at: "2026-10-12T15:00:00Z",
+      },
+    ],
+    history: [
+      { id: "h-seed-13", actor: "BUYER", type: "OFFER", from: null, to: "QUOTED", at: "2026-10-12T15:00:00Z", payload: { revision: 1, unit_price: 7500000, quantity: 1, total: 7500000, price: 7500000 } },
+    ],
+  },
+];
+
+const LEDGER_ENTRIES: LedgerEntryDto[] = [
+  {
+    id: "led-seed-1",
+    project_id: "proj-platano-meta",
+    type: "CREDIT",
+    category: "BUYER_DEPOSIT",
+    amount: 24000000,
+    currency: "COP",
+    negotiation_id: "qr-seed-3",
+    buyer_id: BUYER.id,
+    created_at: "2026-10-03T16:00:00Z",
+  },
+];
+
+export const createLedgerFixtures = (): LedgerEntryDto[] => structuredClone(LEDGER_ENTRIES);
 export const createExternalProjectFixtures = (): ProjectDto[] => structuredClone(EXTERNAL_PROJECTS);
 export const createOpenRequestFixtures = (): OpenRequestDto[] => structuredClone(OPEN_REQUESTS);
-export const createQuoteRequestFixtures = (): QuoteRequestDto[] => structuredClone(QUOTE_REQUESTS);
+export const createQuoteRequestFixtures = (): QuoteRequestDto[] => structuredClone([...QUOTE_REQUESTS, ...PROJECT_NEGOTIATIONS]);

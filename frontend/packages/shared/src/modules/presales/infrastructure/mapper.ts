@@ -3,38 +3,40 @@ import { BoundaryError } from "../../milestones/domain/errors";
 import {
   ACTORS,
   HISTORY_KINDS,
-  KNOWN_LISTING_STATUSES,
+  NEGOTIATION_SCOPES,
   KNOWN_OPEN_REQUEST_STATUSES,
   KNOWN_QUOTE_STATUSES,
   KNOWN_REQUEST_STATUSES,
   ORIGINS,
   UNITS,
   type Actor,
+  type CatalogProject,
   type HistoryEntry,
+  type NegotiationScope,
+  type OfferTerms,
   type OpenRequest,
-  type PresaleListing,
   type QuoteRequest,
   type SaleQuote,
 } from "../domain/presale";
+import { DEPOSIT_STATUSES } from "../../escrow/domain/ledger";
+import { toProject } from "../../projects/infrastructure/mapper";
 import { saleQuoteTotal } from "../domain/presale-rules";
-import type { PartyIdentity } from "../application/presale-repository";
+import type { PartyIdentity, StartTarget } from "../application/presale-repository";
+import type { MilestoneTermsInput } from "../schemas/start-milestone-negotiation";
+import type { ProjectTermsInput } from "../schemas/start-project-negotiation";
 import type { CreateOpenRequestInput } from "../schemas/create-open-request";
-import type { PublishListingInput } from "../schemas/publish-listing";
-import type { RequestQuoteInput } from "../schemas/request-quote";
 import type { StartOpenRequestNegotiationInput } from "../schemas/start-open-request-negotiation";
 import {
-  listingDtoSchema,
+  catalogProjectDtoSchema,
   openRequestDtoSchema,
   quoteRequestDtoSchema,
   type CreateOpenRequestDto,
-  type CreateRequestDto,
   type HistoryEntryDto,
-  type ListingDto,
   type OpenRequestDto,
-  type PublishListingRequestDto,
   type QuoteRequestDto,
   type RespondRequestDto,
   type SaleQuoteDto,
+  type StartNegotiationDto,
   type StartOpenRequestNegotiationDto,
 } from "./dto";
 
@@ -52,38 +54,48 @@ function toKnown<K extends string>(raw: string, known: readonly K[]): K | "UNKNO
   return (known as readonly string[]).includes(raw) ? (raw as K) : "UNKNOWN";
 }
 
-const listingFromDto = (dto: ListingDto): PresaleListing => ({
-  id: dto.id,
-  projectId: dto.project_id,
-  producerId: dto.producer_id ?? null,
-  producerName: dto.producer_name ?? "",
-  title: dto.title,
-  summary: dto.summary,
-  productionType: dto.production_type,
-  expectedQuantity: dto.expected_quantity,
-  unit: toKnown(dto.unit, UNITS),
-  rawUnit: dto.unit,
-  referenceUnitPrice: dto.reference_unit_price,
-  currency: dto.currency,
-  estimatedHarvestDate: dto.estimated_harvest_date,
-  status: toKnown(dto.status, KNOWN_LISTING_STATUSES),
-  committedQuantity: dto.committed_quantity,
-  createdAt: dto.created_at,
-});
+// The terms of an offer by the scope of its negotiation. Milestone offers travel as unit_price = price, quantity = 1.
+function termsFromDto(dto: SaleQuoteDto, scope: NegotiationScope | null): OfferTerms {
+  if (scope === "MILESTONE") return { kind: "MILESTONE", price: dto.unit_price, deliveryDate: dto.delivery_date ?? "", notes: dto.notes ?? "" };
+  if (scope === "PROJECT") {
+    return {
+      kind: "PROJECT",
+      quantity: dto.quantity,
+      unit: toKnown(dto.unit ?? "", UNITS),
+      rawUnit: dto.unit ?? "",
+      unitPrice: dto.unit_price,
+      deliveryDate: dto.delivery_date ?? "",
+      validUntil: dto.valid_until ?? "",
+      notes: dto.notes ?? dto.delivery_terms ?? "",
+    };
+  }
+  return {
+    kind: "SALE",
+    quantity: dto.quantity,
+    unitPrice: dto.unit_price,
+    deliveryDate: dto.delivery_date ?? null,
+    validUntil: dto.valid_until ?? null,
+    deliveryTerms: dto.delivery_terms ?? "",
+  };
+}
 
-const quoteFromDto = (dto: SaleQuoteDto): SaleQuote => ({
+const quoteFromDto = (dto: SaleQuoteDto, scope: NegotiationScope | null): SaleQuote => ({
   requestId: dto.request_id,
   revision: dto.revision,
   // Offers from before authorship existed were always the producer's.
   author: toKnown(dto.author ?? "PRODUCER", ACTORS) as Actor,
+  unit: dto.unit ? toKnown(dto.unit, UNITS) : null,
+  rawUnit: dto.unit ?? "",
+  notes: dto.notes ?? "",
+  terms: termsFromDto(dto, scope),
   unitPrice: dto.unit_price,
   quantity: dto.quantity,
   // Recomputed from the single pure function; a total sent by the server is never trusted over it.
   total: saleQuoteTotal(dto.quantity, dto.unit_price),
   currency: dto.currency,
   deliveryDate: dto.delivery_date ?? null,
-  validUntil: dto.valid_until,
-  deliveryTerms: dto.delivery_terms,
+  validUntil: scope === "MILESTONE" ? null : (dto.valid_until ?? null),
+  deliveryTerms: dto.delivery_terms ?? dto.notes ?? "",
   status: toKnown(dto.status, KNOWN_QUOTE_STATUSES),
   createdAt: dto.created_at,
 });
@@ -99,11 +111,22 @@ const historyFromDto = (dto: HistoryEntryDto): HistoryEntry => ({
   payload: dto.payload,
 });
 
-const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => ({
+// A project negotiation without a scope (legacy payload) is a PROJECT one; open-request negotiations have none.
+function scopeFromDto(dto: QuoteRequestDto, origin: string): NegotiationScope | null {
+  if (dto.scope) return toKnown(dto.scope, NEGOTIATION_SCOPES);
+  return origin === "OPEN_REQUEST" ? null : "PROJECT";
+}
+
+const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => {
+  const origin = toKnown(dto.origin ?? "PROJECT_INTEREST", ORIGINS);
+  const scope = scopeFromDto(dto, origin);
+  return {
   id: dto.id,
-  origin: toKnown(dto.origin ?? "PROJECT_INTEREST", ORIGINS),
+  origin,
   openRequestId: dto.open_request_id ?? null,
-  listingId: dto.listing_id,
+  scope,
+  milestoneId: dto.milestone_id ?? null,
+  targetId: dto.milestone_id ?? dto.project_id,
   projectId: dto.project_id,
   producerId: dto.producer_id ?? null,
   producerName: dto.producer_name ?? "",
@@ -115,9 +138,30 @@ const requestFromDto = (dto: QuoteRequestDto): QuoteRequest => ({
   status: toKnown(dto.status, KNOWN_REQUEST_STATUSES),
   rawStatus: dto.status,
   createdAt: dto.created_at,
-  quotes: dto.quotes.map(quoteFromDto),
+  quotes: dto.quotes.map((q) => quoteFromDto(q, scope)),
   history: [...dto.history].map(historyFromDto).sort((a, b) => a.at.localeCompare(b.at)),
+  deposit: dto.deposit_status
+    ? {
+        status: toKnown(dto.deposit_status, DEPOSIT_STATUSES),
+        agreedTotal: dto.agreed_total ?? 0,
+        depositedAt: dto.deposited_at ?? null,
+        ledgerEntryId: dto.ledger_entry_id ?? null,
+      }
+    : null,
+  };
+};
+
+const catalogFromDto = (dto: z.infer<typeof catalogProjectDtoSchema>): CatalogProject => ({
+  project: toProject(dto),
+  producerId: dto.producer_id ?? null,
+  producerName: dto.producer_name ?? "",
+  negotiationLocked: dto.negotiation_locked ?? false,
+  agreedMilestoneIds: dto.agreed_milestone_ids ?? [],
 });
+
+export const toCatalogProject = (data: unknown): CatalogProject => catalogFromDto(parse(catalogProjectDtoSchema, data, "catalog project"));
+export const toCatalogProjects = (data: unknown): CatalogProject[] =>
+  parse(z.array(catalogProjectDtoSchema), data, "catalog").map(catalogFromDto);
 
 const openRequestFromDto = (dto: OpenRequestDto): OpenRequest => ({
   id: dto.id,
@@ -139,9 +183,6 @@ const openRequestFromDto = (dto: OpenRequestDto): OpenRequest => ({
   createdAt: dto.created_at,
 });
 
-export const toListing = (data: unknown): PresaleListing => listingFromDto(parse(listingDtoSchema, data, "presale"));
-export const toListings = (data: unknown): PresaleListing[] =>
-  parse(z.array(listingDtoSchema), data, "presale list").map(listingFromDto);
 export const toQuoteRequest = (data: unknown): QuoteRequest => requestFromDto(parse(quoteRequestDtoSchema, data, "quote request"));
 export const toQuoteRequests = (data: unknown): QuoteRequest[] =>
   parse(z.array(quoteRequestDtoSchema), data, "quote request list").map(requestFromDto);
@@ -149,24 +190,7 @@ export const toOpenRequest = (data: unknown): OpenRequest => openRequestFromDto(
 export const toOpenRequests = (data: unknown): OpenRequest[] =>
   parse(z.array(openRequestDtoSchema), data, "open request list").map(openRequestFromDto);
 
-export const toPublishRequestDto = (input: PublishListingInput): PublishListingRequestDto => ({
-  title: input.title,
-  summary: input.summary,
-  expected_quantity: input.expectedQuantity,
-  unit: input.unit,
-  reference_unit_price: input.referenceUnitPrice,
-  estimated_harvest_date: input.estimatedHarvestDate,
-});
-
-export const toCreateRequestDto = (buyer: PartyIdentity, input: RequestQuoteInput): CreateRequestDto => ({
-  buyer_id: buyer.id,
-  buyer_name: buyer.name,
-  quantity: input.quantity,
-  desired_delivery_date: input.desiredDeliveryDate,
-  notes: input.notes,
-});
-
-interface OfferTerms {
+interface OfferInput {
   unitPrice: number;
   quantity: number;
   validUntil: string;
@@ -175,13 +199,53 @@ interface OfferTerms {
 }
 
 // Offers and counter-offers share one body; `author` is sent only when it is not the default producer.
-export const toOfferRequestDto = (input: OfferTerms, author: Actor = "PRODUCER"): RespondRequestDto => ({
+export const toOfferRequestDto = (input: OfferInput, author: Actor = "PRODUCER"): RespondRequestDto => ({
   ...(author === "PRODUCER" ? {} : { author }),
   unit_price: input.unitPrice,
   quantity: input.quantity,
   ...(input.deliveryDate ? { delivery_date: input.deliveryDate } : {}),
   valid_until: input.validUntil,
   delivery_terms: input.deliveryTerms,
+});
+
+export const toStartNegotiationRequestDto = (buyer: PartyIdentity, target: StartTarget): StartNegotiationDto =>
+  target.scope === "PROJECT"
+    ? {
+        scope: "PROJECT",
+        buyer_id: buyer.id,
+        buyer_name: buyer.name,
+        quantity: target.input.quantity,
+        unit: target.input.unit,
+        unit_price: target.input.unitPrice,
+        delivery_date: target.input.deliveryDate,
+        valid_until: target.input.validUntil,
+        notes: target.input.notes,
+      }
+    : {
+        scope: "MILESTONE",
+        milestone_id: target.milestoneId,
+        buyer_id: buyer.id,
+        buyer_name: buyer.name,
+        price: target.input.price,
+        delivery_date: target.input.deliveryDate,
+        notes: target.input.notes,
+      };
+
+export const toProjectCounterDto = (author: Actor, input: ProjectTermsInput): RespondRequestDto => ({
+  author,
+  quantity: input.quantity,
+  unit: input.unit,
+  unit_price: input.unitPrice,
+  delivery_date: input.deliveryDate,
+  valid_until: input.validUntil,
+  notes: input.notes,
+});
+
+export const toMilestoneCounterDto = (author: Actor, input: MilestoneTermsInput): RespondRequestDto => ({
+  author,
+  price: input.price,
+  delivery_date: input.deliveryDate,
+  notes: input.notes,
 });
 
 export const toCreateOpenRequestDto = (buyer: PartyIdentity, input: CreateOpenRequestInput): CreateOpenRequestDto => ({
@@ -198,7 +262,7 @@ export const toCreateOpenRequestDto = (buyer: PartyIdentity, input: CreateOpenRe
 });
 
 export const toStartNegotiationDto = (producer: PartyIdentity, input: StartOpenRequestNegotiationInput): StartOpenRequestNegotiationDto => ({
-  listing_id: input.listingId,
+  project_id: input.projectId,
   producer_id: producer.id,
   producer_name: producer.name,
   unit_price: input.unitPrice,

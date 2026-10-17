@@ -27,10 +27,8 @@ interface Props {
 export function StartNegotiationForm({ options, unit, remaining, actionData }: Props) {
   const { formRef, errors, clear } = useFieldErrors(actionData);
   const pending = useNavigation().state !== "idle";
-  const [listingId, setListingId] = useState(options[0]?.listing.id ?? "");
-  const selected = options.find((o) => o.listing.id === listingId) ?? null;
-  const maxQuantity = selected ? Math.min(remaining, selected.available) : remaining;
-  const [quantity, setQuantity] = useState(String(Math.min(remaining, options[0]?.available ?? remaining)));
+  const [projectId, setProjectId] = useState(options[0]?.project.id ?? "");
+  const [quantity, setQuantity] = useState(String(remaining));
   const [unitPrice, setUnitPrice] = useState("");
 
   const total = saleQuoteTotal(parseAmount(quantity) ?? 0, parseAmount(unitPrice) ?? 0);
@@ -38,7 +36,7 @@ export function StartNegotiationForm({ options, unit, remaining, actionData }: P
   if (options.length === 0) {
     return (
       <p role="status" className="text-muted-foreground">
-        Para ofertar necesitas un proyecto publicado en {unitText(unit, 2)} y con disponibilidad. Publica un proyecto y vuelve a esta solicitud.
+        Para ofertar necesitas un proyecto propio que respalde la oferta. Crea un proyecto y vuelve a esta solicitud.
       </p>
     );
   }
@@ -47,31 +45,23 @@ export function StartNegotiationForm({ options, unit, remaining, actionData }: P
     <Form method="post" ref={formRef} noValidate className="flex flex-col gap-4">
       <input type="hidden" name="intent" value="start" />
 
-      <Field
-        id="start-listing"
-        label="Proyecto que respalda la oferta"
-        errors={errors.listingId}
-        hint={selected ? `Disponible en el proyecto: ${formatQuantity(selected.available, unit)}.` : undefined}
-      >
+      <Field id="start-project" label="Proyecto que respalda la oferta" errors={errors.projectId}>
         {(aria) => (
           <Select
-            name="listingId"
-            value={listingId}
+            name="projectId"
+            value={projectId}
             onValueChange={(value) => {
-              setListingId(value);
-              const next = options.find((o) => o.listing.id === value);
-              if (next) setQuantity((current) => String(Math.min(Number(current) || remaining, remaining, next.available)));
-              clear("listingId");
-              clear("quantity");
+              setProjectId(value);
+              clear("projectId");
             }}
           >
-            <SelectTrigger id="start-listing" className="w-full" {...aria}>
+            <SelectTrigger id="start-project" className="w-full" {...aria}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {options.map((o) => (
-                <SelectItem key={o.listing.id} value={o.listing.id}>
-                  {o.projectTitle} · disponible {formatQuantity(o.available, unit)}
+                <SelectItem key={o.project.id} value={o.project.id}>
+                  {o.projectTitle}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -84,7 +74,7 @@ export function StartNegotiationForm({ options, unit, remaining, actionData }: P
           id="start-quantity"
           label={`Cantidad (${unitText(unit, 2)})`}
           errors={errors.quantity}
-          hint={`Máximo ${formatQuantity(maxQuantity, unit)}: lo pendiente por asignar o lo disponible del proyecto, lo que sea menor.`}
+          hint={`Máximo ${formatQuantity(remaining, unit)}: lo pendiente por asignar.`}
         >
           {(aria) => (
             <Input

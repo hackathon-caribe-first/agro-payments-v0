@@ -1,3 +1,4 @@
+import { AUTO_CLOSE_LABELS, type AutoClosedBy } from "@agro/shared/modules/presales/domain/negotiation-rules";
 import type { QuoteStatus, RequestStatus } from "@agro/shared/modules/presales/domain/presale";
 import type { Tone } from "@agro/shared/modules/milestones/milestone-state";
 import { StatusBadge } from "@agro/shared/ui/status-badge";
@@ -31,5 +32,7 @@ const OFFER_LABELS: Record<QuoteStatus, Label> = {
 // History stores raw status strings: known ones get their es-CO label, others are shown as received.
 export const negotiationStatusText = (raw: string): string => (NEGOTIATION_LABELS as Record<string, Label>)[raw]?.label ?? raw;
 
-export const NegotiationStatusBadge = ({ status }: { status: RequestStatus }) => <StatusBadge {...NEGOTIATION_LABELS[status]} />;
+// A negotiation closed by the system after an agreement elsewhere is CANCELLED on the wire; `autoClosedBy` says why.
+export const NegotiationStatusBadge = ({ status, autoClosedBy = null }: { status: RequestStatus; autoClosedBy?: AutoClosedBy | null }) =>
+  autoClosedBy ? <StatusBadge label={AUTO_CLOSE_LABELS[autoClosedBy]} tone="neutral" symbol="○" /> : <StatusBadge {...NEGOTIATION_LABELS[status]} />;
 export const OfferStatusBadge = ({ status }: { status: QuoteStatus }) => <StatusBadge {...OFFER_LABELS[status]} />;

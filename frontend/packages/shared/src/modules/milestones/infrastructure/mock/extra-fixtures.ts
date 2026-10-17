@@ -12,6 +12,7 @@ interface Spec {
   status: MilestoneStatus;
   supplies: number;
   labor: number;
+  estimated?: string;
 }
 
 const PHOTOS = [
@@ -35,6 +36,7 @@ function build(spec: Spec): MilestoneDetailDto {
     status: spec.status,
     supplies_budget: spec.supplies,
     labor_budget: spec.labor,
+    ...(spec.estimated ? { estimated_completion_date: spec.estimated } : {}),
     currency: "COP",
     supplies_executed: hasEvidence ? spec.supplies : 0,
     labor_executed: paid ? spec.labor : 0,
@@ -68,11 +70,18 @@ const CACAO = "proj-cacao-arauca";
 const AGUACATE = "proj-aguacate-tolima";
 const PANELA = "proj-panela-cundinamarca";
 const PLATANO = "proj-platano-meta";
+const SIERRA = "ext-sierra-cafe";
+const TOLIMA = "ext-tolima-cacao";
 
 const SPECS = [
-  { id: "ms-11", projectId: CACAO, order: 1, title: "Preparación del lote", description: "Limpieza y trazado del lote de cacao.", status: "LOCKED", supplies: 4000000, labor: 2500000 },
-  { id: "ms-12", projectId: CACAO, order: 2, title: "Siembra de clones", description: "Siembra de clones de cacao fino de aroma.", status: "LOCKED", supplies: 9000000, labor: 3500000 },
-  { id: "ms-13", projectId: CACAO, order: 3, title: "Sombrío y fertilización", description: "Establecimiento de sombrío temporal y primera fertilización.", status: "LOCKED", supplies: 6000000, labor: 2800000 },
+  { id: "ms-11", projectId: CACAO, order: 1, title: "Preparación del lote", description: "Limpieza y trazado del lote de cacao.", status: "LOCKED", supplies: 4000000, labor: 2500000, estimated: "2027-01-15" },
+  { id: "ms-12", projectId: CACAO, order: 2, title: "Siembra de clones", description: "Siembra de clones de cacao fino de aroma.", status: "LOCKED", supplies: 9000000, labor: 3500000, estimated: "2027-04-30" },
+  { id: "ms-13", projectId: CACAO, order: 3, title: "Sombrío y fertilización", description: "Establecimiento de sombrío temporal y primera fertilización.", status: "LOCKED", supplies: 6000000, labor: 2800000, estimated: "2027-08-15" },
+  { id: "ms-ext-s1", projectId: SIERRA, order: 1, title: "Preparación del beneficiadero", description: "Adecuación de tanques y patios de secado.", status: "LOCKED", supplies: 5000000, labor: 3000000, estimated: "2026-12-15" },
+  { id: "ms-ext-s2", projectId: SIERRA, order: 2, title: "Cosecha selectiva", description: "Recolección selectiva de cereza madura.", status: "LOCKED", supplies: 6000000, labor: 4000000, estimated: "2027-02-15" },
+  { id: "ms-ext-s3", projectId: SIERRA, order: 3, title: "Secado y trillado", description: "Secado en patio y trillado del café pergamino.", status: "LOCKED", supplies: 3500000, labor: 2500000, estimated: "2027-03-20" },
+  { id: "ms-ext-t1", projectId: TOLIMA, order: 1, title: "Fermentadero y cajones", description: "Construcción de cajones de fermentación.", status: "LOCKED", supplies: 4000000, labor: 2000000, estimated: "2026-12-20" },
+  { id: "ms-ext-t2", projectId: TOLIMA, order: 2, title: "Secado controlado", description: "Secado del grano en marquesinas.", status: "LOCKED", supplies: 5000000, labor: 3000000, estimated: "2027-02-10" },
   { id: "ms-21", projectId: AGUACATE, order: 1, title: "Preparación y hoyado", description: "Trazado y hoyado del lote de aguacate.", status: "COMPLETED_AND_PAID", supplies: 3500000, labor: 2200000 },
   { id: "ms-22", projectId: AGUACATE, order: 2, title: "Siembra de plántulas Hass", description: "Siembra de plántulas injertadas.", status: "COMPLETED_AND_PAID", supplies: 8500000, labor: 3000000 },
   { id: "ms-23", projectId: AGUACATE, order: 3, title: "Cosecha y entrega", description: "Cosecha selectiva y entrega al comprador.", status: "COMPLETED_AND_PAID", supplies: 2800000, labor: 4000000 },

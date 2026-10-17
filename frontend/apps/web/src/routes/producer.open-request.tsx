@@ -29,7 +29,7 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
   const form = await request.formData();
   if (form.get("intent") !== "start") return { fieldErrors: { _form: ["Acción desconocida."] } };
   const result = await producerPresales.startOpenRequestNegotiation(params.openRequestId, {
-    listingId: text(form, "listingId"),
+    projectId: text(form, "projectId"),
     unitPrice: text(form, "unitPrice"),
     quantity: text(form, "quantity"),
     validUntil: text(form, "validUntil"),

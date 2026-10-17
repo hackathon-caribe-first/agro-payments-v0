@@ -20,12 +20,10 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
   const id = params.negotiationId;
   return runNegotiationAction(
     {
-      accept: (revision) => producerPresales.acceptSaleQuote(id, revision),
+      accept: (revision, raw) => producerPresales.acceptSaleQuote(id, revision, raw),
       reject: (revision) => producerPresales.rejectSaleQuote(id, revision),
       counter: (raw) => producerPresales.counterOffer(id, raw),
       withdraw: () => producerPresales.withdrawNegotiation(id),
-      respond: (raw) => producerPresales.respondToRequest(id, raw),
-      decline: () => producerPresales.declineRequest(id),
     },
     await request.formData(),
   );

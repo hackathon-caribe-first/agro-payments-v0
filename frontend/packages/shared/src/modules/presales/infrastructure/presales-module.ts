@@ -1,27 +1,25 @@
+import {
+  depositProjectAgreement,
+  getBuyerProjectDetail,
+  getStartNegotiationForm,
+  listBuyerCatalog,
+  startNegotiation,
+} from "../application/project-negotiation";
 import { HttpMilestoneRepository } from "../../milestones/infrastructure/http-milestone-repository";
 import { HttpProjectRepository } from "../../projects/infrastructure/http-project-repository";
 import {
   acceptSaleQuote,
-  cancelRequest,
-  closeListing,
   closeOpenRequest,
   counterOffer,
   createOpenRequest,
-  declineRequest,
-  getListingDetail,
   getOpenRequestBoard,
   getOpenRequestForProducer,
-  getProjectPresale,
   getRequestDetail,
   listBuyerOpenRequests,
   listBuyerRequests,
-  listOpenListings,
   listOpenRequestCatalog,
   listProducerRequests,
-  publishListing,
   rejectSaleQuote,
-  requestQuote,
-  respondToRequest,
   startOpenRequestNegotiation,
   withdrawNegotiation,
   type PresaleDeps,
@@ -52,18 +50,18 @@ export function createPresalesModule({ fetchFn, baseUrl = DEFAULT_BASE_URL, toda
   };
 
   return {
-    publishListing: (projectId: string, raw: unknown) => publishListing(deps, projectId, raw),
-    closeListing: (listingId: string) => closeListing(deps, listingId),
-    listOpenListings: () => listOpenListings(deps),
-    getListingDetail: (listingId: string) => getListingDetail(deps, listingId),
-    getProjectPresale: (projectId: string) => getProjectPresale(deps, projectId),
+    // Flow A: project negotiation
+    listBuyerCatalog: (buyerId: string) => listBuyerCatalog(deps, buyerId),
+    getBuyerProjectDetail: (projectId: string, buyerId: string) => getBuyerProjectDetail(deps, projectId, buyerId),
+    getStartNegotiationForm: (projectId: string, milestoneId: string | null, buyerId: string) =>
+      getStartNegotiationForm(deps, projectId, milestoneId, buyerId),
+    startNegotiation: (target: { projectId: string; milestoneId: string | null }, buyer: PartyIdentity, raw: unknown) =>
+      startNegotiation(deps, target, buyer, raw),
+    depositProjectAgreement: (negotiationId: string, buyer: PartyIdentity, raw: unknown) =>
+      depositProjectAgreement(deps, negotiationId, buyer, raw),
 
-    requestQuote: (listingId: string, buyer: PartyIdentity, raw: unknown) => requestQuote(deps, listingId, buyer, raw),
-    cancelRequest: (requestId: string) => cancelRequest(deps, requestId),
-    declineRequest: (requestId: string) => declineRequest(deps, requestId),
-    respondToRequest: (requestId: string, raw: unknown) => respondToRequest(deps, requestId, raw),
     counterOffer: (requestId: string, actor: Actor, raw: unknown) => counterOffer(deps, requestId, actor, raw),
-    acceptSaleQuote: (requestId: string, revision: unknown, actor?: Actor) => acceptSaleQuote(deps, requestId, revision, actor),
+    acceptSaleQuote: (requestId: string, revision: unknown, actor?: Actor, raw?: unknown) => acceptSaleQuote(deps, requestId, revision, actor, raw),
     rejectSaleQuote: (requestId: string, revision: unknown, actor?: Actor) => rejectSaleQuote(deps, requestId, revision, actor),
     withdrawNegotiation: (requestId: string, actor: Actor) => withdrawNegotiation(deps, requestId, actor),
     listBuyerRequests: (buyerId: string) => listBuyerRequests(deps, buyerId),

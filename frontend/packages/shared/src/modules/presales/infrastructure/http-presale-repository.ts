@@ -1,25 +1,25 @@
 import { NetworkError, ValidationFailure } from "../../milestones/domain/errors";
 import { readFieldErrors } from "../../projects/infrastructure/http-project-repository";
-import type { PartyIdentity, PresaleRepository } from "../application/presale-repository";
+import type { PartyIdentity, PresaleRepository, StartTarget } from "../application/presale-repository";
+import type { MilestoneTermsInput } from "../schemas/start-milestone-negotiation";
+import type { ProjectTermsInput } from "../schemas/start-project-negotiation";
 import type { Actor } from "../domain/presale";
 import type { CounterOfferInput } from "../schemas/counter-offer";
 import type { CreateOpenRequestInput } from "../schemas/create-open-request";
-import type { PublishListingInput } from "../schemas/publish-listing";
-import type { RequestQuoteInput } from "../schemas/request-quote";
-import type { RespondQuoteInput } from "../schemas/respond-quote";
 import type { StartOpenRequestNegotiationInput } from "../schemas/start-open-request-negotiation";
 import {
   toCreateOpenRequestDto,
-  toCreateRequestDto,
-  toListing,
-  toListings,
+  toCatalogProject,
+  toCatalogProjects,
   toOfferRequestDto,
   toOpenRequest,
   toOpenRequests,
-  toPublishRequestDto,
+  toMilestoneCounterDto,
+  toProjectCounterDto,
   toQuoteRequest,
   toQuoteRequests,
   toStartNegotiationDto,
+  toStartNegotiationRequestDto,
 } from "./mapper";
 
 interface Options {
@@ -65,36 +65,37 @@ export class HttpPresaleRepository implements PresaleRepository {
     return this.json(await this.request(path));
   }
 
-  // ---- listings ----
+  // ---- project catalog and project negotiations ----
 
-  async listOpenListings() {
-    return toListings(await this.get("/presales?status=OPEN"));
+  async listCatalog() {
+    return toCatalogProjects(await this.get("/catalog/projects"));
   }
 
-  async getListing(listingId: string) {
-    const response = await this.request(`/presales/${enc(listingId)}`);
+  async getCatalogProject(projectId: string) {
+    const response = await this.request(`/catalog/projects/${enc(projectId)}`);
     if (response.status === 404) return null;
-    return toListing(await this.json(response));
+    return toCatalogProject(await this.json(response));
   }
 
-  async listByProject(projectId: string) {
-    return toListings(await this.get(`/projects/${enc(projectId)}/presales`));
+  async startNegotiation(projectId: string, buyer: PartyIdentity, target: StartTarget) {
+    const response = await this.post(`/projects/${enc(projectId)}/negotiations`, toStartNegotiationRequestDto(buyer, target));
+    return toQuoteRequest(await this.json(response));
   }
 
-  async publish(projectId: string, input: PublishListingInput) {
-    return toListing(await this.json(await this.post(`/projects/${enc(projectId)}/presales`, toPublishRequestDto(input))));
+  async counterProject(requestId: string, author: Actor, input: ProjectTermsInput) {
+    return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/quotes`, toProjectCounterDto(author, input))));
   }
 
-  async close(listingId: string) {
-    return toListing(await this.json(await this.post(`/presales/${enc(listingId)}/close`)));
+  async counterMilestone(requestId: string, author: Actor, input: MilestoneTermsInput) {
+    return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/quotes`, toMilestoneCounterDto(author, input))));
+  }
+
+  async deposit(requestId: string, buyer: PartyIdentity, expectedTotal: number) {
+    const response = await this.post(`/negotiations/${enc(requestId)}/deposit`, { buyer_id: buyer.id, expected_total: expectedTotal });
+    return toQuoteRequest(await this.json(response));
   }
 
   // ---- negotiations ----
-
-  async createRequest(listingId: string, buyer: PartyIdentity, input: RequestQuoteInput) {
-    const response = await this.post(`/presales/${enc(listingId)}/quote-requests`, toCreateRequestDto(buyer, input));
-    return toQuoteRequest(await this.json(response));
-  }
 
   async getRequest(requestId: string) {
     const response = await this.request(`/quote-requests/${enc(requestId)}`);
@@ -114,28 +115,17 @@ export class HttpPresaleRepository implements PresaleRepository {
     return toQuoteRequests(await this.get(`/producer/quote-requests${query}`));
   }
 
-  async respond(requestId: string, input: RespondQuoteInput) {
-    return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/quotes`, toOfferRequestDto(input))));
-  }
-
   async counter(requestId: string, author: Actor, input: CounterOfferInput) {
     return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/quotes`, toOfferRequestDto(input, author))));
-  }
-
-  async decline(requestId: string) {
-    return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/decline`)));
-  }
-
-  async cancel(requestId: string) {
-    return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/cancel`)));
   }
 
   async withdraw(requestId: string, actor: Actor) {
     return toQuoteRequest(await this.json(await this.post(`/quote-requests/${enc(requestId)}/withdraw`, { actor })));
   }
 
-  async acceptQuote(requestId: string, revision: number, actor?: Actor) {
-    const response = await this.post(`/quote-requests/${enc(requestId)}/quotes/${revision}/accept`, actor ? { actor } : undefined);
+  async acceptQuote(requestId: string, revision: number, actor?: Actor, expectedTotal?: number) {
+    const body = actor || expectedTotal !== undefined ? { ...(actor ? { actor } : {}), ...(expectedTotal !== undefined ? { expected_total: expectedTotal } : {}) } : undefined;
+    const response = await this.post(`/quote-requests/${enc(requestId)}/quotes/${revision}/accept`, body);
     return toQuoteRequest(await this.json(response));
   }
 

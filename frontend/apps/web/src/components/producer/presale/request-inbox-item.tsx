@@ -1,19 +1,18 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 import type { RequestEntry } from "@agro/shared/modules/presales/application/use-cases";
+import { autoClosedBy } from "@agro/shared/modules/presales/domain/negotiation-rules";
 import { Badge } from "@agro/shared/ui/badge";
 import { Button } from "@agro/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@agro/shared/ui/card";
-import { availableQuantity } from "@agro/shared/modules/presales/domain/presale-rules";
 import { LatestOffer } from "~/components/negotiation/latest-offer";
-import { originLabel } from "~/components/negotiation/origin";
+import { entryTitle, scopeKicker } from "~/components/negotiation/scope-label";
 import { turnLabel } from "~/components/negotiation/turn-indicator";
-import { formatQuantity } from "~/components/presale/format";
 import { RequestStatusBadge } from "~/components/presale/status-badges";
 
-// A negotiation in the producer's inbox (both origins).
+// A negotiation in the producer's inbox (every kind).
 export function RequestInboxItem({ entry }: { entry: RequestEntry }) {
-  const { request, listing, turn } = entry;
+  const { request, unit, turn } = entry;
   const turnText = turnLabel(turn, "PRODUCER");
   return (
     <li className="min-w-0">
@@ -22,22 +21,15 @@ export function RequestInboxItem({ entry }: { entry: RequestEntry }) {
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm text-muted-foreground">
-                {originLabel(request.origin)} · {listing?.title ?? "Proyecto"}
+                {scopeKicker(entry)} · {entryTitle(entry)}
               </p>
               <CardTitle className="break-words text-base text-primary">{request.buyerName}</CardTitle>
             </div>
-            <RequestStatusBadge status={request.status} />
+            <RequestStatusBadge status={request.status} autoClosedBy={autoClosedBy(request)} />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 px-4">
-          <LatestOffer request={request} unit={listing} />
-          {listing && (
-            <p className="text-sm tabular-nums text-muted-foreground">
-              {availableQuantity(listing) > 0
-                ? `Disponible ${formatQuantity(availableQuantity(listing), listing)} de ${formatQuantity(listing.expectedQuantity, listing)}`
-                : "Sin disponibilidad"}
-            </p>
-          )}
+          <LatestOffer request={request} unit={unit} />
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="compact">
               <Link to={`/producer/negotiations/${request.id}`}>
@@ -46,6 +38,8 @@ export function RequestInboxItem({ entry }: { entry: RequestEntry }) {
               </Link>
             </Button>
             {turnText && <Badge variant={turn === "PRODUCER" ? "default" : "secondary"}>{turnText}</Badge>}
+            {request.deposit?.status === "PENDING" && <Badge variant="secondary">Depósito pendiente</Badge>}
+            {request.deposit?.status === "DEPOSITED" && <Badge variant="secondary">Depositado en la fiducia</Badge>}
           </div>
         </CardContent>
       </Card>

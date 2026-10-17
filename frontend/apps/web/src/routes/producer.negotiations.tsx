@@ -20,7 +20,7 @@ export default function ProducerNegotiations({ loaderData }: Route.ComponentProp
   return (
     <div className="flex flex-col gap-6">
       <Link
-        to={projectId ? `/producer/projects/${projectId}/publication` : "/producer"}
+        to={projectId ? `/producer/projects/${projectId}` : "/producer"}
         className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4"
       >
         <ArrowLeft aria-hidden="true" className="size-4" />

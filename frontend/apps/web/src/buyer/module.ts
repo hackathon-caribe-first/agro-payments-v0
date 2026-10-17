@@ -8,17 +8,21 @@ const presales = createPresalesModule({ fetchFn: transport, baseUrl: API_BASE_UR
 
 // Buyer-side operations. Every write acts as BUYER.
 export const buyer = {
-  listOpenListings: presales.listOpenListings,
-  getListingDetail: presales.getListingDetail,
-
-  // Starting a negotiation from a project's presale.
-  requestQuote: (listingId: string, raw: unknown) => presales.requestQuote(listingId, BUYER_PROFILE, raw),
   listMyRequests: () => presales.listBuyerRequests(BUYER_PROFILE.id),
   getRequestDetail: (requestId: string) => presales.getRequestDetail(requestId, "BUYER"),
   counterOffer: (requestId: string, raw: unknown) => presales.counterOffer(requestId, "BUYER", raw),
-  acceptSaleQuote: (requestId: string, revision: unknown) => presales.acceptSaleQuote(requestId, revision, "BUYER"),
+  acceptSaleQuote: (requestId: string, revision: unknown, raw?: unknown) => presales.acceptSaleQuote(requestId, revision, "BUYER", raw),
   rejectSaleQuote: (requestId: string, revision: unknown) => presales.rejectSaleQuote(requestId, revision, "BUYER"),
   withdrawNegotiation: (requestId: string) => presales.withdrawNegotiation(requestId, "BUYER"),
+
+  // Project negotiation: browse projects, negotiate the project or a milestone, deposit an agreed project.
+  listCatalog: () => presales.listBuyerCatalog(BUYER_PROFILE.id),
+  getProjectDetail: (projectId: string) => presales.getBuyerProjectDetail(projectId, BUYER_PROFILE.id),
+  getStartNegotiationForm: (projectId: string, milestoneId: string | null) =>
+    presales.getStartNegotiationForm(projectId, milestoneId, BUYER_PROFILE.id),
+  startNegotiation: (target: { projectId: string; milestoneId: string | null }, raw: unknown) =>
+    presales.startNegotiation(target, BUYER_PROFILE, raw),
+  depositProjectAgreement: (negotiationId: string, raw: unknown) => presales.depositProjectAgreement(negotiationId, BUYER_PROFILE, raw),
 
   createOpenRequest: (raw: unknown) => presales.createOpenRequest(BUYER_PROFILE, raw),
   closeOpenRequest: presales.closeOpenRequest,
