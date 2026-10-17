@@ -32,12 +32,18 @@ export async function createOpenPayments(env: OpenPaymentsEnv, grants: GrantStor
   return { client, grants, custodyWalletAddress: env.custodyWalletAddress };
 }
 
-const SCOPE_NAME: Record<GrantScope, string> = { milestone: "Milestone", liquidation: "Settlement" };
+const SCOPE_NAME: Record<GrantScope, string> = { milestone: "Milestone", liquidation: "Settlement", premium: "Premium of project" };
+
+function latestFor(grants: GrantStore, id: string, scope: GrantScope) {
+  if (scope === "liquidation") return grants.findLatestForSettlement(id);
+  if (scope === "premium") return grants.findLatestForPremium(id);
+  return grants.findLatestForMilestone(id);
+}
 
 // A revoked grant must not pay: refused as a DomainError (409) before anything reaches the network.
-// `id` is the milestone id, or the settlement id for the liquidation grant (RF-26).
+// `id` is the milestone id, the settlement id for the liquidation grant (RF-26) or the project id for the premium grant (RF-14).
 export async function activeOutgoingGrant(grants: GrantStore, id: string, scope: GrantScope = "milestone"): Promise<Grant & { access: GrantAccess }> {
-  const grant = scope === "liquidation" ? await grants.findLatestForSettlement(id) : await grants.findLatestForMilestone(id);
+  const grant = await latestFor(grants, id, scope);
   const name = `${SCOPE_NAME[scope]} ${id}`;
   if (grant?.status === GRANT_STATUS.REVOKED) throw new DomainError(`${name} is closed: its outgoing-payment grant was revoked`);
   if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) throw new Error(`${name} has no outgoing-payment grant`);

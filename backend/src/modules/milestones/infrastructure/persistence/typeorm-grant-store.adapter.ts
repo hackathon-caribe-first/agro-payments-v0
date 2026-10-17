@@ -51,6 +51,11 @@ export class TypeOrmGrantStore extends GrantStore {
     return row ? this.toGrant(row) : null;
   }
 
+  async findLatestForPremium(projectId: string) {
+    const row = await this.dataSource.getRepository(GrantEntity).findOne({ where: { projectId, purpose: GRANT_PURPOSE.PREMIUM }, order: { createdAt: "DESC" } });
+    return row ? this.toGrant(row) : null;
+  }
+
   private seal = (value: string | undefined) => (value === undefined ? null : this.cipher.encrypt(value));
   private open = (value: string | null) => (value === null ? null : this.cipher.decrypt(value));
 

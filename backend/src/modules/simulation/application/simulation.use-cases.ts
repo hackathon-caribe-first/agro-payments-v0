@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import { NotFoundError, RejectedError } from "../../../shared/domain-errors";
-import { canView, PROJECT_STATUS, type Project, type Viewer } from "../../projects/application/project";
+import { PurchaseContracts } from "../../contracts/ports/purchase-contracts";
+import { canView, PROJECT_STATUS, type Project, type ProjectStatus, type Viewer } from "../../projects/application/project";
 import { ProjectRepository } from "../../projects/ports/project.repository";
 import { SimulationRunRepository } from "../ports/simulation-run.repository";
 import { MOTOR_VERSION, PRICE_KIND, type SimulationInputs, simulate } from "./motor";
@@ -41,6 +42,9 @@ function inputsFor({ preset, overrides: o }: SimulationRequest): SimulationInput
   };
 }
 
+/** DRAFT, or CONTRACT_SIGNED when every party signed the RF-09 contract before the capture opened. */
+const PUBLISHABLE: readonly ProjectStatus[] = [PROJECT_STATUS.DRAFT, PROJECT_STATUS.CONTRACT_SIGNED];
+
 const pesosPerKg = (minor: number) => (minor / 100).toLocaleString("es-CO");
 
 @Injectable()
@@ -48,6 +52,7 @@ export class SimulationUseCases {
   constructor(
     private readonly projects: ProjectRepository,
     private readonly runs: SimulationRunRepository,
+    private readonly contracts: PurchaseContracts,
   ) {}
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
@@ -88,12 +93,14 @@ export class SimulationUseCases {
   }
 
   /**
-   * RF-07: a DRAFT project opens its capture (FUNDING_IN_PROGRESS) only when its latest sheet, made by this motor version,
-   * passes the offer rule. Every refusal is a form-level 409 the producer can act on.
+   * RF-07: a DRAFT (or CONTRACT_SIGNED) project opens its capture (FUNDING_IN_PROGRESS) only when it has its RF-04 purchase
+   * contract and its latest sheet, made by this motor version, passes the offer rule. Every refusal is a form-level 409 the
+   * producer can act on.
    */
   async publish(projectId: string, viewer: Viewer): Promise<Project> {
     const project = await this.project(projectId, viewer);
-    if (project.currentStatus !== PROJECT_STATUS.DRAFT) throw new RejectedError("Solo se publica un proyecto en borrador.");
+    if (!PUBLISHABLE.includes(project.currentStatus)) throw new RejectedError("Solo se publica un proyecto en borrador.");
+    if (!(await this.contracts.exists(project.id))) throw new RejectedError("Registra el contrato de compra antes de publicar: el comprador se pacta antes de captar.");
     const run = await this.runs.findLatest(project.id);
     if (!run) throw new RejectedError("Simula el proyecto antes de publicarlo: la ficha decide si se puede ofrecer.");
     if (run.motorVersion !== MOTOR_VERSION) throw new RejectedError("La ficha se generó con otra versión del motor. Vuelve a simular el proyecto.");

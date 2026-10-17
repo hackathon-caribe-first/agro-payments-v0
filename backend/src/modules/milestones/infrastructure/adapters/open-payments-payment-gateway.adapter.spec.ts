@@ -247,3 +247,26 @@ describe("OpenPaymentsGateway liquidation scope", () => {
     expect(mock.calls).toEqual([]);
   });
 });
+
+// PRD v3 Fase 1 paso 6 / RF-14: the net premium is paid from the premium grant the fiduciaria approved, keyed by the project.
+describe("OpenPaymentsGateway premium scope", () => {
+  const premium: LinePaymentRequest = { ...request, milestoneId: "p-1", lineId: "pay-1", grantScope: "premium" };
+
+  it("pays the premium with the project's premium grant and settles it through the same grant", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(activeGrant({ id: "g-prem", purpose: "premium", milestoneId: null, projectId: "p-1" }));
+    const gateway = new OpenPaymentsGateway(mock.op);
+
+    const result = await gateway.pay(premium);
+    expect(result.reference?.startsWith("premium:p-1 ")).toBe(true);
+    mock.client.incomingPayment.get.mockResolvedValueOnce({ id: INCOMING, completed: true, receivedAmount: amount("3000") });
+    expect((await gateway.check(result.reference as string)).status).toBe("completado");
+  });
+
+  it("never pays the premium from another purpose's grant on the same project", async () => {
+    const mock = mockOpenPayments();
+    await mock.grants.save(activeGrant({ projectId: "p-1", milestoneId: "p-1" }));
+    await expect(new OpenPaymentsGateway(mock.op).pay(premium)).rejects.toThrow(/Premium of project p-1 has no outgoing-payment grant/);
+    expect(mock.calls).toEqual([]);
+  });
+});

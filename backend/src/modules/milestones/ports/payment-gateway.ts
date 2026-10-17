@@ -1,7 +1,10 @@
 import type { LineResult } from "../application/milestone";
 
-/** Which custody grant pays: the milestone's (RF-13) or, for settlement payouts, the settlement's liquidation grant (RF-26). */
-export type GrantScope = "milestone" | "liquidation";
+/**
+ * Which custody grant pays: the milestone's (RF-13), for settlement payouts the settlement's liquidation grant (RF-26), or for
+ * the insurance premium the project's premium grant (RF-14).
+ */
+export type GrantScope = "milestone" | "liquidation" | "premium";
 
 export type LinePaymentRequest = {
   milestoneId: string;
@@ -16,7 +19,7 @@ export type LinePaymentRequest = {
    * `currency`, and the receiver gets whatever the quote converts it to, fees included. Absent: `amount` is what the receiver gets.
    */
   fixedDebitAmount?: boolean;
-  /** Absent: "milestone". With "liquidation", milestoneId carries the settlement id. */
+  /** Absent: "milestone". With "liquidation", milestoneId carries the settlement id; with "premium", the project id. */
   grantScope?: GrantScope;
 };
 

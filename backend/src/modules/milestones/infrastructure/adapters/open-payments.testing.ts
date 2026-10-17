@@ -44,6 +44,9 @@ export class InMemoryGrantStore extends GrantStore {
   async findLatestForHarvest(projectId: string) {
     return this.latest((g) => g.purpose === GRANT_PURPOSE.HARVEST_PAYMENT && g.projectId === projectId);
   }
+  async findLatestForPremium(projectId: string) {
+    return this.latest((g) => g.purpose === GRANT_PURPOSE.PREMIUM && g.projectId === projectId);
+  }
   private latest(match: (g: Grant) => boolean) {
     const mine = [...this.grants.values()].filter(match);
     const latest = mine.reduce<Grant | null>((a, g) => (!a || g.createdAt >= a.createdAt ? g : a), null);

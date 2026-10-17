@@ -37,6 +37,12 @@ import { FakeHarvestPayment, HARVEST_BUYER, PRODUCER as HARVEST_PRODUCER, VERIFI
 import { TypeOrmHarvestStore } from "../../../harvest/infrastructure/persistence/typeorm-harvest-store.adapter";
 import { TypeOrmPanelSources } from "../../../harvest/infrastructure/persistence/typeorm-panel-sources.adapter";
 import { PROJECT_STATUS } from "../../../projects/application/project";
+import { RejectedError } from "../../../../shared/domain-errors";
+import { buildContractDocument } from "../../../contracts/application/contract-document";
+import { CLAIM_STATUS, type InsuranceClaim, PREMIUM_STATUS } from "../../../contracts/application/insurance";
+import { PRICE_TYPE } from "../../../contracts/application/purchase-contract";
+import { contractContext, FIDU, insurancePolicy, OWNER, purchaseContract } from "../../../contracts/application/testing";
+import { PostgresContractsStore } from "../../../contracts/infrastructure/persistence/postgres-contracts-store.adapter";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -727,5 +733,113 @@ describe("TypeOrmHarvestStore (RF-24) and the custody statement (RF-21)", () => 
     const ds = db(ctx);
     const panel = new InvestorPanelUseCases(new TypeOrmHarvestStore(ds), new TypeOrmMilestoneAdapter(ds), new TypeOrmPanelSources(ds));
     expect(await panel.custody("p-h", HARVEST_PRODUCER)).toMatchObject({ credited: 30_900_000, milestoneDebits: 0, settlementDebits: 0, balance: 30_900_000 });
+  });
+});
+
+describe("PostgresContractsStore (RF-04, RF-05, RF-09, RF-14, RF-25)", () => {
+  const wallets = { producer: "https://w.test/prod", supplier: "https://w.test/prov", platform: "https://w.test/fee" };
+  const input: NewProjectInput = {
+    title: "Tomate bajo invernadero",
+    description: "Ciclo de 120 días",
+    productionType: "OTRO",
+    startDate: "2026-11-01",
+    estimatedEndDate: "2027-03-01",
+    milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100_000, laborBudget: 200_000, requirements: [] }],
+  };
+  const claim = (overrides: Partial<InsuranceClaim> = {}): InsuranceClaim => ({
+    id: "c-1",
+    projectId: "p1",
+    trigger: "yield",
+    observedValue: 512.5,
+    evidence: "Certificado del verificador",
+    amount: 130_000_000,
+    status: CLAIM_STATUS.PENDING,
+    incomingPaymentUrl: "https://rs.test/incoming-payments/ind-1",
+    createdBy: FIDU.id,
+    createdAt: now,
+    confirmedBy: null,
+    confirmedAt: null,
+    ...overrides,
+  });
+  const entry = (id: string, amount: number) => ({ id, projectId: "p1", amount, currency: "COP", assetScale: 2, reference: `ref-${id}`, at: now });
+
+  beforeEach(async () => {
+    await dataSource?.query("TRUNCATE projects, project_code_sequences CASCADE");
+    if (!dataSource) return;
+    const { project, milestones } = buildProject({ id: "p1", ownerUserId: OWNER.id, input, wallets, now });
+    await new TypeOrmProjectAdapter(dataSource).create(project, milestones);
+    await dataSource.query("UPDATE projects SET custody_balance = 100000000, current_status = 'FUNDED_IN_CUSTODY' WHERE id = 'p1'");
+  });
+
+  it("round-trips fixed and formula purchase contracts and the policy with its premium payment", async (ctx) => {
+    const store = new PostgresContractsStore(db(ctx));
+    expect(await store.findPurchaseContract("p1")).toBeNull();
+    await store.savePurchaseContract(purchaseContract());
+    expect(await store.findPurchaseContract("p1")).toEqual(purchaseContract());
+    const formula = purchaseContract({ price: { type: PRICE_TYPE.FORMULA, floorPerUnit: 100_000, ceilingPerUnit: 150_000, reference: "SIPSA" }, currency: "USD", unit: "t" });
+    await store.savePurchaseContract(formula);
+    expect(await store.findPurchaseContract("p1")).toEqual(formula);
+
+    const payment = { id: "pay-1", amount: 64_045_800, status: PREMIUM_STATUS.EXECUTING, reference: "REF-1", receipt: null, requestedBy: FIDU.id, requestedAt: now, completedAt: null };
+    const policy = insurancePolicy({ premiumPayment: payment });
+    await store.savePolicy(policy);
+    expect(await store.findPolicy("p1")).toEqual(policy);
+  });
+
+  it("stores contract versions with ordered signatures, one per party and user, and sums captured investors only", async (ctx) => {
+    const ds = db(ctx);
+    const store = new PostgresContractsStore(ds);
+    const v1 = { ...buildContractDocument({ id: "d-1", version: 1, context: contractContext(), createdBy: OWNER.id, now }), projectId: "p1" };
+    const v2 = { ...v1, id: "d-2", version: 2 };
+    await store.insertDocument(v1);
+    await store.insertDocument(v2);
+    await expect(store.insertDocument({ ...v1, id: "d-3" })).rejects.toThrow();
+    const signature = { partyRole: "producer" as const, userId: OWNER.id, signedAt: now, ip: "10.0.0.1", userAgent: "vitest", contractHash: v2.hash };
+    await store.addSignatures("d-2", [signature, { ...signature, partyRole: "fiduciaria", userId: FIDU.id, ip: null, userAgent: null }]);
+    await expect(store.addSignatures("d-2", [signature])).rejects.toThrow();
+    const latest = await store.latestDocument("p1");
+    expect(latest).toEqual({ ...v2, signatures: [signature, { ...signature, partyRole: "fiduciaria", userId: FIDU.id, ip: null, userAgent: null }] });
+    expect(await store.findDocument("d-1")).toEqual(v1);
+
+    const invest = (id: string, user: string, amount: number, status: string) =>
+      ds.query("INSERT INTO investments (id, project_id, investor_user_id, wallet_address, status, amount, currency, asset_scale, created_at) VALUES ($1, 'p1', $2, 'https://w/i', $3, $4, 'COP', 2, $5)", [id, user, status, amount, now]);
+    await invest("i-1", "u-a", 1_000_000, "CAPTURED");
+    await invest("i-2", "u-b", 500_000, "CAPTURED");
+    await invest("i-3", "u-a", 2_000_000, "CAPTURED");
+    await invest("i-4", "u-c", 9_000_000, "FAILED");
+    expect(await store.capturedInvestors("p1")).toEqual([
+      { userId: "u-a", capital: 3_000_000 },
+      { userId: "u-b", capital: 500_000 },
+    ]);
+  });
+
+  it("books the premium as a ledger DEBIT in whole pesos, lowers custody and saves the policy, once; refuses more than custody holds", async (ctx) => {
+    const ds = db(ctx);
+    const store = new PostgresContractsStore(ds);
+    const paid = insurancePolicy({ premiumPayment: { id: "pay-1", amount: 64_045_800, status: PREMIUM_STATUS.COMPLETED, reference: "REF-1", receipt: null, requestedBy: FIDU.id, requestedAt: now, completedAt: now } });
+    await store.bookPremium(paid, entry("pay-1", 64_045_800));
+    expect(await store.findPolicy("p1")).toEqual(paid);
+    expect(await new TypeOrmNegotiationStore(ds).listLedger("p1")).toEqual([
+      { id: expect.any(String), project_id: "p1", type: "DEBIT", category: "PREMIUM", amount: 640_458, currency: "COP", created_at: now.toISOString(), payment_reference: "ref-pay-1" },
+    ]);
+    expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(100_000_000 - 64_045_800);
+    await expect(store.bookPremium(paid, entry("pay-1", 100))).rejects.toThrow();
+    await expect(store.bookPremium(paid, entry("pay-2", 50_000_000))).rejects.toThrow(RejectedError);
+    expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(100_000_000 - 64_045_800);
+  });
+
+  it("round-trips claims and books a confirmed indemnity as a CREDIT that raises custody, once", async (ctx) => {
+    const ds = db(ctx);
+    const store = new PostgresContractsStore(ds);
+    await store.saveClaim(claim());
+    expect(await store.findClaim("c-1")).toEqual(claim());
+    const confirmed = claim({ status: CLAIM_STATUS.CONFIRMED, confirmedBy: FIDU.id, confirmedAt: now });
+    await store.bookIndemnity(confirmed, entry("c-1", 130_000_000));
+    expect(await store.listClaims("p1")).toEqual([confirmed]);
+    const ledger = await new TypeOrmNegotiationStore(ds).listLedger("p1");
+    expect(ledger).toMatchObject([{ type: "CREDIT", category: "INDEMNITY", amount: 1_300_000 }]);
+    expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(230_000_000);
+    await expect(store.bookIndemnity(confirmed, entry("c-1", 130_000_000))).rejects.toThrow();
+    expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(230_000_000);
   });
 });

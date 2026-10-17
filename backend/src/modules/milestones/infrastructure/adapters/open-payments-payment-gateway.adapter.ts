@@ -5,16 +5,16 @@ import { type GrantScope, type LinePaymentRequest, type LinePaymentResult, Payme
 import { activeOutgoingGrant, type OpenPayments, requestToken, withOutgoingToken } from "./open-payments.client";
 
 // Reference = grant key + incoming + outgoing payment URLs, so check() can read both and pick the right grant.
-// The key is the milestone id, or `liquidation:<settlementId>` for settlement payouts.
+// The key is the milestone id, `liquidation:<settlementId>` for settlement payouts or `premium:<projectId>` for the premium.
 const SEPARATOR = " ";
-const LIQUIDATION_PREFIX = "liquidation:";
+const PREFIXED_SCOPES = ["liquidation", "premium"] as const satisfies readonly GrantScope[];
 const toReference = (milestoneId: string, scope: GrantScope, incomingId: string, outgoingId: string) =>
-  [scope === "liquidation" ? `${LIQUIDATION_PREFIX}${milestoneId}` : milestoneId, incomingId, outgoingId].join(SEPARATOR);
+  [scope === "milestone" ? milestoneId : `${scope}:${milestoneId}`, incomingId, outgoingId].join(SEPARATOR);
 function fromReference(reference: string) {
   const [key, incomingId, outgoingId] = reference.split(SEPARATOR);
   if (!key || !incomingId || !outgoingId) throw new Error(`Not an Open Payments reference: ${reference}`);
-  const scope: GrantScope = key.startsWith(LIQUIDATION_PREFIX) ? "liquidation" : "milestone";
-  return { milestoneId: scope === "liquidation" ? key.slice(LIQUIDATION_PREFIX.length) : key, scope, incomingId, outgoingId };
+  const scope: GrantScope = PREFIXED_SCOPES.find((s) => key.startsWith(`${s}:`)) ?? "milestone";
+  return { milestoneId: scope === "milestone" ? key : key.slice(scope.length + 1), scope, incomingId, outgoingId };
 }
 
 type OpAmount = { value: string; assetCode: string; assetScale: number };

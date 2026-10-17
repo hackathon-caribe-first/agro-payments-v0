@@ -11,6 +11,8 @@ export const GRANT_PURPOSE = {
   LIQUIDATION: "liquidation",
   /** RF-24 / Fase 3 paso 3: the buyer's one-off grant on their wallet that pays a certified harvest into custody (projectId keys it: one harvest per project). */
   HARVEST_PAYMENT: "harvest_payment",
+  /** RF-14 / Fase 1 paso 6: the fiduciaria's grant on custody for the project's net insurance premium (projectId set). */
+  PREMIUM: "premium",
 } as const;
 export type GrantPurpose = (typeof GRANT_PURPOSE)[keyof typeof GRANT_PURPOSE];
 
@@ -76,4 +78,6 @@ export abstract class GrantStore {
   abstract findLatestForSettlement(settlementId: string): Promise<Grant | null>;
   /** The newest harvest_payment grant of that project, whatever its status. */
   abstract findLatestForHarvest(projectId: string): Promise<Grant | null>;
+  /** The newest premium grant of that project, whatever its status. */
+  abstract findLatestForPremium(projectId: string): Promise<Grant | null>;
 }

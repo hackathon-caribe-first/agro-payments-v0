@@ -1,4 +1,5 @@
 import { NotFoundError, RejectedError } from "../../../shared/domain-errors";
+import { PurchaseContracts } from "../../contracts/ports/purchase-contracts";
 import { FakeRepository } from "../../milestones/application/testing";
 import { CreateProjectUseCase } from "../../projects/application/create-project.use-case";
 import { PROJECT_STATUS, type Viewer } from "../../projects/application/project";
@@ -16,6 +17,14 @@ const fidu: Viewer = { id: "u-fidu", role: "fidu" };
 const investor: Viewer = { id: "u-inv", role: "investor" };
 const fast = { runs: 500 };
 
+/** RF-04: the projects that have a purchase contract. */
+class FakePurchaseContracts extends PurchaseContracts {
+  readonly projects = new Set<string>();
+  async exists(projectId: string) {
+    return this.projects.has(projectId);
+  }
+}
+
 async function setup() {
   const projects = new FakeProjectRepository(new FakeRepository(new Map()));
   const project = await new CreateProjectUseCase(projects, wallets).execute(owner, {
@@ -27,7 +36,10 @@ async function setup() {
     milestones: [{ title: "Siembra", description: "Siembra", estimatedCompletionDate: "2026-12-01", suppliesBudget: 100, laborBudget: 200, requirements: [] }],
   });
   const runs = new FakeSimulationRunRepository();
-  return { projects, project, runs, useCases: new SimulationUseCases(projects, runs) };
+  // Every project starts with its purchase contract, so the RF-07 tests below exercise the offer rule; RF-04 is tested on its own.
+  const contracts = new FakePurchaseContracts();
+  contracts.projects.add(project.id);
+  return { projects, project, runs, contracts, useCases: new SimulationUseCases(projects, runs, contracts) };
 }
 
 describe("SimulationUseCases.run", () => {
@@ -104,6 +116,21 @@ describe("SimulationUseCases.publish (RF-07 offer rule gate)", () => {
     const run = await useCases.run(project.id, owner, { preset: "P2", overrides: fast });
     await runs.save({ ...run, id: "old", motorVersion: "surco-motor@0.9.0", createdAt: new Date(run.createdAt.getTime() + 1) });
     await expect(useCases.publish(project.id, owner)).rejects.toThrow(/otra versión del motor/);
+  });
+
+  it("refuses without a purchase contract (RF-04: contract before publishing), before anything else", async () => {
+    const { useCases, project, projects, contracts } = await setup();
+    await useCases.run(project.id, owner, { preset: "P2", overrides: fast });
+    contracts.projects.clear();
+    await expect(useCases.publish(project.id, owner)).rejects.toThrow(new RejectedError("Registra el contrato de compra antes de publicar: el comprador se pacta antes de captar."));
+    expect((await projects.findById(project.id))?.currentStatus).toBe(PROJECT_STATUS.DRAFT);
+  });
+
+  it("publishes a project whose RF-09 contract was already signed (CONTRACT_SIGNED)", async () => {
+    const { useCases, project, projects } = await setup();
+    await useCases.run(project.id, owner, { preset: "P2", overrides: fast });
+    await projects.updateStatus(project.id, PROJECT_STATUS.CONTRACT_SIGNED);
+    expect((await useCases.publish(project.id, owner)).currentStatus).toBe(PROJECT_STATUS.FUNDING_IN_PROGRESS);
   });
 
   it("refuses a project that is no longer a draft", async () => {

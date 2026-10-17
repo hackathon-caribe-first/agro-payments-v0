@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AssistantModule } from "./modules/assistant/assistant.module";
+import { ContractsModule } from "./modules/contracts/contracts.module";
 import { HarvestModule } from "./modules/harvest/harvest.module";
 import { InvestmentsModule } from "./modules/investments/investments.module";
 import { MilestonesModule } from "./modules/milestones/milestones.module";
@@ -22,6 +23,7 @@ import { DatabaseModule } from "./shared/database/database.module";
     InvestmentsModule,
     SettlementModule,
     SimulationModule,
+    ContractsModule,
     AssistantModule,
     PayoutsModule,
     HarvestModule,
