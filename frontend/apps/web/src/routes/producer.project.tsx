@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Handshake } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calculator, Handshake } from "lucide-react";
 import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
 import { productionTypeLabel } from "@agro/shared/modules/projects/domain/project-draft";
 import { Button } from "@agro/shared/ui/button";
@@ -51,6 +51,12 @@ export default function ProducerProject({ loaderData }: Route.ComponentProps) {
             <Link to={`/producer/negotiations?project=${project.id}`}>
               <Handshake aria-hidden="true" />
               Negociaciones
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="compact">
+            <Link to={`/producer/projects/${project.id}/publication`}>
+              <Calculator aria-hidden="true" />
+              Ficha y publicación
             </Link>
           </Button>
         </div>

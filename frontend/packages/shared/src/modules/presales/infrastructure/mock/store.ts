@@ -1,6 +1,7 @@
 import { createProducerMockStore, type ProducerMockStore } from "../../../projects/infrastructure/mock/store";
 import type { ProjectDto } from "../../../projects/infrastructure/dto";
 import type { LedgerEntryDto } from "../../../escrow/infrastructure/dto";
+import type { SimulationDto } from "../../../simulation/infrastructure/dto";
 import type { OpenRequestDto, QuoteRequestDto } from "../dto";
 import { createExternalProjectFixtures, createLedgerFixtures, createOpenRequestFixtures, createQuoteRequestFixtures } from "./fixtures";
 
@@ -13,6 +14,8 @@ export interface PresalesMockStore extends ProducerMockStore {
   ledgerEntries: LedgerEntryDto[];
   // Projects of other producers (ids ext-*): served by id only, never listed on the local producer's dashboard.
   externalProjects: ProjectDto[];
+  // Motor runs, newest last (the simulation mock appends; the latest one is the project's sheet).
+  simulationRuns: SimulationDto[];
 }
 
 export const createPresalesMockStore = (): PresalesMockStore => ({
@@ -21,4 +24,5 @@ export const createPresalesMockStore = (): PresalesMockStore => ({
   openRequests: createOpenRequestFixtures(),
   ledgerEntries: createLedgerFixtures(),
   externalProjects: createExternalProjectFixtures(),
+  simulationRuns: [],
 });
