@@ -40,6 +40,7 @@ import { ProjectRepository } from "./ports/project.repository";
       },
     },
   ],
-  exports: [ProjectRepository, PROJECT_WALLETS],
+  // The assistant module drives the same use cases (RF-38: same validations as the app).
+  exports: [ProjectRepository, PROJECT_WALLETS, ProjectQueries, CreateProjectUseCase, MilestoneEvidenceUseCase],
 })
 export class ProjectsModule {}

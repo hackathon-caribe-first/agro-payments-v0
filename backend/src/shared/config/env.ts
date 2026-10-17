@@ -33,6 +33,8 @@ export type Env = {
   openPayments: OpenPaymentsEnv | null;
   /** Demo only: /api routes act as the seeded demo producer when there is no session (see ResolveApiUserUseCase). */
   demoIdentity: boolean;
+  /** Optional: without it the assistant chat answers 503 and everything else works. */
+  anthropicApiKey: string | null;
 };
 
 function required(name: string): string {
@@ -87,5 +89,6 @@ export function loadEnv(): Env {
     paymentGateway: gateway,
     openPayments: gateway === PAYMENT_GATEWAYS.OPEN_PAYMENTS ? openPaymentsEnv() : null,
     demoIdentity: parseDemoIdentity(process.env.DEMO_IDENTITY),
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   };
 }
