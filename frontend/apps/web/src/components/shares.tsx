@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<Line["status"], string> = {
   fallido: "✕ Fallido",
 };
 
-// `payable` shows the operator's pay button; the producer line waits for approval.
+// `payable` shows the operator's pay button (only on a funded milestone); the producer line waits for approval.
 export function Lines({ milestone, payable = false }: { milestone: Milestone; payable?: boolean }) {
   return (
     // ponytail: scrolls inside the card on narrow screens; switch to stacked rows if 320px becomes a primary target

@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/milestones/{id}/funding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts funding: send the browser to redirectUrl so the investor approves one grant capped at the milestone amount */
+        post: operations["MilestonesController_startFunding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/milestones/{id}/lines/{lineId}/payment": {
         parameters: {
             query?: never;
@@ -115,7 +132,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Operator pays one line. Supplier lines can be paid before approval, the producer line cannot. */
+        /** Operator pays one line of a funded milestone. Supplier lines can be paid before approval, the producer line cannot. */
         post: operations["MilestonesController_payLine"];
         delete?: never;
         options?: never;
@@ -185,7 +202,7 @@ export interface components {
         LineDto: {
             kind: components["schemas"]["LineKind"];
             status: components["schemas"]["LineStatus"];
-            /** @description Gateway payment reference; simulated ones start with SIM- */
+            /** @description Gateway payment reference; simulated ones start with SIM-, Open Payments ones hold the incoming and outgoing payment URLs */
             reference: string | null;
             /** Format: date-time */
             settledAt: string | null;
@@ -200,6 +217,11 @@ export interface components {
             evidence: components["schemas"]["EvidenceDto"] | null;
             review: components["schemas"]["ReviewDto"] | null;
             lines: components["schemas"]["LineDto"][];
+            /**
+             * Format: date-time
+             * @description Set when the investor approved the grant that funds the lines; no line is paid before
+             */
+            fundedAt: string | null;
             /**
              * Format: date-time
              * @description Set once every line is completado or fallido
@@ -222,6 +244,10 @@ export interface components {
             decision: components["schemas"]["Decision"];
             /** @description Required when observing: what the producer must correct */
             reason?: string;
+        };
+        FundingStartDto: {
+            /** @description Wallet consent page; the browser leaves the app and comes back through the funding callback */
+            redirectUrl: string;
         };
     };
     responses: never;
@@ -362,6 +388,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneDto"];
+                };
+            };
+        };
+    };
+    MilestonesController_startFunding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingStartDto"];
                 };
             };
         };
