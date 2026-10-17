@@ -32,7 +32,9 @@ function useDictation(onText: (text: string) => void) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const recognition = useRef<Recognition | null>(null);
-  useEffect(() => setSupported(speechRecognition() !== null), []);
+  useEffect(() => {
+    setSupported(speechRecognition() !== null);
+  }, []);
 
   const toggle = () => {
     if (listening) return recognition.current?.stop();
@@ -69,7 +71,10 @@ export default function ProducerAssistant({ loaderData }: Route.ComponentProps) 
   const [error, setError] = useState<string | null>(null);
   const dictation = useDictation((spoken) => setText((current) => (current ? `${current} ${spoken}` : spoken)));
   const endRef = useRef<HTMLLIElement>(null);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [lines.length]);
+  // Block body: newer browsers return a Promise from scrollIntoView, and an effect may only return a cleanup function.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [lines.length]);
 
   const say = (line: ChatLine) => setLines((current) => [...current, line]);
 
