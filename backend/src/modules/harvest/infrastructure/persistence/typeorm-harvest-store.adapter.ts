@@ -107,10 +107,18 @@ export class TypeOrmHarvestStore extends HarvestStore {
   }
 
   async creditsByCategory(projectId: string) {
+    return this.byCategory(projectId, "CREDIT");
+  }
+
+  async debitsByCategory(projectId: string) {
+    return this.byCategory(projectId, "DEBIT");
+  }
+
+  private async byCategory(projectId: string, type: "CREDIT" | "DEBIT") {
     const rows = await this.query(
       `SELECT l.category, SUM(l.amount) AS total, p.asset_scale FROM ledger_entries l JOIN projects p ON p.id = l.project_id
-       WHERE l.project_id = $1 AND l.type = 'CREDIT' GROUP BY l.category, p.asset_scale ORDER BY MIN(l.seq)`,
-      [projectId],
+       WHERE l.project_id = $1 AND l.type = $2 GROUP BY l.category, p.asset_scale ORDER BY MIN(l.seq)`,
+      [projectId, type],
     );
     // The ledger holds whole pesos; the statement is in the project's minor units.
     return Object.fromEntries(rows.map((r) => [r.category as string, Number(r.total) * 10 ** Number(r.asset_scale)]));

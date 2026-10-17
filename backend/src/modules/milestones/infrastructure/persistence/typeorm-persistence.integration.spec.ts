@@ -43,6 +43,10 @@ import { CLAIM_STATUS, type InsuranceClaim, PREMIUM_STATUS } from "../../../cont
 import { PRICE_TYPE } from "../../../contracts/application/purchase-contract";
 import { contractContext, FIDU, insurancePolicy, OWNER, purchaseContract } from "../../../contracts/application/testing";
 import { PostgresContractsStore } from "../../../contracts/infrastructure/persistence/postgres-contracts-store.adapter";
+import { SettlementUseCases } from "../../../settlement/application/settlement.use-cases";
+import { sampleTerms } from "../../../settlement/application/testing";
+import { SimulatedLiquidationFunding } from "../../../settlement/infrastructure/adapters/simulated-liquidation-funding.adapter";
+import { FakeGateway } from "../../application/testing";
 
 const url = process.env.TEST_DATABASE_URL ?? "postgres://agro:agro@localhost:5432/agro_test";
 // dropSchema wipes the database: refuse anything that is not a *_test (or *_test_<worktree>) database.
@@ -841,5 +845,51 @@ describe("PostgresContractsStore (RF-04, RF-05, RF-09, RF-14, RF-25)", () => {
     expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(230_000_000);
     await expect(store.bookIndemnity(confirmed, entry("c-1", 130_000_000))).rejects.toThrow();
     expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(230_000_000);
+  });
+
+  it("keeps the custody statement and the settlement's default L on one rule across harvest, premium and indemnity (RF-21)", async (ctx) => {
+    const ds = db(ctx);
+    const contracts = new PostgresContractsStore(ds);
+    const harvest = new TypeOrmHarvestStore(ds);
+    const milestoneRepo = new TypeOrmMilestoneAdapter(ds);
+    // Seeded 100M (capital) + harvest 10.8M + indemnity 130M − premium 64,045,800 − one milestone line paid from custody.
+    await harvest.creditHarvest({ id: "led-h", projectId: "p1", amount: 108_000, currency: "COP", buyerUserId: "u-buyer", paymentReference: null, createdAt: now.toISOString() }, 10_800_000);
+    const paid = insurancePolicy({ premiumPayment: { id: "pay-1", amount: 64_045_800, status: PREMIUM_STATUS.COMPLETED, reference: "REF-1", receipt: null, requestedBy: FIDU.id, requestedAt: now, completedAt: now } });
+    await contracts.bookPremium(paid, entry("pay-1", 64_045_800));
+    await contracts.saveClaim(claim());
+    await contracts.bookIndemnity(claim({ status: CLAIM_STATUS.CONFIRMED, confirmedBy: FIDU.id, confirmedAt: now }), entry("c-1", 130_000_000));
+    let [m] = await milestoneRepo.findByProject("p1");
+    m = review(submitEvidence(fund(m, now), "Fotos", now), "approved", null, now);
+    m = applyLineResult(m, m.lines[0].id, { status: "completado", reference: "R" }, now);
+    await milestoneRepo.save(m);
+    const line = m.lines[0].amount;
+    const net = 100_000_000 + 10_800_000 + 130_000_000 - 64_045_800;
+    expect((await new TypeOrmProjectAdapter(ds).findById("p1"))?.custodyBalance).toBe(net);
+
+    const statement = await new InvestorPanelUseCases(harvest, milestoneRepo, new TypeOrmPanelSources(ds)).custody("p1", OWNER);
+    expect(statement).toMatchObject({
+      credited: net + 64_045_800,
+      credits: [
+        { category: "HARVEST_PAYMENT", amount: 10_800_000 },
+        { category: "INDEMNITY", amount: 130_000_000 },
+      ],
+      ledgerDebits: 64_045_800,
+      debits: [{ category: "PREMIUM", amount: 64_045_800 }],
+      milestoneDebits: line,
+      settlementDebits: 0,
+      balance: net - line,
+    });
+
+    const settlement = new SettlementUseCases(
+      new TypeOrmProjectAdapter(ds),
+      new TypeOrmSettlementAdapter(ds),
+      new FakeGateway((r) => ({ status: "en_cola", reference: `REF-${r.lineId}` })),
+      wallets,
+      new SimulatedLiquidationFunding(),
+      undefined,
+      milestoneRepo,
+    );
+    const preview = await settlement.preview("p1", { id: "u-admin", role: "admin" }, { ...sampleTerms(), proceeds: null, days: 365 });
+    expect(preview.terms.proceeds).toBe(statement.balance);
   });
 });

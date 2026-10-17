@@ -56,6 +56,9 @@ export class FakeHarvestStore extends HarvestStore {
     const total = this.credits.filter((c) => c.projectId === projectId).reduce((sum, c) => sum + c.amount * 10 ** (p?.assetScale ?? 2), 0);
     return total > 0 ? { HARVEST_PAYMENT: total } : {};
   }
+  async debitsByCategory(_projectId: string): Promise<Record<string, number>> {
+    return {};
+  }
   transaction<T>(_projectId: string, work: (store: HarvestStore) => Promise<T>): Promise<T> {
     return work(this);
   }

@@ -13,9 +13,12 @@ const pct2 = (fraction: number) => Math.round(fraction * 10_000) / 100;
 export interface CustodyStatement {
   currency: string;
   assetScale: number;
-  /** Every credit that reached custody (the project's custody_balance, which only grows). */
+  /** Every credit that reached custody: custody_balance (the ledger's net) plus the ledger debits it already lost. */
   credited: number;
   credits: { category: string; amount: number }[];
+  /** Ledger DEBITs (the insurance premium, RF-14), already subtracted from custody_balance when they were booked. */
+  ledgerDebits: number;
+  debits: { category: string; amount: number }[];
   /** Milestone lines paid or in flight from custody. */
   milestoneDebits: number;
   /** Liquidation payouts paid or in flight from custody. */
@@ -26,19 +29,27 @@ export interface CustodyStatement {
 
 const MOVING: readonly string[] = [PAYOUT_STATUS.EXECUTED, PAYOUT_STATUS.EXECUTING];
 
+/** The custody ledger grouped by category, in the project's minor units. */
+export type LedgerTotals = { credits: Record<string, number>; debits: Record<string, number> };
+
+// Applies the custody rule documented on Project.custodyBalance: the premium is already out of custodyBalance, so the balance
+// subtracts only what the ledger does not hold (milestone lines and liquidation payouts); credited adds the ledger debits back.
 export function custodyStatement(
   project: Pick<Project, "currency" | "assetScale" | "custodyBalance">,
-  creditsByCategory: Record<string, number>,
+  ledger: LedgerTotals,
   milestones: readonly Milestone[],
   settlements: readonly Settlement[],
 ): CustodyStatement {
   const milestoneDebits = milestones.reduce((sum, m) => sum + spentFromCustody(m), 0);
   const settlementDebits = settlements.flatMap((s) => s.payouts).filter((p) => MOVING.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+  const ledgerDebits = Object.values(ledger.debits).reduce((sum, amount) => sum + amount, 0);
   return {
     currency: project.currency,
     assetScale: project.assetScale,
-    credited: project.custodyBalance,
-    credits: Object.entries(creditsByCategory).map(([category, amount]) => ({ category, amount })),
+    credited: project.custodyBalance + ledgerDebits,
+    credits: Object.entries(ledger.credits).map(([category, amount]) => ({ category, amount })),
+    ledgerDebits,
+    debits: Object.entries(ledger.debits).map(([category, amount]) => ({ category, amount })),
     milestoneDebits,
     settlementDebits,
     balance: Math.max(0, project.custodyBalance - milestoneDebits - settlementDebits),

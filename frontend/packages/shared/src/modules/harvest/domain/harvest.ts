@@ -36,7 +36,11 @@ export interface Custody {
   balance: number;
   credited: number;
   credits: { category: string; amount: number }[];
+  /** Ledger DEBITs (the insurance premium, RF-14) by category. */
+  debits: { category: string; amount: number }[];
+  /** Everything that left custody: ledger debits + milestone lines + liquidation payouts; balance = credited − debited. */
   debited: number;
+  ledgerDebits: number;
   milestoneDebits: number;
   settlementDebits: number;
 }

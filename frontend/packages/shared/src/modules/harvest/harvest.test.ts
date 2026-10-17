@@ -22,7 +22,7 @@ const project = (overrides: Partial<ProjectDto> = {}): ProjectDto => ({
 });
 
 const setup = () => {
-  const store = { projects: [project()], milestones: [], ledgerEntries: [] };
+  const store: Parameters<typeof createHarvestMockFetch>[0] = { projects: [project()], milestones: [], ledgerEntries: [] };
   const fetchFn = createHarvestMockFetch(store, async () => new Response(null, { status: 404 }));
   return { store, harvest: createHarvestModule({ fetchFn }) };
 };
@@ -57,6 +57,26 @@ describe("harvest module over the mock (RF-24)", () => {
       error: { kind: "validation", fieldErrors: { "price.price_per_kg": [expect.any(String)] } },
     });
     expect(await harvest.pay("p1")).toMatchObject({ ok: false, error: { kind: "validation", fieldErrors: { _form: [expect.stringContaining("certificada")] } } });
+  });
+
+  it("reads custody with the premium DEBIT already out of custody_balance (never subtracted twice) and the indemnity as a credit", async () => {
+    const { harvest, store } = setup();
+    const entry = (type: string, category: string, amount: number) => ({ id: `led-${category}`, project_id: "p1", type, category, amount, currency: "COP", negotiation_id: "", buyer_id: "", created_at: "2026-11-02T00:00:00.000Z" });
+    // 1,000,000 seeded − premium 150,000 + indemnity 300,000, as the contracts mock books them.
+    store.projects[0].custody_balance = 1_000_000 - 150_000 + 300_000;
+    store.ledgerEntries.push(entry("DEBIT", "PREMIUM", 150_000), entry("CREDIT", "INDEMNITY", 300_000));
+    expect(await harvest.custody("p1")).toMatchObject({
+      ok: true,
+      value: {
+        balance: 1_150_000,
+        credited: 1_300_000,
+        credits: [{ category: "INDEMNITY", amount: 300_000 }],
+        debits: [{ category: "PREMIUM", amount: 150_000 }],
+        ledgerDebits: 150_000,
+        debited: 150_000,
+        milestoneDebits: 0,
+      },
+    });
   });
 
   it("reads the investor panel with realized TIR pending before the settlement, and not_found for an unknown project", async () => {

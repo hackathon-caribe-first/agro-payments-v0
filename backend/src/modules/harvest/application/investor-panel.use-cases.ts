@@ -41,12 +41,13 @@ export class InvestorPanelUseCases {
   }
 
   private async statement(project: Project): Promise<CustodyStatement> {
-    const [credits, milestones, settlements] = await Promise.all([
+    const [credits, debits, milestones, settlements] = await Promise.all([
       this.store.creditsByCategory(project.id),
+      this.store.debitsByCategory(project.id),
       this.milestoneRepository.findByProject(project.id),
       this.sources.settlements(project.id),
     ]);
-    return custodyStatement(project, credits, milestones, settlements);
+    return custodyStatement(project, { credits, debits }, milestones, settlements);
   }
 
   async custody(projectId: string, viewer: Viewer): Promise<CustodyStatement> {

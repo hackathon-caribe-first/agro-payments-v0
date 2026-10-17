@@ -39,7 +39,10 @@ export const custodyDtoSchema = z.object({
   balance: z.number(),
   credited: z.number(),
   credits: z.array(z.object({ category: z.string(), amount: z.number() })),
+  // Ledger DEBITs (the insurance premium), already out of custody_balance; `credited` adds them back.
+  debits: z.array(z.object({ category: z.string(), amount: z.number() })),
   debited: z.number(),
+  ledger_debits: z.number(),
   milestone_debits: z.number(),
   settlement_debits: z.number(),
 });

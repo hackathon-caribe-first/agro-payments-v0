@@ -59,14 +59,32 @@ describe("harvest wire shape", () => {
   });
 
   it("the custody statement in pesos", () => {
-    const statement = { currency: "COP", assetScale: 2, credited: 500_00, credits: [{ category: "HARVEST_PAYMENT", amount: 500_00 }], milestoneDebits: 100_00, settlementDebits: 50_00, balance: 350_00 };
+    const statement = {
+      currency: "COP",
+      assetScale: 2,
+      credited: 600_00,
+      credits: [
+        { category: "HARVEST_PAYMENT", amount: 500_00 },
+        { category: "INDEMNITY", amount: 100_00 },
+      ],
+      ledgerDebits: 20_00,
+      debits: [{ category: "PREMIUM", amount: 20_00 }],
+      milestoneDebits: 100_00,
+      settlementDebits: 50_00,
+      balance: 430_00,
+    };
     expect(toCustodyResponse("p1", statement)).toEqual({
       project_id: "p1",
       currency: "COP",
-      balance: 350,
-      credited: 500,
-      credits: [{ category: "HARVEST_PAYMENT", amount: 500 }],
-      debited: 150,
+      balance: 430,
+      credited: 600,
+      credits: [
+        { category: "HARVEST_PAYMENT", amount: 500 },
+        { category: "INDEMNITY", amount: 100 },
+      ],
+      debits: [{ category: "PREMIUM", amount: 20 }],
+      debited: 170,
+      ledger_debits: 20,
       milestone_debits: 100,
       settlement_debits: 50,
     });

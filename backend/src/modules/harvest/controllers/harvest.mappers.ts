@@ -56,7 +56,9 @@ export function toCustodyResponse(projectId: string, s: CustodyStatement) {
     balance: pesos(s.balance),
     credited: pesos(s.credited),
     credits: s.credits.map((c) => ({ category: c.category, amount: pesos(c.amount) })),
-    debited: pesos(s.milestoneDebits + s.settlementDebits),
+    debits: s.debits.map((d) => ({ category: d.category, amount: pesos(d.amount) })),
+    debited: pesos(s.ledgerDebits + s.milestoneDebits + s.settlementDebits),
+    ledger_debits: pesos(s.ledgerDebits),
     milestone_debits: pesos(s.milestoneDebits),
     settlement_debits: pesos(s.settlementDebits),
   };

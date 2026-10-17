@@ -6,6 +6,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   BUYER_DEPOSIT: "Depósitos del comprador",
   INVESTOR_CAPITAL: "Aportes de inversionistas",
   HARVEST_PAYMENT: "Pago de la cosecha",
+  INDEMNITY: "Indemnización del seguro",
+};
+
+const DEBIT_LABELS: Record<string, string> = {
+  PREMIUM: "Prima neta del seguro",
 };
 
 // RF-21: what is still in custody. With an observed milestone the grant stays alive but nothing more is paid, so this is the money
@@ -25,6 +30,12 @@ export function CustodyCard({ custody, note }: { custody: Custody; note?: string
             <div key={c.category} className="contents">
               <dt className="text-muted-foreground">{CATEGORY_LABELS[c.category] ?? "Otros ingresos"}</dt>
               <dd className="text-right tabular-nums">+ {money(c.amount)}</dd>
+            </div>
+          ))}
+          {custody.debits.map((d) => (
+            <div key={d.category} className="contents">
+              <dt className="text-muted-foreground">{DEBIT_LABELS[d.category] ?? "Otros egresos"}</dt>
+              <dd className="text-right tabular-nums">− {money(d.amount)}</dd>
             </div>
           ))}
           <dt className="text-muted-foreground">Pagado en hitos</dt>

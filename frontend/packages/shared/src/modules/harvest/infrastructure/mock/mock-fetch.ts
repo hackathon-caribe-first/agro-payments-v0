@@ -34,15 +34,23 @@ export function createHarvestMockFetch(store: HarvestMockStore, delegate: typeof
   const custodyOf = (p: ProjectDto): CustodyDto => {
     const milestones = store.milestones.filter((m) => m.project_id === p.id);
     const debited = milestones.reduce((sum, m) => sum + m.supplies_executed + m.labor_executed, 0);
+    // Same rule as the backend: custody_balance is the ledger's net (the premium DEBIT already out of it).
     const credits = new Map<string, number>();
-    for (const e of store.ledgerEntries.filter((l) => l.project_id === p.id)) credits.set(e.category, (credits.get(e.category) ?? 0) + e.amount);
+    const debits = new Map<string, number>();
+    for (const e of store.ledgerEntries.filter((l) => l.project_id === p.id)) {
+      const into = e.type === "DEBIT" ? debits : credits;
+      into.set(e.category, (into.get(e.category) ?? 0) + e.amount);
+    }
+    const ledgerDebits = [...debits.values()].reduce((sum, amount) => sum + amount, 0);
     return {
       project_id: p.id,
       currency: p.currency,
       balance: Math.max(0, p.custody_balance - debited),
-      credited: p.custody_balance,
+      credited: p.custody_balance + ledgerDebits,
       credits: [...credits].map(([category, amount]) => ({ category, amount })),
-      debited,
+      debits: [...debits].map(([category, amount]) => ({ category, amount })),
+      debited: ledgerDebits + debited,
+      ledger_debits: ledgerDebits,
       milestone_debits: debited,
       settlement_debits: 0,
     };

@@ -41,6 +41,16 @@ export type Project = {
   description: string;
   /** Σ(supplies + labor) of its milestones, minor units; the platform fee is on top. */
   targetAmount: number;
+  /**
+   * RF-21 custody rule (the one place it is written down), minor units. custodyBalance is the custody ledger's net: every CREDIT
+   * (BUYER_DEPOSIT, INVESTOR_CAPITAL, HARVEST_PAYMENT, INDEMNITY) adds to it and every ledger DEBIT (PREMIUM) subtracts from it,
+   * in the same transaction as its ledger row. Milestone lines and liquidation payouts are not ledger rows: they are derived from
+   * the milestones and settlements and subtracted on read. So what is still in custody is
+   *   custodyBalance − milestone lines paid or in flight − liquidation payouts paid or in flight,
+   * and the premium, already out of custodyBalance, is never subtracted again. The custody statement (harvest/domain/panel.ts,
+   * where credited = custodyBalance + ledger debits) and the settlement's default L (custodyBalance − milestone lines, before any
+   * payout exists) both apply this rule.
+   */
   custodyBalance: number;
   totalDisbursed: number;
   investorRoiPct: number;

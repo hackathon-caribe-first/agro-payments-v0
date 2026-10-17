@@ -21,7 +21,9 @@ const fromCustody = (d: CustodyDto): Custody => ({
   balance: d.balance,
   credited: d.credited,
   credits: d.credits,
+  debits: d.debits,
   debited: d.debited,
+  ledgerDebits: d.ledger_debits,
   milestoneDebits: d.milestone_debits,
   settlementDebits: d.settlement_debits,
 });

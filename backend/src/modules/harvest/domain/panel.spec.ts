@@ -60,7 +60,7 @@ describe("custodyStatement (RF-21: what is still in custody)", () => {
     const [first] = m.lines;
     m = applyLineResult(m, first.id, { status: "completado", reference: "R" }, at);
     const project = sampleProject({ custodyBalance: 500_000_000 });
-    const statement = custodyStatement(project, { INVESTOR_CAPITAL: 300_000_000, HARVEST_PAYMENT: 200_000_000 }, [m], []);
+    const statement = custodyStatement(project, { credits: { INVESTOR_CAPITAL: 300_000_000, HARVEST_PAYMENT: 200_000_000 }, debits: {} }, [m], []);
     expect(statement).toEqual({
       currency: "COP",
       assetScale: 2,
@@ -69,13 +69,32 @@ describe("custodyStatement (RF-21: what is still in custody)", () => {
         { category: "INVESTOR_CAPITAL", amount: 300_000_000 },
         { category: "HARVEST_PAYMENT", amount: 200_000_000 },
       ],
+      ledgerDebits: 0,
+      debits: [],
       milestoneDebits: first.amount,
       settlementDebits: 0,
       balance: 500_000_000 - first.amount,
     });
-    const afterLiquidation = custodyStatement(project, {}, [], [executed(null)]);
+    const afterLiquidation = custodyStatement(project, { credits: {}, debits: {} }, [], [executed(null)]);
     expect(afterLiquidation.settlementDebits).toBe(200_000_000);
     expect(afterLiquidation.balance).toBe(300_000_000);
+  });
+
+  it("does not subtract the premium twice: custody_balance is already net of it, credited adds it back and the indemnity counts as a credit", () => {
+    let m = fund({ ...unfundedMilestone(), projectId: "p1" }, at);
+    m = review(submitEvidence(m, "Fotos", at), "approved", null, at);
+    const [first] = m.lines;
+    m = applyLineResult(m, first.id, { status: "completado", reference: "R" }, at);
+    // Capital 300M + harvest 200M + indemnity 50M − premium 20M, as the ledger bookings left custody_balance.
+    const project = sampleProject({ custodyBalance: 300_000_000 + 200_000_000 + 50_000_000 - 20_000_000 });
+    const ledger = { credits: { INVESTOR_CAPITAL: 300_000_000, HARVEST_PAYMENT: 200_000_000, INDEMNITY: 50_000_000 }, debits: { PREMIUM: 20_000_000 } };
+    const statement = custodyStatement(project, ledger, [m], []);
+    expect(statement.credited).toBe(550_000_000);
+    expect(statement.credited).toBe(statement.credits.reduce((sum, c) => sum + c.amount, 0));
+    expect(statement.ledgerDebits).toBe(20_000_000);
+    expect(statement.debits).toEqual([{ category: "PREMIUM", amount: 20_000_000 }]);
+    expect(statement.balance).toBe(550_000_000 - 20_000_000 - first.amount);
+    expect(statement.balance).toBe(statement.credited - statement.ledgerDebits - statement.milestoneDebits - statement.settlementDebits);
   });
 });
 

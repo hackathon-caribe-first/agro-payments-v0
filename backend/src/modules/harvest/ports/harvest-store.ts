@@ -25,6 +25,8 @@ export abstract class HarvestStore {
   abstract creditHarvest(credit: HarvestCredit, amountMinor: number): Promise<void>;
   /** The custody ledger's credits by category, in the project's minor units. */
   abstract creditsByCategory(projectId: string): Promise<Record<string, number>>;
+  /** The custody ledger's DEBITs by category (the insurance premium), in the project's minor units. */
+  abstract debitsByCategory(projectId: string): Promise<Record<string, number>>;
   /** Runs `work` in one transaction serialized on the project row (like NegotiationStore); `store` is bound to it. */
   abstract transaction<T>(projectId: string, work: (store: HarvestStore) => Promise<T>): Promise<T>;
 }

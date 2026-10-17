@@ -79,7 +79,7 @@ export class SettlementUseCases {
     return { ...request, investors, days: request.days ?? cycleDays(project), proceeds: request.proceeds ?? (await this.custodyLeft(project)) };
   }
 
-  /** RF-21: the credited custody balance minus the milestone lines paid or in flight from it. */
+  /** RF-21 custody rule (see Project.custodyBalance): the ledger's net (premium already out, indemnity in) minus the milestone lines. */
   private async custodyLeft(project: Project): Promise<number> {
     const milestones = (await this.milestones?.findByProject(project.id)) ?? [];
     return Math.max(0, project.custodyBalance - milestones.reduce((sum, m) => sum + spentFromCustody(m), 0));
