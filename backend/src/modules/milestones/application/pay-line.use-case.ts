@@ -1,10 +1,20 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DomainError } from "../../../shared/domain-errors";
+import { projectOfMilestone } from "../../support/application/op-trace";
+import { PAYMENT_KIND, type PaymentTarget, recordGatewayResult } from "../../support/application/payment-step";
+import { PaymentStepRepository } from "../../support/ports/payment-step.repository";
 import { MilestoneFunding } from "../ports/milestone-funding";
 import { PaymentGateway, type LinePaymentResult } from "../ports/payment-gateway";
 import { applyLineResult, assertLinePayable, type Milestone } from "./milestone";
 import { MilestoneStore } from "./milestone-store";
 import { revokeIfClosed } from "./revoke-grant";
+
+/** A milestone line in the payment step timeline: `${milestoneId}:${lineId}`, like the gateway's idempotency key. */
+export const lineTarget = (milestoneId: string, lineId: string): PaymentTarget => ({
+  kind: PAYMENT_KIND.MILESTONE_LINE,
+  paymentId: `${milestoneId}:${lineId}`,
+  projectId: projectOfMilestone(milestoneId),
+});
 
 @Injectable()
 export class PayLineUseCase {
@@ -12,6 +22,7 @@ export class PayLineUseCase {
     private readonly store: MilestoneStore,
     private readonly gateway: PaymentGateway,
     private readonly funding: MilestoneFunding,
+    @Optional() private readonly steps?: PaymentStepRepository,
   ) {}
 
   async execute(id: string, lineId: string) {
@@ -35,6 +46,7 @@ export class PayLineUseCase {
       });
 
     const updated = await this.store.update(id, (m) => applyLineResult(m, lineId, result, new Date()));
+    await recordGatewayResult(this.steps, lineTarget(id, lineId), result);
     return this.closeOut(updated);
   }
 

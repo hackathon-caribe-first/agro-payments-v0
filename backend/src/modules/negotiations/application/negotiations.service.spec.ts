@@ -248,6 +248,31 @@ describe("NegotiationsService deposit", () => {
     expect(await rejection(service.deposit(id, BUYER, { buyer_id: "x", expected_total: 4_500_000 }))).toEqual({ status: 409, form: "El depósito ya se realizó." });
   });
 
+  it("Open Payments: a deposit sent but not confirmed credits nothing; the deposit endpoint confirms it later, once, without a new grant", async () => {
+    const custody = new RedirectCustody();
+    custody.sent = "unconfirmed";
+    const { service, store, steps, id } = await agreed(custody);
+    await service.deposit(id, BUYER, { buyer_id: "x", expected_total: 4_500_000 });
+
+    const unconfirmed = await service.completeDeposit(id, { interactRef: "r", hash: "good" });
+    expect(unconfirmed.deposit_status).toBe("PENDING");
+    expect(store.ledger).toEqual([]);
+    expect(store.projects.get("p1")).toMatchObject({ custodyBalance: 0 });
+
+    // Still in flight: answered as is, no consent URL (a new grant would pay twice).
+    expect(await service.deposit(id, BUYER, { buyer_id: "x", expected_total: 4_500_000 })).not.toHaveProperty("deposit_redirect_url");
+    expect(custody.orders).toHaveLength(1);
+
+    custody.inFlight = { status: "completed", reference: "https://rs.test/outgoing-payments/out-1" };
+    const done = await service.deposit(id, BUYER, { buyer_id: "x", expected_total: 4_500_000 });
+    expect(done.deposit_status).toBe("DEPOSITED");
+    expect(store.ledger).toEqual([expect.objectContaining({ amount: 4_500_000, payment_reference: "https://rs.test/outgoing-payments/out-1" })]);
+    expect(store.projects.get("p1")).toMatchObject({ custodyBalance: 450_000_000 });
+    expect(steps.of("buyer_deposit", id)).toEqual(["completed"]);
+    expect(await rejection(service.deposit(id, BUYER, { buyer_id: "x", expected_total: 4_500_000 }))).toEqual({ status: 409, form: "El depósito ya se realizó." });
+    expect(store.ledger).toHaveLength(1);
+  });
+
   it("Open Payments: a BUYER accept on a PROJECT offer starts the deposit and returns the consent URL", async () => {
     const { service } = setup(new RedirectCustody());
     const r = await service.start("p1", BUYER, projectOffer());

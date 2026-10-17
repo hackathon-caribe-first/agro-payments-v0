@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { DomainError } from "../../../../shared/domain-errors";
-import { mockOpenPayments } from "../../../milestones/infrastructure/adapters/open-payments.testing";
+import { amount, mockOpenPayments } from "../../../milestones/infrastructure/adapters/open-payments.testing";
+import { InMemoryPaymentSteps } from "../../../support/application/testing";
 import { depositDebitLimit, OpenPaymentsCustodyDeposit } from "./open-payments-custody-deposit.adapter";
 
 const API = "http://api.test";
@@ -18,7 +19,9 @@ function setup(buyerWallet: string | null = BUYER_WALLET.id, wallets = [BUYER_WA
   mock.client.incomingPayment.get.mockImplementation((async ({ url }: { url: string }) => ({ id: url, completed: true, receivedAmount: { value: String(order.amount), assetCode: "COP", assetScale: 2 } })) as never);
   // The buyer's wallet quotes the exact total by default (same currency); specs override it to model FX.
   mock.client.quote.create.mockImplementation((async () => ({ id: "https://rs.custody.test/quotes/q-1", debitAmount: { value: String(order.amount), assetCode: "COP", assetScale: 2 } })) as never);
-  return { ...mock, deposit: new OpenPaymentsCustodyDeposit(mock.op, buyerWallet, API) };
+  const steps = new InMemoryPaymentSteps();
+  // No sleeping in specs: three polls, back to back.
+  return { ...mock, steps, deposit: new OpenPaymentsCustodyDeposit(mock.op, buyerWallet, API, steps, { attempts: 3, intervalMs: 0 }) };
 }
 
 async function started() {
@@ -99,7 +102,7 @@ describe("OpenPaymentsCustodyDeposit.complete", () => {
     expect(client.quote.create).toHaveBeenCalledWith({ url: BUYER_WALLET.resourceServer, accessToken: "quote-token" }, { walletAddress: BUYER_WALLET.id, receiver: incomingId, method: "ilp" });
     expect(client.outgoingPayment.create).toHaveBeenCalledWith(
       { url: BUYER_WALLET.resourceServer, accessToken: "outgoing-token" },
-      { walletAddress: BUYER_WALLET.id, quoteId: expect.stringContaining("/quotes/q-1") },
+      { walletAddress: BUYER_WALLET.id, quoteId: expect.stringContaining("/quotes/q-1"), metadata: { deposit: "qr-1" } },
     );
     expect(reference).toMatch(/outgoing-payments\/out-1$/);
     expect(await grants.findLatestForNegotiation("qr-1")).toMatchObject({ status: "active", pending: null });
@@ -118,5 +121,53 @@ describe("OpenPaymentsCustodyDeposit.complete", () => {
     client.quote.create.mockResolvedValueOnce({ id: "q-big", debitAmount: { value: "454500001", assetCode: "COP", assetScale: 2 } } as never);
     await expect(deposit.complete(order, callback)).rejects.toThrow(DomainError);
     expect(client.outgoingPayment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("OpenPaymentsCustodyDeposit confirmation", () => {
+  it("completed once the custody incoming payment completes (or the whole debit was sent): the caller may credit", async () => {
+    const { deposit, client, callback, steps } = await started();
+    client.incomingPayment.get.mockResolvedValueOnce({ id: "x", completed: false, receivedAmount: amount("0") }).mockResolvedValueOnce({ id: "x", completed: true, receivedAmount: amount("450000000") });
+    const result = await deposit.complete(order, callback);
+    expect(result).toEqual({ status: "completed", reference: expect.stringMatching(/outgoing-payments\/out-1$/) });
+    expect(client.outgoingPayment.get).toHaveBeenCalledTimes(2);
+    expect(steps.of("buyer_deposit", "qr-1")).toEqual(["grant_requested", "grant_approved", "incoming_created", "quote_created", "outgoing_created"]);
+
+    const sent = await started();
+    sent.client.outgoingPayment.get.mockResolvedValueOnce({ id: "o", failed: false, debitAmount: amount("450000000"), sentAmount: amount("450000000") } as never);
+    expect((await sent.deposit.complete(order, sent.callback)).status).toBe("completed");
+  });
+
+  it("a failed outgoing payment rejects (nothing to credit) and records the failure", async () => {
+    const { deposit, client, callback, steps } = await started();
+    client.outgoingPayment.get.mockResolvedValueOnce({ id: "o", failed: true, debitAmount: amount("3010") } as never);
+    await expect(deposit.complete(order, callback)).rejects.toThrow(DomainError);
+    expect(steps.of("buyer_deposit", "qr-1").at(-1)).toBe("failed");
+  });
+
+  it("still unconfirmed after polling: answers unconfirmed and records sent_unconfirmed; confirm() finds it by metadata and settles it later", async () => {
+    const { deposit, client, callback, steps } = await started();
+    // Custody has received nothing yet.
+    client.incomingPayment.get.mockResolvedValue({ id: "x", completed: false, receivedAmount: amount("0") });
+    const sent = await deposit.complete(order, callback);
+    expect(sent.status).toBe("unconfirmed");
+    expect(client.outgoingPayment.get).toHaveBeenCalledTimes(3);
+    expect(steps.of("buyer_deposit", "qr-1").at(-1)).toBe("sent_unconfirmed");
+
+    client.outgoingPayment.list.mockResolvedValueOnce({
+      pagination: { hasNextPage: false, hasPreviousPage: false },
+      result: [{ id: sent.reference, receiver: "https://rs.custody.test/incoming-payments/in-1", failed: false, debitAmount: amount("3010"), receiveAmount: amount("3000"), metadata: { deposit: "qr-1" } }],
+    });
+    client.incomingPayment.get.mockResolvedValueOnce({ id: "x", completed: true, receivedAmount: amount("450000000") });
+    expect(await deposit.confirm(order)).toEqual({ status: "completed", reference: sent.reference });
+  });
+
+  it("confirm() is null while no grant was approved or no payment carries the deposit's metadata", async () => {
+    const pending = await started();
+    expect(await pending.deposit.confirm(order)).toBeNull();
+    const { deposit, client, callback } = await started();
+    client.quote.create.mockResolvedValueOnce({ id: "q-big", debitAmount: { value: "454500001", assetCode: "COP", assetScale: 2 } } as never);
+    await expect(deposit.complete(order, callback)).rejects.toThrow(DomainError);
+    expect(await deposit.confirm(order)).toBeNull();
   });
 });

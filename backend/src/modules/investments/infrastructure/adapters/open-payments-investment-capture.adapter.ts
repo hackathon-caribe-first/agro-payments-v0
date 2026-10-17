@@ -8,6 +8,9 @@ import {
 } from "../../../milestones/infrastructure/adapters/open-payments.client";
 import type { FundingCallback } from "../../../milestones/ports/milestone-funding";
 import { GRANT_PURPOSE, GRANT_STATUS } from "../../../milestones/ports/grant-store";
+import { withOpTraceContext } from "../../../support/application/op-trace";
+import { PAYMENT_KIND, PAYMENT_STEP, quoteDetail, stepRecorder } from "../../../support/application/payment-step";
+import type { PaymentStepRepository } from "../../../support/ports/payment-step.repository";
 import type { Clock } from "../../application/investments.use-cases";
 import { type CaptureQuote, exceedsGrant, type Investment, mustRequote } from "../../domain/investment";
 import { type CaptureCompletion, type CaptureStart, InvestmentCapture, type InvestorWallet } from "../../ports/investment-capture";
@@ -42,8 +45,22 @@ export class OpenPaymentsInvestmentCapture extends InvestmentCapture {
     private readonly op: OpenPayments,
     private readonly apiUrl: string,
     private readonly clock: Clock = { now: () => new Date() },
+    private readonly steps?: PaymentStepRepository,
   ) {
     super();
+  }
+
+  private record(investment: Investment) {
+    return stepRecorder(this.steps, { kind: PAYMENT_KIND.INVESTMENT_CAPTURE, paymentId: investment.id, projectId: investment.projectId });
+  }
+
+  // RF-28: every request below is traced under the investment and its project.
+  start(investment: Investment, wallet: InvestorWallet) {
+    return withOpTraceContext({ investmentId: investment.id, projectId: investment.projectId }, () => this.request(investment, wallet));
+  }
+
+  complete(investment: Investment, callback: FundingCallback) {
+    return withOpTraceContext({ investmentId: investment.id, projectId: investment.projectId }, () => this.pay(investment, callback));
   }
 
   async wallet(url: string): Promise<InvestorWallet> {
@@ -72,7 +89,8 @@ export class OpenPaymentsInvestmentCapture extends InvestmentCapture {
     };
   }
 
-  async start(investment: Investment, wallet: InvestorWallet): Promise<CaptureStart> {
+  private async request(investment: Investment, wallet: InvestorWallet): Promise<CaptureStart> {
+    const record = this.record(investment);
     const { client, grants, custodyWalletAddress } = this.op;
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
     if (custody.assetCode !== investment.currency || custody.assetScale !== investment.assetScale) {
@@ -90,7 +108,16 @@ export class OpenPaymentsInvestmentCapture extends InvestmentCapture {
         metadata: { project: investment.projectId, investment: investment.id },
       },
     );
+    await record(PAYMENT_STEP.INCOMING_CREATED, incoming.id);
     const quote = await this.quote(investor, incoming.id, investment);
+    await record(
+      PAYMENT_STEP.QUOTE_CREATED,
+      quote.id,
+      quoteDetail(
+        { value: quote.debitAmount, assetCode: quote.debitAssetCode, assetScale: quote.debitAssetScale },
+        { value: quote.receiveAmount, assetCode: investment.currency, assetScale: investment.assetScale },
+      ),
+    );
 
     const finishUri = `${this.apiUrl}/api/investments/${encodeURIComponent(investment.id)}/callback`;
     const { redirectUrl, pending } = await requestInteractiveOutgoingGrant(this.op, investor, quote.debitAmount, finishUri);
@@ -110,10 +137,21 @@ export class OpenPaymentsInvestmentCapture extends InvestmentCapture {
       createdAt: new Date(),
       revokedAt: null,
     });
+    await record(PAYMENT_STEP.GRANT_REQUESTED, pending.continueUri);
     return { kind: "consent", redirectUrl, quote, incomingPaymentId: incoming.id };
   }
 
-  async complete(investment: Investment, callback: FundingCallback): Promise<CaptureCompletion> {
+  private async pay(investment: Investment, callback: FundingCallback): Promise<CaptureCompletion> {
+    const completion = await this.capture(investment, callback);
+    // Recorded out here: capture()'s catch would turn a failed step write into a failed capture of money that moved.
+    const record = this.record(investment);
+    await record(PAYMENT_STEP.GRANT_APPROVED, (await this.op.grants.findLatestForInvestment(investment.id))?.access?.continueUri ?? null);
+    if (completion.kind === "captured") await record(PAYMENT_STEP.OUTGOING_CREATED, completion.outgoingPaymentId);
+    if (completion.kind === "failed") await record(PAYMENT_STEP.FAILED, null, { reason: completion.reason });
+    return completion;
+  }
+
+  private async capture(investment: Investment, callback: FundingCallback): Promise<CaptureCompletion> {
     const { client, grants } = this.op;
     const { quote: approved, incomingPaymentId } = investment;
     if (!approved || !incomingPaymentId) throw new DomainError(`Investment ${investment.id} has no quote to pay`);

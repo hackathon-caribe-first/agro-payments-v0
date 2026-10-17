@@ -10,6 +10,8 @@ import { WalletDirectory } from "../../payouts/ports/wallet-directory";
 import { canView, PROJECT_STATUS, type Project, type ProjectStatus, type Viewer } from "../../projects/application/project";
 import { ProjectRepository } from "../../projects/ports/project.repository";
 import { SimulationRunRepository } from "../../simulation/ports/simulation-run.repository";
+import { PAYMENT_KIND, recordGatewayResult } from "../../support/application/payment-step";
+import type { PaymentStepRepository } from "../../support/ports/payment-step.repository";
 import { ContractsStore } from "../ports/contracts-store";
 import { IndemnityInflow } from "../ports/indemnity-inflow";
 import { PremiumFunding } from "../ports/premium-funding";
@@ -85,6 +87,7 @@ export class ContractsUseCases {
     private readonly premium: PremiumFunding,
     private readonly inflow: IndemnityInflow,
     private readonly clock: Clock = { now: () => new Date() },
+    private readonly steps?: PaymentStepRepository,
   ) {}
 
   private async project(id: string, viewer: Viewer): Promise<Project> {
@@ -268,17 +271,20 @@ export class ContractsUseCases {
     if (!payment) return policy;
     const receipt = mergeReceipt(payment.receipt, result.receipt);
     const reference = result.reference ?? payment.reference;
+    const recordSteps = () => recordGatewayResult(this.steps, { kind: PAYMENT_KIND.INSURANCE_PREMIUM, paymentId: payment.id, projectId: project.id }, result);
     if (result.status === "completado") {
       const now = this.clock.now();
       const paid = { ...policy, premiumPayment: { ...payment, status: PREMIUM_STATUS.COMPLETED, reference, receipt, completedAt: now } };
       await this.store.bookPremium(paid, { id: payment.id, projectId: project.id, amount: payment.amount, currency: project.currency, assetScale: project.assetScale, reference, at: now });
       // Like RF-22: the grant closes with its only payment. A failed revoke never undoes the payment.
       await this.premium.revoke(project.id).catch(() => undefined);
+      await recordSteps();
       return paid;
     }
     const status = result.status === "fallido" ? PREMIUM_STATUS.FAILED : PREMIUM_STATUS.EXECUTING;
     const next = { ...policy, premiumPayment: { ...payment, status, reference, receipt } };
     await this.store.savePolicy(next);
+    await recordSteps();
     return next;
   }
 

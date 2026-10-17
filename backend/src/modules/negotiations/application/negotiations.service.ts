@@ -9,6 +9,8 @@ import type { FundingCallback } from "../../milestones/ports/milestone-funding";
 import { custodyGate, pesosToMinor, PROJECT_STATUS, type Project } from "../../projects/application/project";
 import { viewsOf } from "../../projects/application/project-queries";
 import { toMilestoneSummaryResponse } from "../../projects/controllers/api.mappers";
+import { PAYMENT_KIND, PAYMENT_STEP, stepRecorder } from "../../support/application/payment-step";
+import { PaymentStepRepository } from "../../support/ports/payment-step.repository";
 import { applyProjectDeposit } from "../domain/deposit";
 import { toFieldErrors, toOpenRequest, toQuoteRequest } from "../domain/mapper";
 import {
@@ -124,6 +126,7 @@ export class NegotiationsService {
     @Inject(CLOCK) private readonly clock: Clock,
     // RF-37: the deposit that activates the project is announced to its producer.
     @Optional() private readonly events?: DomainEvents,
+    @Optional() private readonly steps?: PaymentStepRepository,
     // The buyer wallet of the deposit comes from the project's purchase contract (RF-04).
     @Optional() private readonly contracts?: PurchaseContracts,
   ) {}
@@ -569,9 +572,15 @@ export class NegotiationsService {
     return this.moveDeposit(request);
   }
 
-  /** Moves the agreed total into custody: synchronously when simulated, else after the buyer approves the wallet grant. */
+  /**
+   * Moves the agreed total into custody: synchronously when simulated, else after the buyer approves the wallet grant.
+   * A payment already sent but not confirmed is polled again instead (never paid twice): credited once it landed, else still PENDING.
+   */
   private async moveDeposit(request: NegotiationRecord): Promise<DepositOutcome> {
-    const started = await this.custody.start(await this.depositOrder(request));
+    const order = await this.depositOrder(request);
+    const inFlight = await this.custody.confirm(order);
+    if (inFlight) return inFlight.status === "completed" ? this.settleDeposit(request, inFlight.reference) : request;
+    const started = await this.custody.start(order);
     if (started) return { ...request, deposit_redirect_url: started.redirectUrl };
     return this.settleDeposit(request, null);
   }
@@ -588,12 +597,15 @@ export class NegotiationsService {
     };
   }
 
-  /** The wallet sent the buyer back: verify, move the money, then apply the custody effects. */
+  /**
+   * The wallet sent the buyer back: verify, move the money, then apply the custody effects once it landed. Sent but unconfirmed:
+   * the deposit stays PENDING and the deposit endpoint confirms it later (moveDeposit).
+   */
   async completeDeposit(id: string, callback: FundingCallback): Promise<NegotiationRecord> {
     const request = await this.load(id);
     if (request.deposit_status !== "PENDING") throw conflict(NO_DEPOSIT_MESSAGES.not_agreed);
-    const { reference } = await this.custody.complete(await this.depositOrder(request), callback);
-    return this.settleDeposit(request, reference);
+    const result = await this.custody.complete(await this.depositOrder(request), callback);
+    return result.status === "completed" ? this.settleDeposit(request, result.reference) : request;
   }
 
   // Ledger CREDIT, negotiation DEPOSITED and custody balance + FUNDED_IN_CUSTODY commit together. Idempotent: a settled deposit is left as is.
@@ -611,6 +623,8 @@ export class NegotiationsService {
       return request;
     });
     if (activated) this.events?.publish({ type: "project.funded", projectId: settled.project_id });
+    // After the commit (the store's transaction has no seam for it); awaited, so a lost step fails the call instead of vanishing.
+    await stepRecorder(this.steps, { kind: PAYMENT_KIND.BUYER_DEPOSIT, paymentId: settled.id, projectId: settled.project_id })(PAYMENT_STEP.COMPLETED, reference);
     return settled;
   }
 

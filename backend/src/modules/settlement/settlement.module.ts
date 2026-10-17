@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { InvestmentsModule } from "../investments/investments.module";
 import { MilestonesModule } from "../milestones/milestones.module";
 import { ProjectsModule } from "../projects/projects.module";
+import { SupportModule } from "../support/support.module";
 import { SettlementUseCases } from "./application/settlement.use-cases";
 import { loadEnv } from "../../shared/config/env";
 import { WEB_APP_URL } from "../milestones/controllers/milestone-funding-callback.controller";
@@ -21,7 +22,7 @@ import { SettlementRepository } from "./ports/settlement.repository";
 // from the liquidation grant the fiduciaria approves on custody in open-payments mode,
 // and pays the producer and platform to the same wallets new project milestones use. Investors default to the captured investments.
 @Module({
-  imports: [AuthModule, MilestonesModule, ProjectsModule, InvestmentsModule],
+  imports: [AuthModule, MilestonesModule, ProjectsModule, InvestmentsModule, SupportModule],
   controllers: [SettlementController, LiquidationGrantCallbackController],
   providers: [
     SettlementUseCases,

@@ -7,6 +7,7 @@ import {
 } from "../../../milestones/infrastructure/adapters/open-payments.client";
 import type { FundingCallback } from "../../../milestones/ports/milestone-funding";
 import { GRANT_PURPOSE, GRANT_STATUS } from "../../../milestones/ports/grant-store";
+import { withOpTraceContext } from "../../../support/application/op-trace";
 import type { Settlement } from "../../application/settlement";
 import { LiquidationFunding } from "../../ports/liquidation-funding";
 
@@ -22,7 +23,20 @@ export class OpenPaymentsLiquidationFunding extends LiquidationFunding {
     super();
   }
 
-  async start(settlement: Settlement) {
+  // RF-28: the grant's requests are traced under the settlement and its project.
+  start(settlement: Settlement) {
+    return withOpTraceContext({ settlementId: settlement.id, projectId: settlement.projectId }, () => this.request(settlement));
+  }
+
+  complete(settlementId: string, callback: FundingCallback) {
+    return withOpTraceContext({ settlementId }, () => this.finalize(settlementId, callback));
+  }
+
+  revoke(settlementId: string) {
+    return withOpTraceContext({ settlementId }, () => this.cancel(settlementId));
+  }
+
+  private async request(settlement: Settlement) {
     const { client, grants, custodyWalletAddress } = this.op;
     const custody = await client.walletAddress.get({ url: custodyWalletAddress });
     if (custody.assetCode !== settlement.currency || custody.assetScale !== settlement.assetScale) {
@@ -53,7 +67,7 @@ export class OpenPaymentsLiquidationFunding extends LiquidationFunding {
     return { redirectUrl };
   }
 
-  async complete(settlementId: string, callback: FundingCallback) {
+  private async finalize(settlementId: string, callback: FundingCallback) {
     const grant = await this.op.grants.findLatestForSettlement(settlementId);
     await finalizeInteractiveGrant(this.op, grant, callback, `Settlement ${settlementId}`);
   }
@@ -63,7 +77,7 @@ export class OpenPaymentsLiquidationFunding extends LiquidationFunding {
     return grant?.status === GRANT_STATUS.ACTIVE && grant.access !== null;
   }
 
-  async revoke(settlementId: string) {
+  private async cancel(settlementId: string) {
     const { client, grants } = this.op;
     const grant = await grants.findLatestForSettlement(settlementId);
     if (grant?.status !== GRANT_STATUS.ACTIVE || !grant.access) return;
