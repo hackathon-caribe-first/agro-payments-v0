@@ -1,3 +1,4 @@
+import { createContractsMockFetch } from "../../../contracts/infrastructure/mock/mock-fetch";
 import { createEscrowMockFetch } from "../../../escrow/infrastructure/mock/mock-fetch";
 import { createHarvestMockFetch } from "../../../harvest/infrastructure/mock/mock-fetch";
 import { createInvestmentsMockFetch } from "../../../investments/infrastructure/mock/mock-fetch";
@@ -7,16 +8,20 @@ import { createSimulationMockFetch } from "../../../simulation/infrastructure/mo
 import { createPresalesMockFetch } from "./mock-fetch";
 import { createPresalesMockStore } from "./store";
 
-// One mock server for the whole app: harvest -> investments -> simulation -> presales -> escrow -> projects -> milestones, all over the same store arrays.
+// One mock server for the whole app: harvest -> contracts -> investments -> simulation -> presales -> escrow -> projects ->
+// milestones, all over the same store arrays.
 export function createAppMockTransport(): typeof fetch {
   const store = createPresalesMockStore();
   return createHarvestMockFetch(
     store,
-    createInvestmentsMockFetch(
+    createContractsMockFetch(
       store,
-      createSimulationMockFetch(
+      createInvestmentsMockFetch(
         store,
-        createPresalesMockFetch(store, createEscrowMockFetch(store, createProjectsMockFetch(store, createMockFetch(store.milestones)))),
+        createSimulationMockFetch(
+          store,
+          createPresalesMockFetch(store, createEscrowMockFetch(store, createProjectsMockFetch(store, createMockFetch(store.milestones)))),
+        ),
       ),
     ),
   );

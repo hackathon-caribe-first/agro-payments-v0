@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router";
+import { Form, redirect, useSearchParams } from "react-router";
 import type { Milestone } from "@agro/shared/api/client";
 import { formatMoney } from "@agro/shared/modules/milestones/milestone-state";
 import { Input } from "@agro/shared/ui/input";
@@ -36,7 +36,12 @@ async function observedCustody(milestones: Milestone[]): Promise<Record<string, 
   );
   return Object.fromEntries(entries.filter((e): e is [string, Custody] => e !== null));
 }
-export const clientAction = ({ request }: Route.ClientActionArgs) => custodianAction(request);
+export async function clientAction({ request }: Route.ClientActionArgs) {
+  const form = await request.clone().formData();
+  const projectId = String(form.get("projectId") ?? "").trim();
+  if (form.get("intent") === "open-project" && projectId) return redirect(`/custodian/projects/${encodeURIComponent(projectId)}`);
+  return custodianAction(request);
+}
 
 // The custody wallet sends the browser back here with ?funded=<id> / ?funding_error=<id> (milestone grant)
 // or ?liquidation_granted=<id> / ?liquidation_error=<id> (settlement liquidation grant).
@@ -60,6 +65,8 @@ function GrantResult({ milestones }: { milestones: Milestone[] }) {
     );
   }
   if (params.has("liquidation_granted")) return ok("Grant de liquidación aprobado. Ya puedes ejecutar la cascada.");
+  if (params.has("premium_granted")) return ok("Grant de la prima aprobado. Ya puedes pagar la prima neta desde la custodia.");
+  if (params.has("premium_error")) return fail("No se completó el grant de la prima. Intenta aprobarlo de nuevo.");
   if (params.has("liquidation_error")) return fail("No se completó el grant de liquidación. Intenta aprobarlo de nuevo.");
   return null;
 }
@@ -126,6 +133,37 @@ function Orders({ milestone, orders, suppliers }: { milestone: Milestone; orders
   );
 }
 
+// RF-14 / RF-25: the premium and indemnity live on the project's page. The wallet callback names the project in its query.
+function PremiumGrantLink() {
+  const [params] = useSearchParams();
+  const projectId = params.get("premium_granted") ?? params.get("premium_error");
+  if (!projectId) return null;
+  return (
+    <a href={`/custodian/projects/${encodeURIComponent(projectId)}`} className="self-start font-brand font-bold text-primary underline underline-offset-4">
+      Ir al seguro del proyecto
+    </a>
+  );
+}
+
+function OpenProject() {
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border bg-card p-5">
+      <h2 className="text-lg text-primary">Seguro y contrato de un proyecto</h2>
+      <p className="text-sm text-muted-foreground">Prima neta desde la custodia, indemnizaciones de la aseguradora y la firma del patrimonio autónomo.</p>
+      <Form method="post" className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="intent" value="open-project" />
+        <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+          <span className="font-semibold">Identificador del proyecto</span>
+          <Input name="projectId" required placeholder="p-…" />
+        </label>
+        <button type="submit" className="h-11 rounded-md border px-5 font-brand font-bold text-primary">
+          Abrir
+        </button>
+      </Form>
+    </section>
+  );
+}
+
 function RegisterSupplier({ suppliers }: { suppliers: Supplier[] }) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border bg-card p-5">
@@ -163,6 +201,8 @@ export default function Custodian({ loaderData }: Route.ComponentProps) {
         </p>
       </header>
       <GrantResult milestones={milestones} />
+      <PremiumGrantLink />
+      <OpenProject />
       <RegisterSupplier suppliers={suppliers} />
       <MilestoneList>
         {milestones.map((m) => (

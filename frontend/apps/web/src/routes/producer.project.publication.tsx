@@ -56,7 +56,7 @@ export default function ProducerProjectPublication({ loaderData, actionData }: R
   const { project, sheet, presets } = loaderData;
   const navigation = useNavigation();
   const busy = navigation.state !== "idle" ? navigation.formData?.get("intent") : null;
-  const isDraft = project.currentStatus === "DRAFT";
+  const isDraft = project.currentStatus === "DRAFT" || project.currentStatus === "CONTRACT_SIGNED";
   return (
     <div className="flex flex-col gap-6">
       <Link to={`/producer/projects/${project.id}`} className="inline-flex items-center gap-1.5 text-sm font-bold text-primary underline underline-offset-4">
@@ -117,7 +117,13 @@ export default function ProducerProjectPublication({ loaderData, actionData }: R
           <Button type="submit" className="self-start" disabled={busy === "publish"}>
             {busy === "publish" ? "Publicando…" : "Publicar proyecto"}
           </Button>
-          <p className="text-sm text-muted-foreground">Al publicar se abre la captación de inversionistas. Solo se publica si la última ficha cumple la regla de oferta.</p>
+          <p className="text-sm text-muted-foreground">
+            Al publicar se abre la captación de inversionistas. Solo se publica con el{" "}
+            <Link to={`/producer/projects/${project.id}/contracts`} className="font-semibold text-primary underline underline-offset-4">
+              contrato de compra
+            </Link>{" "}
+            registrado y si la última ficha cumple la regla de oferta.
+          </p>
           <Problem data={actionData} intent="publish" />
         </Form>
       )}

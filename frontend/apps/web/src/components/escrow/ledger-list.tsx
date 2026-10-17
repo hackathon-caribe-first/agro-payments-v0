@@ -8,6 +8,8 @@ const CATEGORY_LABELS: Record<LedgerCategory, string> = {
   BUYER_DEPOSIT: "Depósito del comprador",
   INVESTOR_CAPITAL: "Aporte de inversionista",
   HARVEST_PAYMENT: "Pago de la cosecha",
+  PREMIUM: "Prima neta del seguro (sale)",
+  INDEMNITY: "Indemnización del seguro",
   UNKNOWN: "Movimiento",
 };
 
@@ -45,7 +47,10 @@ export function LedgerList({ ledger, currency = "COP" }: { ledger: ProjectLedger
                 <tr key={entry.id} className="border-t">
                   <td className="py-1.5 pr-2">{formatDateTime(entry.createdAt)}</td>
                   <td className="py-1.5 pr-2">{CATEGORY_LABELS[entry.category]}</td>
-                  <td className="py-1.5 text-right font-semibold tabular-nums">{formatMoney(entry.amount, entry.currency)}</td>
+                  <td className="py-1.5 text-right font-semibold tabular-nums">
+                    {entry.type === "DEBIT" ? "− " : ""}
+                    {formatMoney(entry.amount, entry.currency)}
+                  </td>
                 </tr>
               ))}
             </tbody>

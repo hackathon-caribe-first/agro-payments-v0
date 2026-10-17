@@ -1,7 +1,8 @@
-// Domain types for the escrow ledger (the custody account of a project): buyer deposits and investor capital.
+// Domain types for the escrow ledger (the custody account of a project): buyer deposits, investor capital, the harvest payment
+// (RF-24), the insurance premium paid from custody (DEBIT, RF-14) and the indemnity paid into it (RF-25).
 
-export const LEDGER_TYPES = ["CREDIT"] as const;
-export const LEDGER_CATEGORIES = ["BUYER_DEPOSIT", "INVESTOR_CAPITAL", "HARVEST_PAYMENT"] as const;
+export const LEDGER_TYPES = ["CREDIT", "DEBIT"] as const;
+export const LEDGER_CATEGORIES = ["BUYER_DEPOSIT", "INVESTOR_CAPITAL", "HARVEST_PAYMENT", "PREMIUM", "INDEMNITY"] as const;
 // A project agreement is first PENDING (agreed, not yet deposited) and then DEPOSITED.
 export const DEPOSIT_STATUSES = ["PENDING", "DEPOSITED"] as const;
 
@@ -23,6 +24,6 @@ export interface LedgerEntry {
   createdAt: string;
 }
 
-// Custody is the sum of the credits; entries of an unknown type never count.
+// Custody is the credits minus the debits; entries of an unknown type never count.
 export const custodyBalance = (entries: readonly Pick<LedgerEntry, "type" | "amount">[]): number =>
-  entries.filter((e) => e.type === "CREDIT").reduce((sum, e) => sum + e.amount, 0);
+  entries.reduce((sum, e) => sum + (e.type === "CREDIT" ? e.amount : e.type === "DEBIT" ? -e.amount : 0), 0);

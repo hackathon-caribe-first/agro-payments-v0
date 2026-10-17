@@ -8,6 +8,7 @@ export default [
     route("producer/assistant", "routes/producer.assistant.tsx"),
     route("producer/projects/:projectId", "routes/producer.project.tsx"),
     route("producer/projects/:projectId/publication", "routes/producer.project.publication.tsx"),
+    route("producer/projects/:projectId/contracts", "routes/producer.project.contracts.tsx"),
     route("producer/negotiations", "routes/producer.negotiations.tsx"),
     route("producer/negotiations/:negotiationId", "routes/producer.negotiation.tsx"),
     route("producer/open-requests", "routes/producer.open-requests.tsx"),
@@ -36,6 +37,7 @@ export default [
     route("investor/projects/:projectId/panel", "routes/investor.project.panel.tsx"),
     route("verifier", "routes/verifier.tsx"),
     route("custodian", "routes/custodian.tsx"),
+    route("custodian/projects/:projectId", "routes/custodian.project.tsx"),
     // LEGACY Spanish URLs: all redirect to the English ones (see routes/legacy-redirect.tsx).
     route("productor", "routes/legacy-redirect.tsx", { id: "legacy-productor" }),
     route("productor/*", "routes/legacy-redirect.tsx", { id: "legacy-productor-splat" }),
