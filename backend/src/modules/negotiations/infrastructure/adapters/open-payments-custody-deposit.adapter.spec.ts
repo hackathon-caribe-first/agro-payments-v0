@@ -162,6 +162,16 @@ describe("OpenPaymentsCustodyDeposit confirmation", () => {
     expect(await deposit.confirm(order)).toEqual({ status: "completed", reference: sent.reference });
   });
 
+  it("a wallet that times out while checking a sent payment leaves it unconfirmed instead of failing the deposit", async () => {
+    const { deposit, client, callback, steps } = await started();
+    client.outgoingPayment.get.mockRejectedValue(new Error("Request timed out: GET outgoing-payments/o-1"));
+    const sent = await deposit.complete(order, callback);
+    expect(sent.status).toBe("unconfirmed");
+    expect(client.outgoingPayment.get).toHaveBeenCalledTimes(3);
+    expect(steps.of("buyer_deposit", "qr-1")).not.toContain("failed");
+    expect(steps.of("buyer_deposit", "qr-1").at(-1)).toBe("sent_unconfirmed");
+  });
+
   it("confirm() is null while no grant was approved or no payment carries the deposit's metadata", async () => {
     const pending = await started();
     expect(await pending.deposit.confirm(order)).toBeNull();

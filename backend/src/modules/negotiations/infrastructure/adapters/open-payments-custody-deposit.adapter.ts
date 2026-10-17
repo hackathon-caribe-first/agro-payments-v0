@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Logger } from "@nestjs/common";
 import { DomainError } from "../../../../shared/domain-errors";
 import { minorUnits } from "../../../milestones/infrastructure/adapters/open-payments-payment-gateway.adapter";
 import {
@@ -82,6 +83,8 @@ type PaymentState = "completed" | "failed" | "unconfirmed";
 // The buyer wallet comes from the project's purchase contract (RF-04); OP_BUYER_WALLET_ADDRESS is the deployment's fallback.
 // Steps are recorded under the negotiation id: a retried deposit keeps the first attempt's row for a step it repeats.
 export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
+  private readonly logger = new Logger(OpenPaymentsCustodyDeposit.name);
+
   constructor(
     private readonly op: OpenPayments,
     private readonly buyerWalletAddress: string | null,
@@ -204,18 +207,27 @@ export class OpenPaymentsCustodyDeposit extends CustodyDeposit {
   // Landed: the outgoing payment sent its whole debit, or the custody incoming payment completed or received its full amount.
   private async poll(grant: Grant & { access: GrantAccess }, outgoingId: string, incomingId: string): Promise<PaymentState> {
     const { client } = this.op;
-    const { authServer } = await client.incomingPayment.getPublic({ url: incomingId });
-    const incomingToken = await requestToken(this.op, authServer, { type: "incoming-payment", actions: ["read"] });
+    let incomingToken: string | null = null;
     for (let attempt = 0; attempt < this.polling.attempts; attempt++) {
       if (attempt > 0) await sleep(this.polling.intervalMs);
-      const outgoing = await withGrantToken(this.op, grant, (accessToken) => client.outgoingPayment.get({ url: outgoingId, accessToken }));
-      if (outgoing.failed) return "failed";
-      const sent = minorUnits(outgoing.sentAmount);
-      const debit = minorUnits(outgoing.debitAmount);
-      if (sent !== null && debit !== null && debit > 0 && sent >= debit) return "completed";
-      const incoming = await client.incomingPayment.get({ url: incomingId, accessToken: incomingToken });
-      const target = incoming.incomingAmount?.value;
-      if (incoming.completed || (target !== undefined && BigInt(incoming.receivedAmount.value) >= BigInt(target))) return "completed";
+      try {
+        const outgoing = await withGrantToken(this.op, grant, (accessToken) => client.outgoingPayment.get({ url: outgoingId, accessToken }));
+        if (outgoing.failed) return "failed";
+        const sent = minorUnits(outgoing.sentAmount);
+        const debit = minorUnits(outgoing.debitAmount);
+        if (sent !== null && debit !== null && debit > 0 && sent >= debit) return "completed";
+        if (!incomingToken) {
+          const { authServer } = await client.incomingPayment.getPublic({ url: incomingId });
+          incomingToken = await requestToken(this.op, authServer, { type: "incoming-payment", actions: ["read"] });
+        }
+        const incoming = await client.incomingPayment.get({ url: incomingId, accessToken: incomingToken });
+        const target = incoming.incomingAmount?.value;
+        if (incoming.completed || (target !== undefined && BigInt(incoming.receivedAmount.value) >= BigInt(target))) return "completed";
+      } catch (error) {
+        // The outgoing payment already exists: a wallet that times out or errors means "not confirmed yet", never "failed",
+        // so the deposit stays PENDING and confirm() settles it later instead of the buyer being told to pay again.
+        this.logger.warn(`Deposit check of ${outgoingId} (attempt ${attempt + 1}) failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     return "unconfirmed";
   }
