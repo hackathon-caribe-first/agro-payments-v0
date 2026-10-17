@@ -8,8 +8,8 @@ test("Demo orquestada: corrección, aprobación, pago y conciliación (SIMULADOS
   await scene(page, "PRODUCTOR · Corrige evidencia de siembra");
   await page.locator('input[name="seedlings_planted"]').fill("1500");
   await page.locator('input[name="spacing_cm"]').fill("150");
-  await page.locator('input[name="field_photos"]').nth(0).check();
-  await page.locator('input[name="field_photos"]').nth(1).check();
+  await page.locator('label[for^="field-field_photos-"]').nth(0).click();
+  await page.locator('label[for^="field-field_photos-"]').nth(1).click();
   await page.getByRole("button", { name: "Guardar registro" }).click();
   await expect(page.getByText("Registro guardado.")).toBeVisible();
   await page.getByRole("button", { name: "Enviar a revisión" }).click();
