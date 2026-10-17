@@ -4,7 +4,7 @@ import { cn } from "@agro/shared/lib/utils";
 const ROLES = [
   { to: "/productor", label: "Productor" },
   { to: "/verificador", label: "Verificador" },
-  { to: "/custodio", label: "Custodio" },
+  { to: "/custodio", label: "Operador" },
 ];
 
 function Shell({ children }: { children: React.ReactNode }) {
